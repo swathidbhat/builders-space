@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vite/
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+DECISIONS.md
+BUGS.md
+TEST_PLAN.md
+STATUS_RING_SPEC.md
+TEST_LOG*.md
+runtime_arch_refactor_spec.md
+.cursor/
