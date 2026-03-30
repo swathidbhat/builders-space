@@ -1,5 +1,9 @@
 # Builders Space
 
+
+https://github.com/user-attachments/assets/5118a62b-e610-43ef-b556-1169afeac5e7
+
+
 An ambient awareness dashboard for multi-agent coding work, rendered as an immersive deep-space scene. Each of your projects appears as a planet. Each coding agent (Claude, Codex, Cursor) working on a project appears as a worker on that planet's surface. Expanding status rings around a planet signal when it needs your attention — red for errors, amber for waiting. Technical jargon is translated into human lingo so you always know what's happening at a glance.
 
 ## Why This Exists
