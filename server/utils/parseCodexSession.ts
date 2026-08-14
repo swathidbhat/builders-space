@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from 'fs';
 import { basename } from 'path';
 import { shortenPaths } from './parseTranscript';
+import { meaningfulAgentText, meaningfulUserText } from './userMessages';
 
 export interface CodexSessionData {
   sessionId: string;
@@ -8,6 +9,8 @@ export interface CodexSessionData {
   threadName?: string;
   latestTask?: string;
   lastAction?: string;
+  /** What the agent is asking, when it closed its turn with a final answer. */
+  question?: string;
   isActive: boolean;
   lastActivityMs: number;
 }
@@ -21,6 +24,7 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
     let cwd = '';
     let latestTask: string | undefined;
     let lastAction: string | undefined;
+    let lastFinalAnswer: string | undefined;
     let latestTimestamp = 0;
 
     for (const line of lines) {
@@ -37,9 +41,21 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
         }
 
         if (entry.type === 'event_msg' && entry.payload?.type === 'user_message') {
+          // Codex writes far more into the user role than the user does: a
+          // safety-classifier prompt quoting the whole transcript, attached
+          // file manifests, open-browser state. Taking the raw latest message
+          // regularly surfaced one of those as the agent's goal.
+          const meaningful = meaningfulUserText(entry.payload.message);
+          if (meaningful) latestTask = meaningful;
+        }
+
+        // `phase` distinguishes a closing answer from mid-work narration, so
+        // it is a truer "is this agent waiting on you" signal than guessing
+        // from whether a tool call happened to come last.
+        if (entry.type === 'event_msg' && entry.payload?.type === 'agent_message') {
           const msg = entry.payload.message;
-          if (typeof msg === 'string' && msg.length > 0) {
-            latestTask = msg.slice(0, 200);
+          if (typeof msg === 'string' && msg.trim()) {
+            lastFinalAnswer = entry.payload.phase === 'commentary' ? undefined : msg;
           }
         }
 
@@ -47,6 +63,8 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
           const p = entry.payload;
           if (p?.type === 'function_call' && p.name) {
             lastAction = formatCodexToolUse(p.name, p.arguments);
+            // A tool call after the answer means work resumed.
+            lastFinalAnswer = undefined;
           }
         }
       } catch {
@@ -66,6 +84,7 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
       threadName: extractThreadName(filePath),
       latestTask,
       lastAction,
+      question: meaningfulAgentText(lastFinalAnswer),
       isActive,
       lastActivityMs: effectiveTimestamp,
     };

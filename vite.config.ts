@@ -10,7 +10,11 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5174,
+    // 5174 is claimed by another local project. `strictPort` makes a clash
+    // fail loudly instead of silently landing on the next free port, which
+    // otherwise leaves the preview pane pointed at whatever owns 5175.
+    port: 5175,
+    strictPort: true,
     proxy: {
       '/ws': {
         target: 'ws://localhost:3002',

@@ -34,15 +34,36 @@ describe('layoutOrbitalLanes', () => {
     expect(result.ringRadii).toEqual([]);
   });
 
-  it('places all projects on the XZ plane (y = 0)', () => {
-    const projects = [
-      makeProject('Alpha'),
-      makeProject('Beta'),
-      makeProject('Gamma'),
-    ];
+  it('lifts projects off the midplane so the field reads as a volume', () => {
+    // Deliberately not y === 0. A flat disc of evenly spaced planets reads as
+    // a circle no matter how many there are; depth is what breaks that.
+    const projects = Array.from({ length: 9 }, (_, i) => makeProject(`P${i}`));
     const { positions } = layoutOrbitalLanes(projects);
-    for (const [, y] of positions) {
-      expect(y).toBe(0);
+    const ys = positions.map(([, y]) => y);
+
+    expect(ys.some((y) => y > 0.5)).toBe(true);
+    expect(ys.some((y) => y < -0.5)).toBe(true);
+  });
+
+  it('does not line the planets up on a handful of radii', () => {
+    // The old concentric-ring layout put every planet on one of 1-2 radii,
+    // which is exactly what made the arrangement look like a circle.
+    const projects = Array.from({ length: 9 }, (_, i) => makeProject(`P${i}`));
+    const { positions } = layoutOrbitalLanes(projects);
+    const radii = positions.map(([x, , z]) => Math.hypot(x, z));
+    const distinct = new Set(radii.map((r) => Math.round(r * 4)));
+    expect(distinct.size).toBeGreaterThanOrEqual(6);
+  });
+
+  it('keeps planets far enough apart to read as separate worlds', () => {
+    const projects = Array.from({ length: 14 }, (_, i) => makeProject(`P${i}`));
+    const { positions } = layoutOrbitalLanes(projects);
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const [ax, ay, az] = positions[i];
+        const [bx, by, bz] = positions[j];
+        expect(Math.hypot(ax - bx, ay - by, az - bz)).toBeGreaterThan(2.5);
+      }
     }
   });
 
@@ -89,17 +110,17 @@ describe('layoutOrbitalLanes', () => {
     );
   });
 
-  it('distributes >8 projects across multiple rings', () => {
+  it('spreads many projects over a range of depths', () => {
     const projects = Array.from({ length: 12 }, (_, i) =>
       makeProject(`Project-${String.fromCharCode(65 + i)}`),
     );
     const { positions, ringRadii } = layoutOrbitalLanes(projects);
     expect(positions).toHaveLength(12);
-    expect(ringRadii.length).toBeGreaterThanOrEqual(2);
+    expect(ringRadii).toHaveLength(12);
 
-    const radii = positions.map(([x, , z]) => Math.sqrt(x * x + z * z));
-    const uniqueRadii = new Set(radii.map((r) => Math.round(r * 100)));
-    expect(uniqueRadii.size).toBeGreaterThanOrEqual(2);
+    // Outermost meaningfully further out than innermost, so the field has depth
+    // rather than sitting at one distance.
+    expect(ringRadii[ringRadii.length - 1]).toBeGreaterThan(ringRadii[0] * 1.4);
   });
 
   it('gives every project a unique position', () => {

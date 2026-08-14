@@ -1,9 +1,15 @@
-import { useRef, useMemo, useCallback } from 'react';
+import { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSpaceStore } from '../store';
 import type { ProjectInfo } from '../types';
 import { PlanetLabel } from './PlanetLabel';
+import { SurfaceView } from './SurfaceView';
+import { planSurfaceCamp, selectSurfaceAgents } from './surfacePlacement';
+import { descentState } from './descentState';
+import { SURFACE_MOUNT_AT } from './surfaceConstants';
+import { getProjectAgentIdentities } from '../ui/agentIdentity';
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 
 function hashString(str: string): number {
   let hash = 0;
@@ -320,6 +326,11 @@ function StatusRings({ radius, state }: { radius: number; state: PlanetState }) 
     return mats;
   }, [color]);
 
+  // Rings unmount on every landing and remount on every return, so without
+  // this each round trip strands a geometry and four materials on the GPU.
+  useEffect(() => () => ringGeo.dispose(), [ringGeo]);
+  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
+
   useFrame((s) => {
     if (!ringsRef.current) return;
     const t = s.clock.elapsedTime;
@@ -371,13 +382,70 @@ interface PlanetProps {
   position: [number, number, number];
 }
 
+/**
+ * Descent state for one planet, as React state.
+ *
+ * `surfaceMounted` gates the expensive ground detail for the planet being
+ * landed on. `landedAnywhere` retires orbital chrome on *every* planet —
+ * labels on distant planets are still visible from the ground, where they
+ * render huge and collide with the HUD.
+ *
+ * Driven from the frame loop rather than the store so it costs a couple of
+ * re-renders per landing instead of sixty a second.
+ */
+function useDescent(projectId: string): {
+  surfaceMounted: boolean;
+  landedAnywhere: boolean;
+  groundOpaque: boolean;
+} {
+  const [state, setState] = useState({
+    surfaceMounted: false,
+    landedAnywhere: false,
+    groundOpaque: false,
+  });
+
+  useFrame(() => {
+    const mine = descentState.planetId === projectId;
+    const landedAnywhere = descentState.progress >= SURFACE_MOUNT_AT;
+    const surfaceMounted = landedAnywhere && mine;
+    // Only once the patch has finished fading in. Hiding the sphere any earlier
+    // would show straight through the planet into space while the ground is
+    // still translucent.
+    const groundOpaque = mine && descentState.progress >= 1;
+    if (
+      surfaceMounted !== state.surfaceMounted ||
+      landedAnywhere !== state.landedAnywhere ||
+      groundOpaque !== state.groundOpaque
+    ) {
+      setState({ surfaceMounted, landedAnywhere, groundOpaque });
+    }
+  });
+
+  return state;
+}
+
 export function Planet({ project, position }: PlanetProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const selectPlanet = useSpaceStore((s) => s.selectPlanet);
+  const selectedId = useSpaceStore((s) => s.selectedPlanetId);
+  const reduced = usePrefersReducedMotion();
 
   const seed = hashString(project.name);
   const planetType = getPlanetType(seed);
   const planetState = useMemo(() => derivePlanetState(project), [project]);
+
+  const isTarget = selectedId === project.id;
+  const { surfaceMounted, landedAnywhere, groundOpaque } = useDescent(project.id);
+
+  const camp = useMemo(
+    () => (isTarget ? planSurfaceCamp(selectSurfaceAgents(project.agents), project.name) : null),
+    [isTarget, project.agents, project.name],
+  );
+
+  const identities = useMemo(
+    () => (isTarget ? getProjectAgentIdentities(project.agents.map((a) => a.id)) : null),
+    [isTarget, project.agents],
+  );
 
   const radius = 1.8;
 
@@ -403,15 +471,48 @@ export function Planet({ project, position }: PlanetProps) {
     });
   }, [seed, planetType]);
 
+  /**
+   * Stand-in for the identity shader while landed.
+   *
+   * The procedural shader evaluates ~250 noise hashes per fragment; from the
+   * ground it covers a third of the frame (more when you pitch down) entirely
+   * behind the opaque ground patch, costing ~5ms a frame to draw nothing.
+   * Swapping the material rather than hiding the mesh keeps the fallback
+   * honest: where the patch does not quite reach, you see distant ground
+   * instead of a hole into space.
+   */
+  const flatMaterial = useMemo(() => {
+    const rand = seededRandom(seed);
+    const colors = buildColors(planetType, rand);
+    return new THREE.MeshBasicMaterial({
+      color: colors.color2,
+      toneMapped: false,
+    });
+  }, [seed, planetType]);
+
+  useEffect(
+    () => () => {
+      material.dispose();
+      flatMaterial.dispose();
+    },
+    [material, flatMaterial],
+  );
+
   useFrame((state, delta) => {
     const targetDim = planetState === 'idle' ? 1 : -1;
+    // Clamped: a raw delta * 3 exceeds 1 whenever a frame runs long (tab
+    // restored, heavy mount) and lerp then extrapolates past the target,
+    // flashing the planet blown-out before it settles.
     material.uniforms.uDim.value = THREE.MathUtils.lerp(
       material.uniforms.uDim.value,
       targetDim,
-      delta * 3,
+      Math.min(1, delta * 3),
     );
 
-    if (meshRef.current) {
+    // A planet you are standing on holds still. Spinning it would drag the
+    // ground out from under the agents, who are placed in planet-local space
+    // while the camera is not.
+    if (meshRef.current && !(isTarget && descentState.phase !== 'space')) {
       const rotSpeed = planetState === 'idle' ? 0.006 : 0.06;
       meshRef.current.rotation.y += delta * rotSpeed;
     }
@@ -429,9 +530,13 @@ export function Planet({ project, position }: PlanetProps) {
 
   return (
     <group position={position}>
+      {/* Swapped to a flat material once the ground patch is fully opaque —
+          see flatMaterial. Not hidden: the patch is centred on the camp anchor
+          while the visible ground is centred on wherever you have panned to,
+          so coverage is not guaranteed in every reachable pose. */}
       <mesh
         ref={meshRef}
-        material={material}
+        material={groundOpaque ? flatMaterial : material}
         onClick={handleClick}
         onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
         onPointerOut={() => { document.body.style.cursor = 'default'; }}
@@ -439,14 +544,29 @@ export function Planet({ project, position }: PlanetProps) {
         <sphereGeometry args={[radius, 64, 64]} />
       </mesh>
 
-      <StatusRings radius={radius} state={planetState} />
+      {/* Rings and labels are orbital-scale wayfinding. From the ground they
+          wrap the sky and collide with the HUD, so they retire on landing —
+          including on the other planets still visible overhead. */}
+      {!landedAnywhere && <StatusRings radius={radius} state={planetState} />}
 
-      <PlanetLabel
-        name={project.name}
-        agentCount={project.agents.length}
-        planetState={planetState}
-        yOffset={radius + 0.8}
-      />
+      {!landedAnywhere && (
+        <PlanetLabel
+          name={project.name}
+          agentCount={project.agents.length}
+          planetState={planetState}
+          yOffset={radius + 0.8}
+        />
+      )}
+
+      {surfaceMounted && camp && identities && (
+        <SurfaceView
+          project={project}
+          camp={camp}
+          identities={identities}
+          planetPosition={position}
+          reduced={reduced}
+        />
+      )}
     </group>
   );
 }

@@ -1,99 +1,16 @@
 import { Suspense, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Starfield } from './Starfield';
 import { Planet } from './Planet';
+import { CameraRig } from './CameraRig';
+import { descentState } from './descentState';
 import { useSpaceStore } from '../store';
 import { layoutOrbitalLanes } from './layout';
 
 function useOrbitalLayout() {
   const projects = useSpaceStore((s) => s.projects);
   return useMemo(() => layoutOrbitalLanes(projects), [projects]);
-}
-
-function CameraController() {
-  const { camera } = useThree();
-  const selectedId = useSpaceStore((s) => s.selectedPlanetId);
-  const projects = useSpaceStore((s) => s.projects);
-  const cameraMode = useSpaceStore((s) => s.cameraMode);
-  const controlsRef = useRef<any>(null);
-
-  const targetPos = useRef(new THREE.Vector3(0, 20, 30));
-  const targetLookAt = useRef(new THREE.Vector3(0, 0, 0));
-  const transitioning = useRef(false);
-  const prevSelection = useRef<{ mode: string; id: string | null }>({
-    mode: 'space',
-    id: null,
-  });
-
-  const { positions, ringRadii } = useOrbitalLayout();
-
-  useEffect(() => {
-    const selectionChanged =
-      cameraMode !== prevSelection.current.mode ||
-      selectedId !== prevSelection.current.id;
-
-    if (cameraMode === 'planet' && selectedId) {
-      const idx = projects.findIndex((p) => p.id === selectedId);
-      if (idx >= 0 && positions[idx]) {
-        const [x, y, z] = positions[idx];
-        targetPos.current.set(x + 4, y + 2, z + 4);
-        targetLookAt.current.set(x, y, z);
-      }
-    } else {
-      const maxR =
-        ringRadii.length > 0 ? Math.max(...ringRadii) : 10;
-      const fovRad = (60 / 2) * (Math.PI / 180);
-      const fitDist = (maxR * 1.5) / Math.tan(fovRad);
-      const dist = Math.max(14, fitDist);
-      targetPos.current.set(0, dist * 0.65, dist * 0.6);
-      targetLookAt.current.set(0, 0, 0);
-    }
-
-    if (selectionChanged) {
-      transitioning.current = true;
-      prevSelection.current = { mode: cameraMode, id: selectedId };
-    }
-  }, [cameraMode, selectedId, projects, positions, ringRadii]);
-
-  useFrame((_state, delta) => {
-    const controls = controlsRef.current;
-    if (!controls) return;
-
-    const factor = 1 - Math.exp(-5 * delta);
-
-    camera.position.lerp(targetPos.current, factor);
-    controls.target.lerp(targetLookAt.current, factor);
-
-    if (transitioning.current) {
-      controls.enabled = false;
-
-      const settled =
-        camera.position.distanceTo(targetPos.current) < 0.05 &&
-        controls.target.distanceTo(targetLookAt.current) < 0.05;
-
-      if (settled) {
-        camera.position.copy(targetPos.current);
-        controls.target.copy(targetLookAt.current);
-        transitioning.current = false;
-        controls.enabled = true;
-      }
-    }
-
-    controls.update();
-  });
-
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      enableDamping
-      dampingFactor={0.05}
-      minDistance={3}
-      maxDistance={150}
-      enablePan={false}
-    />
-  );
 }
 
 const nebulaVertexShader = `
@@ -208,7 +125,9 @@ export function SpaceScene() {
 
   return (
     <Canvas
-      camera={{ position: [0, 20, 30], fov: 60, near: 0.1, far: 500 }}
+      // near is 0.05 for the landed view, where the ground is half a unit away.
+      // Nothing in the orbital view comes closer than 3, so it costs nothing.
+      camera={{ position: [0, 20, 30], fov: 60, near: 0.05, far: 500 }}
       style={{
         position: 'fixed',
         top: 0,
@@ -219,8 +138,14 @@ export function SpaceScene() {
         zIndex: 1,
       }}
       onPointerMissed={() => {
+        // Clicking bare ground while landed must not eject you back to orbit;
+        // Escape and the overlay's exit button do that deliberately.
+        if (descentState.phase !== 'space') return;
         useSpaceStore.getState().deselectPlanet();
       }}
+      // Shadows are only ever cast on the landed surface — nothing in the
+      // orbital view sets castShadow — so the extra pass costs nothing there.
+      shadows
       gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
     >
       <ambientLight intensity={0.15} />
@@ -233,8 +158,7 @@ export function SpaceScene() {
         <PlanetSystem />
       </Suspense>
 
-      <CameraController />
-
+      <CameraRig />
     </Canvas>
   );
 }

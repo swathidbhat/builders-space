@@ -9,7 +9,7 @@ function prettifyName(raw: string): string {
 
 const stateStyles: Record<PlanetState, { color: string; glow: string; suffix: string }> = {
   active:  { color: '#44ffaa', glow: '0 0 8px rgba(68,255,170,0.6)', suffix: '' },
-  idle:    { color: 'rgba(200,220,255,0.5)', glow: 'none', suffix: '' },
+  idle:    { color: '#fff', glow: 'none', suffix: '' },
   waiting: { color: '#ffaa44', glow: '0 0 8px rgba(255,170,68,0.7)', suffix: ' \u2022 needs you' },
   error:   { color: '#ff4444', glow: '0 0 8px rgba(255,68,68,0.7)', suffix: ' \u2022 error' },
 };
@@ -34,7 +34,7 @@ export function PlanetLabel({ name, agentCount, planetState, yOffset }: PlanetLa
       <div
         style={{
           color: '#fff',
-          fontFamily: "'Space Grotesk', sans-serif",
+          fontFamily: "'Inter', sans-serif",
           textAlign: 'center',
           whiteSpace: 'nowrap',
           userSelect: 'none',
@@ -43,7 +43,7 @@ export function PlanetLabel({ name, agentCount, planetState, yOffset }: PlanetLa
         <div
           style={{
             fontSize: '16px',
-            fontFamily: "'Orbitron', sans-serif",
+            fontFamily: "'Inter', sans-serif",
             fontWeight: 600,
             letterSpacing: '0.05em',
             textShadow: '0 0 10px rgba(100,180,255,0.5)',

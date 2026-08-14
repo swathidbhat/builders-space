@@ -19,6 +19,8 @@ export interface AgentInfo {
   statusSource?: AgentStatusSource;
   currentTask?: string;
   lastAction?: string;
+  /** What the agent is asking you, when it is waiting rather than working. */
+  question?: string;
   errorReason?: string;
   startedAt?: string;
   elapsedMs?: number;
@@ -40,7 +42,35 @@ export interface SpaceData {
   lastUpdated: number;
 }
 
-export interface HumanizeResponse {
-  texts: Record<string, string>;
-  usedLLM: boolean;
+/** One agent's own contribution to its party's goal. */
+export interface AgentIntent {
+  id: string;
+  intent: string;
+  /** What you must now decide, inferred from the agent's last message. */
+  decision: string;
+}
+
+/** Agents working toward the same outcome, under one shared goal. */
+export interface AgentParty {
+  id: string;
+  goal: string;
+  members: AgentIntent[];
+}
+
+/**
+ * What the briefing is allowed to see. Deliberately narrow: this shape is the
+ * cache key, so a volatile field here would bill a call on every socket tick.
+ * `question` rides along only for agents that have actually stopped, where it
+ * is fixed for as long as they wait.
+ */
+export interface BriefingAgentInput {
+  id: string;
+  task?: string;
+  /** A stalled agent's last message, so the decision in it can be named. */
+  question?: string;
+}
+
+/** Empty `parties` means nothing is known — there is no coarse second answer. */
+export interface BriefingResponse {
+  parties: AgentParty[];
 }

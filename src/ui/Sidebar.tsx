@@ -47,7 +47,7 @@ export function Sidebar() {
           backdropFilter: 'blur(12px)',
           border: '1px solid rgba(100,140,255,0.12)',
           borderRadius: '8px',
-          color: '#8899bb',
+          color: '#fff',
           fontSize: '16px',
           width: '36px',
           height: '36px',
@@ -55,7 +55,7 @@ export function Sidebar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: "'Space Grotesk', sans-serif",
+          fontFamily: "'Inter', sans-serif",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'rgba(30,30,60,0.85)';
@@ -84,7 +84,7 @@ export function Sidebar() {
         backdropFilter: 'blur(20px)',
         borderRight: '1px solid rgba(100,140,255,0.08)',
         zIndex: 60,
-        fontFamily: "'Space Grotesk', sans-serif",
+        fontFamily: "'Inter', sans-serif",
         display: 'flex',
         flexDirection: 'column',
         animation: 'sidebarIn 0.25s ease',
@@ -110,9 +110,9 @@ export function Sidebar() {
           style={{
             fontSize: '10px',
             fontWeight: 600,
-            color: '#667',
+            color: '#fff',
             textTransform: 'uppercase',
-            fontFamily: "'Orbitron', sans-serif",
+            fontFamily: "'Inter', sans-serif",
             letterSpacing: '0.1em',
           }}
         >
@@ -123,7 +123,7 @@ export function Sidebar() {
           style={{
             background: 'none',
             border: 'none',
-            color: '#556',
+            color: '#fff',
             fontSize: '16px',
             cursor: 'pointer',
             padding: '0 2px',
@@ -176,7 +176,7 @@ export function Sidebar() {
                   : '2px solid transparent',
                 cursor: 'pointer',
                 textAlign: 'left',
-                fontFamily: "'Space Grotesk', sans-serif",
+                fontFamily: "'Inter', sans-serif",
                 transition: 'background 0.15s',
               }}
               onMouseEnter={(e) => {
@@ -216,7 +216,7 @@ export function Sidebar() {
                 <span
                   style={{
                     fontSize: '10px',
-                    color: '#556',
+                    color: '#fff',
                     fontWeight: 500,
                     flexShrink: 0,
                   }}

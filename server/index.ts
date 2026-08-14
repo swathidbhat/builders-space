@@ -10,7 +10,7 @@ import { ClaudeWatcher } from './watchers/claudeWatcher';
 import { CodexWatcher } from './watchers/codexWatcher';
 import { EventWatcher } from './watchers/eventWatcher';
 import { StateManager } from './stateManager';
-import { humanizeTexts } from './services/humanizer';
+import { briefProject } from './services/briefing';
 import { getHookStatus, enableHooks, disableHooks } from './services/hookSetup';
 import type { ServerToClientEvents, ClientToServerEvents, AgentSource, SessionMeta } from './types';
 
@@ -62,13 +62,14 @@ io.on('connection', (socket) => {
     socket.emit('space:state', stateManager.getState());
   });
 
-  socket.on('space:humanize', async (texts, callback) => {
+  socket.on('space:brief', async (agents, callback) => {
     try {
-      const result = await humanizeTexts(texts);
-      callback(result);
+      callback(await briefProject(agents));
     } catch (err) {
-      console.error('[WS] Humanize error:', err);
-      callback({ texts: {}, usedLLM: false });
+      console.error('[WS] Briefing error:', err);
+      // Nothing known. Agents carry their names and nothing else — there is
+      // no coarser answer to fall back to, by design.
+      callback({ parties: [] });
     }
   });
 
@@ -155,7 +156,7 @@ httpServer.listen(PORT, () => {
   console.log(`\n  Builders Space server running on http://localhost:${PORT}`);
   console.log(`  Socket.IO: ws://localhost:${PORT}\n`);
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('  ANTHROPIC_API_KEY not set — humanizer will use basic fallback. Add it to .env\n');
+    console.warn('  ANTHROPIC_API_KEY not set — no goals, parties or decisions; agents show names only. Add it to .env\n');
   }
 });
 

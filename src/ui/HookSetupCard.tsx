@@ -145,7 +145,7 @@ export function HookSetupCard() {
       borderRadius: 10,
       boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
       fontFamily: 'monospace',
-      color: 'rgba(255, 255, 255, 0.8)',
+      color: '#fff',
     }}>
       <div style={{
         display: 'flex',
@@ -154,7 +154,7 @@ export function HookSetupCard() {
         padding: '10px 14px',
         borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
       }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#60a5fa', letterSpacing: 0.5 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', letterSpacing: 0.5 }}>
           Hooks
         </span>
         <button
@@ -162,7 +162,7 @@ export function HookSetupCard() {
           style={{
             background: 'none',
             border: 'none',
-            color: 'rgba(255,255,255,0.3)',
+            color: '#fff',
             cursor: 'pointer',
             fontSize: 18,
             lineHeight: 1,
@@ -176,7 +176,7 @@ export function HookSetupCard() {
 
       <div style={{ padding: '12px 14px' }}>
         {!allConfigured && (
-          <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', margin: '0 0 10px', lineHeight: 1.5 }}>
+          <p style={{ fontSize: 10, color: '#fff', margin: '0 0 10px', lineHeight: 1.5 }}>
             Improve tracking for Claude, Codex, and Cursor.
             Claude, Codex and Cursor can report what they're doing more quickly and accurately.
             If live updates from these tools stop, Builders Space will continue
@@ -203,9 +203,9 @@ export function HookSetupCard() {
             borderRadius: 6,
             border: '1px solid rgba(255,255,255,0.05)',
           }}>
-            <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 9, color: '#fff', margin: 0, lineHeight: 1.6 }}>
               This adds a few lines to your tool config files.
-              Originals are backed up to <span style={{ color: 'rgba(255,255,255,0.55)' }}>~/.builders-space/backups/</span> before
+              Originals are backed up to <span style={{ color: '#fff' }}>~/.builders-space/backups/</span> before
               any changes. You can disable at any time to remove
               everything cleanly.
             </p>
@@ -246,7 +246,7 @@ export function HookSetupCard() {
                 borderRadius: 6,
                 border: '1px solid rgba(255,255,255,0.15)',
                 background: 'transparent',
-                color: 'rgba(255,255,255,0.4)',
+                color: '#fff',
                 cursor: loading ? 'default' : 'pointer',
                 opacity: loading ? 0.5 : 1,
                 transition: 'opacity 0.2s, color 0.2s',
@@ -295,9 +295,9 @@ function ToolRow({
             display: 'inline-block',
             flexShrink: 0,
           }} />
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>{label}</span>
+          <span style={{ fontSize: 10, color: '#fff' }}>{label}</span>
         </div>
-        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>{statusText}</span>
+        <span style={{ fontSize: 9, color: '#fff' }}>{statusText}</span>
       </div>
       {result?.status === 'manual' && result.snippet && (
         <div style={{ marginTop: 4 }}>
@@ -319,7 +319,7 @@ function ToolRow({
             <pre style={{
               marginTop: 4,
               fontSize: 8,
-              color: 'rgba(255,255,255,0.5)',
+              color: '#fff',
               background: 'rgba(0,0,0,0.3)',
               borderRadius: 4,
               padding: 8,

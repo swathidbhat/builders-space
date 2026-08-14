@@ -80,6 +80,40 @@ describe('StateManager', () => {
       expect(agent.lastAction).toBe('Read:foo.ts');
       expect(agent.lastActivityMs).toBe(now);
     });
+
+    it('leaves currentTask and question alone', () => {
+      // The parsers own these two; overlays only carry status and activity.
+      // An overlay that cleared `question` would erase what a stuck agent is
+      // asking you the moment its next hook event landed.
+      const now = Date.now();
+      const projects = new Map<string, ProjectInfo>();
+      projects.set('/proj', makeProject({
+        path: '/proj',
+        agents: [makeAgent({
+          source: 'claude-code',
+          sessionId: 'sess1',
+          status: 'working',
+          currentTask: 'ship the checkout flow',
+          question: 'Stripe or Adyen?',
+        })],
+      }));
+      sm.updateClaudeProjects(projects);
+
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/proj',
+        status: 'waiting',
+        lastEventAt: now,
+        terminal: false,
+        mode: 'realtime',
+      });
+
+      const agent = sm.getState().projects[0].agents[0];
+      expect(agent.status).toBe('waiting');
+      expect(agent.currentTask).toBe('ship the checkout flow');
+      expect(agent.question).toBe('Stripe or Adyen?');
+    });
   });
 
   describe('Codex overlay with no lastAction', () => {

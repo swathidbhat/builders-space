@@ -51,23 +51,23 @@ The entire UI exists to answer one question: which project needs my attention? T
 
 ## 2. Planet Surface — "What's happening on this project?"
 
-The pixel-art surface shows agents that matter right now — working, error, and waiting. Done agents are excluded (they've finished and don't need attention).
+Once you land on a planet, the agents that matter right now — working, error, and waiting — are standing on its surface. Done agents are excluded (they've finished and don't need attention) and are not shown while landed; the sidebar and HUD still count them.
 
 ### 2.1 Agent filtering
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 2.1.1 | Project has 2 working, 1 waiting, 1 done agents | Open project panel, look at surface | 3 sprites visible (2 working + 1 waiting). Done agent not shown | Filter is `working \|\| error \|\| waiting` — surface shows agents the user needs to be aware of. Done agents only appear in card list |
-| 2.1.2 | Project has only done agents | Open project panel | Surface shows sky + terrain, no sprites | Empty surface = nothing needs attention. Intentional |
-| 2.1.3 | Project has 1 error agent only | Open project panel | 1 sprite with error animation on surface | Error agents are shown — they represent something actively wrong |
-| 2.1.4 | Project has 1 waiting agent only | Open project panel | 1 sprite sitting with "..." thought bubble | Waiting agents are shown — they need the user's input |
+| 2.1.1 | Project has 2 working, 1 waiting, 1 done agents | Land on the planet | 3 figures standing on the ground (2 working + 1 waiting). Done agent not shown | Filter is `working \|\| error \|\| waiting` — the surface shows agents the user needs to be aware of. Done agents are not shown while landed |
+| 2.1.2 | Project has only done agents | Land on the planet | Ground and sky, no figures | Empty surface = nothing needs attention. Intentional |
+| 2.1.3 | Project has 1 error agent only | Land on the planet | 1 figure with error animation | Error agents are shown — they represent something actively wrong |
+| 2.1.4 | Project has 1 waiting agent only | Land on the planet | 1 figure sitting with "..." thought bubble | Waiting agents are shown — they need the user's input |
 
 ### 2.2 Working agent animations
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 2.2.1 | Working agent on surface | Watch sprite | Walking or digging animation with 4-frame cycle | Movement = productive. Walk is lateral sine motion; dig has pickaxe and debris |
-| 2.2.2 | Working agent walking | Watch behind sprite | Dust trail particles behind feet | Physically grounded — feet kick up dirt. This is semantic (movement), not decorative |
+| 2.2.1 | Working agent on surface | Watch figure | Walking or digging animation with 4-frame cycle | Movement = productive. Walk is lateral sine motion; dig has pickaxe and debris |
+| 2.2.2 | Working agent walking | Watch behind figure | Dust trail particles behind feet | Physically grounded — feet kick up dirt. This is semantic (movement), not decorative |
 | 2.2.3 | Working agent digging | Watch dig impact point | Debris/sparks at dig point | Pickaxe hits rock — meaningful particle effect |
 | 2.2.4 | Working agent | Look for green sparkles or ground glow | None present | Decorative particles were deliberately removed — they carried no semantic meaning |
 
@@ -75,31 +75,37 @@ The pixel-art surface shows agents that matter right now — working, error, and
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 2.3.1 | Error agent on surface | Watch sprite | Standing and trembling (rapid horizontal shake) | "Malfunctioning" read at a glance |
+| 2.3.1 | Error agent on surface | Watch figure | Standing and trembling (rapid horizontal shake) | "Malfunctioning" read at a glance |
 | 2.3.2 | Error agent | Look at eyes | Red eyes | Immediately distinguishable from healthy agents |
 | 2.3.3 | Error agent | Watch over time | Occasional suit-color glitch to red | Reinforces distress signal |
-| 2.3.4 | Error agent | Look above/around sprite | Red embers rising, red `!` beacon, ground glow | "Something is broken/burning" — kept because it maps to status |
-| 2.3.5 | Error agent alongside working agent | Compare visually | Error sprite visually dominant (z-order front, red effects) | `STATUS_Z = { working: 0, waiting: 1, error: 2 }` — error drawn last (front), waiting in middle, working in back |
+| 2.3.4 | Error agent | Look above/around figure | Red embers rising, red `!` beacon, ground glow | "Something is broken/burning" — kept because it maps to status |
+| 2.3.5 | Error agent alongside working agent | Compare visually | Error figure reads as dominant through its red effects | Depth is now real 3D — who occludes whom follows distance, so urgency is carried by the effects rather than a fixed draw order |
 
 ### 2.4 Waiting agent animations
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 2.4.1 | Waiting agent on surface | Watch sprite | Sitting pose with slow breathing | Seated = not active, but present |
-| 2.4.2 | Waiting agent | Look above sprite | Animated "..." thought bubble — 3 amber dots pulse sequentially, each bobbing up when active | Universal "thinking/waiting" indicator. Amber matches the waiting status color |
-| 2.4.3 | Waiting agent | Watch over 5 seconds | Sprite occasionally flips direction (looks left briefly, then back right) | "Looking around" — subtle life, communicates the agent is aware but idle |
-| 2.4.4 | Waiting agent alongside working and error agents | Compare z-order | Working (back) → waiting (middle) → error (front) | Layering matches urgency: error on top, working behind |
+| 2.4.1 | Waiting agent on surface | Watch figure | Sitting pose with slow breathing | Seated = not active, but present |
+| 2.4.2 | Waiting agent | Look above figure | Animated "..." thought bubble — 3 amber dots pulse sequentially, each bobbing up when active | Universal "thinking/waiting" indicator. Amber matches the waiting status color |
+| 2.4.3 | Waiting agent | Watch over 5 seconds | Figure occasionally flips direction (looks left briefly, then back right) | "Looking around" — subtle life, communicates the agent is aware but idle |
+| 2.4.4 | Agent standing on the far side of the planet | Look for it | Hidden by the planet itself | The sphere is opaque and writes depth, so back-side agents are occluded without an explicit cull |
 
 ### 2.5 Surface determinism
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 2.5.1 | Open same project twice (close and reopen panel) | Compare terrain | Identical terrain, stars, dust motes | Surface is seeded from project name — same project always looks the same |
-| 2.5.2 | Two different projects | Compare terrain | Different terrain colors and patterns | Different project names produce different seeds |
+| 2.5.1 | Land on the same project twice | Compare terrain and landing site | Identical terrain and identical landing spot | Both are seeded from the project name — the same project always looks the same and is approached from the same direction |
+| 2.5.2 | Two different projects | Compare terrain | Different terrain colours, relief and landing sites | Different project names produce different seeds |
+| 2.5.3 | Landed, wait for several socket ticks | Watch the agents | Nobody teleports or swaps places | Placement is hashed from `agent.id`, never from array index — the socket replaces the projects array roughly once a second |
+| 2.5.4 | Landed, one agent's session ends and drops out | Watch the others | The rest stay put | Slots depend on the agent's own id, not on how many agents are present |
+| 2.5.5 | Landed with no briefing yet, then the briefing arrives and parties appear | Watch the agents | Nobody moves — banners appear over the arrangement already on the ground | Grouping is a read-only layer over slots `planSurfaceCamp` already decided. Locked in by the `INVARIANT: grouping cannot move anyone` test |
+| 2.5.6 | Landed, the briefing changes its mind (regroups the same agents) | Watch the agents | Still nobody moves; only the banners change | Placement takes no briefing input at all, so no arrangement of parties can reach it |
 
 ---
 
-## 3. Agent Cards — "What do I need to know about each agent?"
+## 3. Agent Chips — "What do I need to know about each agent?"
+
+**What a chip's detail line says is now covered in §5.2** — status, identity and click-to-open are still tested here. `AgentInfo.lastAction` is still populated by the watchers but is no longer rendered anywhere, so §3.3 exercises the formatter that builds the string, not a surface that displays it.
 
 ### 3.1 Status display
 
@@ -158,23 +164,39 @@ The pixel-art surface shows agents that matter right now — working, error, and
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 4.1.1 | Space view, multiple planets | Click a planet | Camera smoothly transitions to planet; ProjectPanel slides in from right (0.3s ease) | Selection feels deliberate, not jarring |
-| 4.1.2 | Planet selected | Press Escape | Panel closes, camera returns to space view | Universal dismiss gesture |
-| 4.1.3 | Planet selected | Click empty space (miss all planets) | Panel closes, camera returns to space view | Click-away dismissal |
-| 4.1.4 | Planet A selected | Click Planet B | Camera transitions to Planet B; panel updates | Direct planet-to-planet navigation without returning to space view first |
-| 4.1.5 | Sidebar visible | Click project name in sidebar | Camera navigates to that planet, panel opens | Sidebar is an alternative navigation method |
-| 4.1.6 | Planet already selected via sidebar | Click same project in sidebar again | Deselects — panel closes, camera returns to space | Toggle behavior |
+| 4.1.1 | Space view, multiple planets | Click a planet | Camera descends out of orbit and lands on the surface (~1.4s); ground, figures and party banners fade in together late in the descent | Selection feels deliberate, not jarring — you travel to the project rather than opening a document about it |
+| 4.1.2 | Landed on a planet | Press Escape | Bar hides, camera ascends to the orbital overview, planet labels and status rings return | Universal dismiss gesture |
+| 4.1.3 | Space view | Click empty space (miss all planets) | Nothing selected; no change | Click-away only dismisses from orbit — while landed, clicking bare ground must not eject you |
+| 4.1.4 | Landed on Planet A | Click Planet B in the sidebar | Camera travels to Planet B and lands; bar updates | Direct planet-to-planet navigation without returning to orbit first |
+| 4.1.5 | Sidebar visible | Click project name in sidebar | Camera lands on that planet, bar opens | Sidebar is an alternative navigation method |
+| 4.1.6 | Planet already selected via sidebar | Click same project in sidebar again | Deselects — bar hides, camera returns to orbit | Toggle behavior |
 
-### 4.2 Camera behavior
+### 4.2 Landing and surface navigation
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 4.2.1 | Transition to a planet | Watch camera movement | Smooth interpolation using `1 - Math.exp(-5 * delta)` — fast start, gentle settle | Frame-rate independent smoothing; no jank regardless of FPS |
-| 4.2.2 | During camera transition | Try to orbit (drag) | OrbitControls disabled during transition | Prevents controls from fighting the animation |
-| 4.2.3 | Camera settled on planet | Try to orbit | OrbitControls re-enabled | User can look around freely once transition ends |
-| 4.2.4 | Space view | Zoom and orbit | OrbitControls with damping (factor 0.05), min distance 3, max distance 150 | Bounded to prevent losing the scene |
+| 4.2.1 | Space view | Click a planet | Camera falls toward it at an even rate, gaze swinging from the planet to the horizon late in the fall | Distance eases geometrically and the gaze is remapped to the back of the descent — both at once reads as a swerve |
+| 4.2.2 | Landed | Look at the horizon | Runs roughly level across the lower third of the frame, ridged rather than a clean arc | The camera rolls onto the local surface normal; the ridges are the terrain height field |
+| 4.2.3 | Land on several different projects | Compare the horizon each time | Always level, never tilted or vertical | Landing sites are hashed anywhere on the sphere, including the southern hemisphere — `camera.up` must track the local normal, not world up |
+| 4.2.4 | Landed | Drag left and right | Standing point slides along the surface; agents left behind lean as your local up rotates | Panning walks you around the globe. The lean is real small-planet geometry, not a bug |
+| 4.2.5 | Landed | Drag up and down | Pitch changes within a clamp; the horizon never leaves the frame | Clamped to ±the horizon angle so you cannot end up staring at the sky or your feet |
+| 4.2.6 | Landed | Scroll | Altitude changes between roughly 0.25 and 1.4 units | Lets you trade horizon curvature for a wider view of the camp |
+| 4.2.7 | Landed | Click bare ground | Nothing happens — you stay landed | `onPointerMissed` is suppressed while landed; only Escape and Back to orbit leave |
+| 4.2.8 | Landed, then return to orbit | Compare with the framing on first load | Identical | The overview pose is computed once from the ring layout and returned to exactly |
+| 4.2.9 | Landed | Look at other planets in the sky | Visible as objects, with no floating name labels or status rings | Orbital-scale chrome is retired on landing — from the ground it wraps the sky and collides with the HUD |
 
-### 4.3 Hover states
+### 4.3 Camera behavior
+
+| # | Setup | Action | Expected | Why |
+|---|-------|--------|----------|-----|
+| 4.3.1 | Descending or ascending | Watch camera movement | Direction slerps around the planet while distance eases geometrically over ~1.4s | A straight positional lerp grazes inner-ring planets and changes apparent speed wildly across a 15x range of scale |
+| 4.3.2 | Descending | Watch the path | Never passes inside the planet, at any point on the path | Distance is always interpolated between the two endpoint radii, so it cannot dip below either |
+| 4.3.3 | During any transition | Try to orbit (drag) | OrbitControls disabled | Prevents controls from fighting the animation |
+| 4.3.4 | Back in space view after a landing | Try to orbit | OrbitControls re-enabled and un-rolled | `camera.up` is reset to world up on arrival, or OrbitControls inherits the landed roll |
+| 4.3.5 | Space view | Zoom and orbit | OrbitControls with damping (factor 0.05), min distance 3, max distance 150 | Bounded to prevent losing the scene |
+| 4.3.6 | Tab backgrounded during a descent, then restored | Return to the tab | Camera completes the descent; planets do not flash blown-out | One very long frame must not make eased values overshoot their targets |
+
+### 4.4 Hover states
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
@@ -185,25 +207,58 @@ The pixel-art surface shows agents that matter right now — working, error, and
 
 ---
 
-## 5. Human Lingo — "What is this agent actually doing?"
+## 5. Work Parties & Intent — "What is being built here, and what is it asking me?"
 
-### 5.1 Translation behavior
+The surface names *intent*, never activity. Agents pursuing the same outcome form a **work party** that carries one banner naming the goal; an agent on its own carries its intent on its own chip; an agent that has stopped to ask you something shows the question. There is no jargon-translation layer and no raw view — the old `space:humanize` path and its regex fallback are gone.
 
-| # | Setup | Action | Expected | Why |
-|---|-------|--------|----------|-----|
-| 5.1.1 | Open project panel with Human Lingo on (default) | Read agent action text | Human-readable labels like "Installing project tools" instead of `Shell: npm install` | Non-technical users should never need to read developer jargon |
-| 5.1.2 | Toggle Human Lingo off | Read agent action text | Raw text like `Shell: npm install` or `Read: src/utils/auth.ts` | Power users can see the real commands |
-| 5.1.3 | Toggle Human Lingo back on | Read agent action text | Humanized labels reappear (from cache, no delay) | Toggle is instant for previously translated text |
-| 5.1.4 | Open project panel (Human Lingo on) | Watch network | `space:humanize` socket event sent only for un-cached raw texts | Client-initiated, on-demand — doesn't waste LLM calls for panels the user never opens |
-
-### 5.2 Translation quality
+### 5.1 Party banners
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 5.2.1 | Agent action: `Read: src/components/Login.tsx` | Check humanized text | Something like "Reviewing login code" (5-8 words) | Concise, everyday language |
-| 5.2.2 | Agent action: `Shell: git diff HEAD~3...HEAD -- src/` | Check humanized text | Something like "Reviewing recent code changes" | Technical git commands are opaque to non-developers |
-| 5.2.3 | No ANTHROPIC_API_KEY set | Check humanized text | Fallback labels from regex rules: "Reading" for Read, "Running" for Shell, etc. | Graceful degradation — app works without API key |
-| 5.2.4 | Agent action is an unrecognized format | Check fallback (no API key) | Known `Tool:detail` lines map to verbs; otherwise "Unclear activity" | No freeform truncation of arbitrary strings; no collision with lifecycle "Working" |
+| 5.1.1 | Project where 4 agents were asked for the same outcome | Land and look above the camp | One banner with a 3–6 word goal ("Create social media artifact and post") and an `N agents` line, instead of 4 separate labels | One goal read once beats four activity strings read four times — this is the whole reason the camp stopped being a wall of labels |
+| 5.1.2 | An agent whose goal nobody shares | Look for a banner over it | No banner; its own chip carries its intent | A banner needs something to say *and* someone to share it with — a party of one is just an agent |
+| 5.1.3 | Party with a goal the model could not name (empty `goal`) | Look for a banner | No banner; members fall back to their own chips | An untitled banner is worse than no banner |
+| 5.1.4 | Party whose members stand at different depths in the band | Look at where the banner sits | Band centroid, at the depth of the **furthest-back** member | Individual chips stagger upward with depth; sitting the banner at the back of that fan puts it above and behind every member, where the gap has already opened |
+| 5.1.5 | Project whose camp is hashed into the southern hemisphere | Look at the banner | Directly above its party, not drifting off to one side | The banner is lifted along the **radius**, not along planet-local +Y — local up only points outward near the pole |
+| 5.1.6 | Party containing one error agent and three working ones | Look at the banner's status dot | Red | The banner speaks for whoever most needs you: error > waiting > working > done |
+| 5.1.7 | Descend onto a planet with parties | Watch the banners appear | Fade in on the same schedule as the ground and the figures | The camp should arrive as one thing, not in pieces |
+
+### 5.2 What an agent's chip says
+
+The detail line under an agent's name resolves in this order: toast > error reason > question > its own intent > silent.
+
+| # | Setup | Action | Expected | Why |
+|---|-------|--------|----------|-----|
+| 5.2.1 | Working agent standing under a party banner | Read its chip | Name only — no detail line | The banner overhead has already said why this agent is here; repeating it an inch below is the duplication the banner exists to remove |
+| 5.2.2 | Agent not covered by a banner | Read its chip | Name plus its own 5–8 word intent | Every standing agent accounts for itself one way or the other |
+| 5.2.3 | Waiting agent whose transcript ends in a question | Read its chip | The question it actually asked — shown even inside a labelled party | An agent that has stopped and asked you something is the one thing on the planet that cannot wait for a hover |
+| 5.2.4 | Error agent with an `errorReason` | Read its chip | The error reason, truncated at 120 characters | What broke outranks what was intended |
+| 5.2.5 | Click an agent figure | Observe the chip | Its tool opens; a toast replaces the detail line for ~3s | Click-to-open lives on the figure itself — the thing standing in front of you is the thing you want to open |
+| 5.2.6 | Camp drawing more than 3 labels | Read the chips | Working chips fold back to just a name and reveal the detail on hover; question and error chips keep their text | Density is measured in labels, not bodies — three agents under one banner draw one label between them |
+| 5.2.7 | One banner over 4 agents, 3 of them holding questions | Count what is drawn | Counts as 4 labels and folds back | Regression: agents inside a banner still draw a chip when exempt from the fold-back, so they must be counted or a crowded camp reports itself as sparse |
+| 5.2.8 | Land on a planet, read chips before the briefing returns | Read the chips | Names only — no raw tool call, no placeholder | Raw activity is never shown, not even while waiting |
+
+### 5.3 Grouping without an API key
+
+| # | Setup | Action | Expected | Why |
+|---|-------|--------|----------|-----|
+| 5.3.1 | `ANTHROPIC_API_KEY` unset | Land on a project | Agents asked exactly the same thing share a party; every agent appears in exactly one party | `fallbackBriefing` groups by exact normalised task — coarser than the model, never wrong in a way that misleads |
+| 5.3.2 | No API key, one agent has no discoverable task | Look at that agent | Stands alone with no goal text — never "Unclear activity" or similar filler | An empty task is an absence of information, not a goal shared with every other taskless agent |
+| 5.3.3 | Tasks differing only by trailing whitespace, case, or a final period | Compare grouping | Still one party | `normalizeTask` trims, collapses whitespace, lowercases and strips trailing punctuation on both client and server |
+| 5.3.4 | API key set but the call fails or times out | Observe the surface | Same fallback grouping; no error state, no empty camp | The briefing failing must degrade the labels, not the scene |
+| 5.3.5 | Model returns an answer missing more than half the roster | Observe | Whole answer discarded; fallback grouping used instead | A model that dropped half the roster misunderstood the task — its surviving parties are not more trustworthy than the ones it forgot |
+| 5.3.6 | Model invents an id, or names the same agent in two parties | Observe | Invented id dropped, duplicate ignored, any forgotten agent re-added as its own party | `repairBriefing` makes the answer safe to render before it reaches the scene |
+
+### 5.4 Request economy
+
+| # | Setup | Action | Expected | Why |
+|---|-------|--------|----------|-----|
+| 5.4.1 | Land on a project and wait 30s with no roster change | Watch socket traffic | One `space:brief` emitted ~400ms after landing, then nothing | The guard compares roster *content*, not array identity — the socket hands over a fresh agents array every tick |
+| 5.4.2 | An agent flaps in and out of the roster on a TTL boundary | Watch socket traffic | The 400ms debounce absorbs it; no request per toggle | Every toggle changes the key, and every changed key would otherwise be a cache miss |
+| 5.4.3 | Land on the same project twice within 30 minutes, same roster | Check server logs | Second landing served from cache, no LLM call | `CACHE_TTL_MS` — see 11.1 |
+| 5.4.4 | Two browser tabs land on the same project at once | Check server logs | One LLM call; both clients get the same answer | In-flight de-duplication by roster key |
+| 5.4.5 | Land, then change the roster again within 3 seconds | Observe the second briefing | Fallback grouping, returned immediately | The rate floor degrades rather than queues — a usable answer now beats a better one after an unbounded wait |
+| 5.4.6 | Land, then fly back to orbit before the briefing returns | Observe | Result discarded; no banners flash onto the next planet | The response is checked against the still-selected project before it is stored |
 
 ---
 
@@ -295,14 +350,15 @@ Layout is **name-stable**: agent status and `lastActivityMs` must not move a pla
 | 8.2.2 | Rapid state updates (many agent changes) | Monitor frame rate | Stable — no compounding re-renders | Zustand selectors + useMemo prevent unnecessary recalculation |
 | 8.2.3 | React StrictMode | Check if enabled | Disabled (removed from entry point) | StrictMode double-mounting destroys and recreates WebGL resources, causing visible flashes |
 
-### 8.3 PlanetSurface canvas performance
+### 8.3 Landed surface performance
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 8.3.1 | Open project panel with agents | Check canvas rendering | `requestAnimationFrame` loop, `imageSmoothingEnabled = false` | Pixel-art aesthetic requires nearest-neighbor rendering |
-| 8.3.2 | Canvas dimensions | Inspect | 100×60 pixel units, scaled up via CSS | Tiny canvas = minimal per-frame computation |
-| 8.3.3 | Terrain, stars, dust motes | Inspect generation | Computed in `useMemo`, not recalculated each frame | Static elements generated once from seed |
-| 8.3.4 | Close project panel | Check | Animation loop cleaned up | No orphaned RAF loops |
+| 8.3.1 | Land on a planet with agents | Check the WebGL canvas | One canvas for the whole app; each agent is lit box geometry sharing a single `UNIT_BOX`, posed by limb rotation | One geometry and a handful of materials per agent, and there is no second WebGL context |
+| 8.3.2 | Landed, several agents | Inspect the scene graph | Every body part reuses the shared box; only the four identity materials are per-agent | Bounded per-agent GPU cost — adding an agent adds materials, never geometry |
+| 8.3.3 | Terrain | Inspect generation | Ground patch built once per landing from `terrainHeight` + project seed (~19k vertices, ~15-20ms) | Deterministic look per project, and the cost is paid once, late in the descent |
+| 8.3.4 | Return to orbit | Check GPU resources | Ground geometry and each agent's materials disposed on unmount; the shared box outlives them | Landing and leaving repeatedly must not leak GPU memory |
+| 8.3.5 | `prefers-reduced-motion: reduce` | Toggle OS setting | Animation freezes at frame 0 | Accessibility path |
 
 ---
 
@@ -426,15 +482,20 @@ EventWatcher normalizes raw hook events into `HookRuntimeEntry` overlays and cal
 
 ## 11. Caching & Resource Management
 
-### 11.1 Humanizer cache
+### 11.1 Briefing cache
+
+The briefing is the only LLM call in the app, so every guard against redundant spend lives in `server/services/briefing.ts`. The cache key is derived from the request DTO (`{id, task}` per agent, sorted and normalised) — nothing volatile may enter it.
 
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
-| 11.1.1 | Translate the same raw text twice | Check LLM calls | Second request served from cache, no LLM call | Avoid redundant API spend |
-| 11.1.2 | Cache at 500 entries | Add one more | LRU eviction — oldest entry removed | MAX_CACHE = 500 prevents unbounded memory |
-| 11.1.3 | Cached entry older than 1 hour | Request it | Re-translated via LLM | CACHE_TTL_MS = 1 hour ensures freshness |
-| 11.1.4 | Batch of 25 raw texts | Submit for humanization | Split into batches of 20 max | BATCH_SIZE = 20 prevents oversized LLM requests |
-| 11.1.5 | LLM call fails | Check result | Falls back to regex/truncation per input, never crashes | Graceful degradation |
+| 11.1.1 | Brief the same roster twice within 30 minutes | Check LLM calls | Second request served from cache, no LLM call | Avoid redundant API spend |
+| 11.1.2 | Cache at 64 entries | Add one more | Oldest entry evicted (`Map` iterates in insertion order) | MAX_CACHE = 64 prevents unbounded memory |
+| 11.1.3 | Cached entry older than 30 minutes | Request it | Re-briefed via LLM | CACHE_TTL_MS = 30 min ensures freshness |
+| 11.1.4 | Two identical rosters requested while the first call is still open | Check LLM calls | Second awaits the first's promise — one call, two answers | In-flight de-duplication; two sockets must not both pay for the same roster |
+| 11.1.5 | A second, *different* roster within 3 seconds of the last call | Check LLM calls | No call — fallback grouping returned immediately | MIN_CALL_INTERVAL_MS = 3000 means a client bug cannot bill in a loop |
+| 11.1.6 | Request with more than 8 agents | Check LLM calls | No call — fallback grouping | The client sends the surface roster, capped at 5; anything past 8 is a malformed request, not a big project |
+| 11.1.7 | LLM call throws | Check result | `fallbackBriefing` returned, error logged, never crashes | Graceful degradation |
+| 11.1.8 | Agent's `lastAction` or `status` changes, task unchanged | Check LLM calls | Cache hit — no new call | The DTO carries only `{id, task}`; a volatile field in the key would bill a call several times a second |
 
 ### 11.2 State management
 
@@ -449,7 +510,7 @@ EventWatcher normalizes raw hook events into `HookRuntimeEntry` overlays and cal
 | # | Setup | Action | Expected | Why |
 |---|-------|--------|----------|-----|
 | 11.3.1 | Stop server (SIGINT) | Check cleanup | All watchers stopped, HTTP server closed | No orphaned file watchers or listeners |
-| 11.3.2 | Close project panel | Check PlanetSurface | `requestAnimationFrame` loop canceled | No orphaned animation loops |
+| 11.3.2 | Return to orbit | Check SurfaceView | Ground geometry and agent materials disposed; pointer/wheel listeners removed | No orphaned render loops or listeners |
 
 ---
 
@@ -461,17 +522,17 @@ EventWatcher normalizes raw hook events into `HookRuntimeEntry` overlays and cal
 |---|----------|----------|-----|
 | 12.1.1 | No agent sessions exist on disk | Space view with stars and nebula, no planets, sidebar empty | App is usable but empty — no crash, no loading spinner stuck |
 | 12.1.2 | All agents done for > 1 hour | All planets disappear | Dashboard shows live work only |
-| 12.1.3 | Project panel open, last agent disappears | Panel content updates to show no agents | No stale data in open panels |
+| 12.1.3 | Landed, last agent disappears | Surface empties; bar shows "No active agents" | No stale data while landed |
 
 ### 12.2 UI layout edge cases
 
 | # | Scenario | Expected | Why |
 |---|----------|----------|-----|
-| 12.2.1 | Very long project name | Name truncated with ellipsis in ProjectPanel and Sidebar | `overflow: hidden`, `textOverflow: ellipsis` prevent layout breakage |
-| 12.2.2 | ProjectPanel open with long project name | ESC button not pushed off screen | Button has `flexShrink: 0` — never squeezed by title |
+| 12.2.1 | Very long project name | Name and path truncated with ellipsis in the HUD and Sidebar | `overflow: hidden`, `textOverflow: ellipsis` prevent layout breakage |
+| 12.2.2 | Very long goal or question text | Party banner clamps the goal to 2 lines; an agent chip clamps its detail line to 2 | Fixed-width chips with `WebkitLineClamp` — an unbounded string would otherwise grow a label until it covered the agents beside it |
 | 12.2.3 | Planet labels and sidebar both visible | Labels don't bleed through sidebar/panel | Canvas has `zIndex: 1`, UI panels have higher z-index |
 | 12.2.4 | HUD with sidebar open | HUD shifts right by 200px | Left offset accounts for sidebar width |
-| 12.2.5 | HUD with project panel open | HUD right edge aligns with panel edge (panel is 420px) | Right offset is `420px`, matching the panel width |
+| 12.2.5 | HUD while landed | HUD spans the full width; planet labels and status rings are hidden | Nothing occupies the right edge any more, and orbital-scale labels would collide with the HUD from ground level |
 
 ### 12.3 Server unavailable
 
@@ -480,6 +541,8 @@ EventWatcher normalizes raw hook events into `HookRuntimeEntry` overlays and cal
 | 12.3.1 | Frontend loads but backend is down | No crash; empty state; reconnection attempts | Socket.IO reconnects with backoff (1s → 5s max) |
 | 12.3.2 | Backend goes down while viewing | Existing state stays visible; reconnects when backend returns | Last-known state is better than blank screen |
 | 12.3.3 | `POST /api/open-session` fails | Toast shows error; no crash | Graceful failure with user feedback |
+| 12.3.4 | `space:brief` ack never arrives (server hangs mid-briefing) | Resolves to empty parties after 8s; agents fall back to solo chips; the request guard clears so a later tick retries | Socket.IO acks have no timeout of their own — `withAck` adds one. Without the guard clearing, one lost response would wedge that project permanently, since the key it is stuck on will never change |
+| 12.3.5 | Socket disconnected when the briefing is requested | Resolves immediately to empty parties; no pending promise | A landed camp with no banners is a degraded read, not a broken one |
 
 ### 12.4 Health endpoint
 
@@ -524,27 +587,39 @@ The `HookSetupCard` component in `src/ui/HookSetupCard.tsx` provides a persisten
 
 ## 14. Automated Tests
 
-Automated unit tests run via `npm test` (vitest). These complement the manual tests above — they cover the StateManager authority model and EventWatcher normalization logic that are difficult to test manually.
+Automated unit tests run via `npm test` (vitest). These complement the manual tests above — they cover parsing, state and geometry logic that is difficult or impossible to check by looking at the screen.
+
+`vitest.config.ts` includes `server/__tests__/**` and `src/**/*.test.ts` and runs `environment: 'node'`. **There is no DOM**, so React component and hook tests are not possible. That is why the briefing request key and the party anchor maths live in pure exported modules (`src/ui/briefingRequest.ts`, `src/scene/surfacePlacement.ts`) rather than inside `useBriefProject` and `PartyLabel` — extracting them is the only way they can be tested at all.
 
 ### 14.1 How to run
 
 | # | Action | Expected | Why |
 |---|--------|----------|-----|
-| 14.1.1 | Run `npm test` | All tests pass (65 tests across 4 files) | Confirms authority model, overlay expiry, event normalization (incl. Cursor lifecycle), and stable orbital layout |
+| 14.1.1 | Run `npm test` | All tests pass (292 tests across 13 files) | Confirms transcript parsing, briefing cache/repair/fallback, authority model, overlay expiry, event normalization, and the surface geometry invariants |
 | 14.1.2 | Run `npm run test:watch` | Vitest runs in watch mode, re-runs on file changes | Development workflow |
+| 14.1.3 | Run `npm test` with no network access and no `ANTHROPIC_API_KEY` | Still passes | No test touches the network — `briefing.test.ts` injects a transport via `__setBriefingTransport` so the real cache and repair logic runs against a stub |
 
 ### 14.2 What's covered
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `server/__tests__/stateManager.test.ts` | 18 | Authority scenarios (realtime/inferred), overlay expiry at TTL boundaries, Cursor realtime overlays, clearHookRuntimeForSources, pre-discovery events, rapid events, empty state, cwd-based matching |
+| `server/__tests__/userMessages.test.ts` | 51 | Table-driven over the exported `SYNTHETIC_PREFIXES` and `CONTINUATION_WORDS`, so an entry added to either list without a case shows up as untested. Reject-before-unwrap ordering, XML-ish tag shape, `meaningfulAgentText` rejecting JSON verdicts, `firstSentence` / `truncateAt` |
 | `server/__tests__/eventWatcher.test.ts` | 37 | Event normalization (incl. Cursor camelCase, `sessionEnd`/`stop`), fire event normalization, unknown event rejection, missing field handling, `detectSource` (Cursor vs Claude), `extractSessionId`/`extractCwd` |
-| `src/scene/__tests__/layout.test.ts` | 9 | `layoutOrbitalLanes`: empty/single, XZ plane, determinism, ignores agent status and `lastActivityMs`, multi-ring (>8), unique positions, order-independence (sort by name) |
+| `server/__tests__/briefing.test.ts` | 30 | Cache hit/expiry/eviction, in-flight de-duplication, the 3s rate floor, `repairBriefing` (invented ids, duplicates, forgotten agents, bail past half the roster), `fallbackBriefing` grouping and taskless agents, `briefingKey` normalization, schema validation. Transport injected via `__setBriefingTransport` |
+| `server/__tests__/stateManager.test.ts` | 19 | Authority scenarios (realtime/inferred), overlay expiry at TTL boundaries, Cursor realtime overlays, clearHookRuntimeForSources, pre-discovery events, rapid events, empty state, cwd-based matching |
+| `server/__tests__/parseTranscript.test.ts` | 16 | Real tmpdir fixtures: `currentTask` is the **latest** meaningful user message and not the first, continuation-word fallback to the previous turn, `question` set and unset around a trailing tool call, synthetic turns skipped |
+| `server/__tests__/parseCodexSession.test.ts` | 9 | The safety-classifier prompt never becomes a goal, ambient-context unwrap below `## My request for Codex:`, `phase: final_answer` vs `commentary` |
 | `server/__tests__/smoke.test.ts` | 1 | Test infrastructure sanity check |
+| `src/scene/__tests__/surfacePlacement.test.ts` | 38 | Determinism per `(projectName, agent.id)`, invariance to input order and to agent status, unit-length directions, band and depth bounds, everything inside the horizon, minimum separation and graceful crowding, orthonormal landing frame. Plus `partyAnchor`: order-independence, depth of the furthest member, single-member identity, in-bounds, inside the horizon — and **`INVARIANT: grouping cannot move anyone`** |
+| `src/scene/__tests__/surfaceCamera.test.ts` | 36 | Landed pose height/direction/pitch, **camera roll onto the local surface normal** (incl. a southern-hemisphere camp), descent endpoints, monotonic approach, never entering the planet, antipodal slerp, no NaN along the path, overview framing, pan clamps |
+| `src/scene/__tests__/surfaceTerrain.test.ts` | 19 | Height field determinism, range, continuity (no pole or meridian seam), patch vertex bounds and radii, normals facing outward, ring resolution concentrated near the viewer, mesh radius agreeing with `terrainHeight` — the invariant that keeps agents' feet on the ground |
+| `src/scene/__tests__/agentMotion.test.ts` | 16 | Which animation each status maps to, how far a walker strays, which way it faces, phase derived from the agent id rather than array index |
+| `src/ui/__tests__/briefingRequest.test.ts` | 11 | Asserts on the DTO's **key set** — exactly `{id, task}` — so widening it fails here rather than on the API bill. Plus request-key stability across scan order, whitespace, case and trailing punctuation |
+| `src/scene/__tests__/layout.test.ts` | 9 | `layoutOrbitalLanes`: empty/single, XZ plane, determinism, ignores agent status and `lastActivityMs`, multi-ring (>8), unique positions, order-independence (sort by name) |
 
 ### 14.3 Relationship to manual tests
 
-Automated tests cover the internal StateManager and EventWatcher contract. Manual tests (Sections 1–13) cover the full user experience including 3D rendering, animations, Socket.IO lifecycle, and UI interactions that cannot be unit tested.
+Automated tests cover the parsing, state and geometry contracts. Manual tests (Sections 1–13) cover the full user experience including 3D rendering, animations, Socket.IO lifecycle, and UI interactions that cannot be unit tested in a DOM-less runner.
 
 ---
 
@@ -558,4 +633,4 @@ These are documented bugs that remain unfixed. Listed here so testers don't file
 | ~~Planets reordered by agent activity / tier — positions jumped on every status update~~ | ~~Medium~~ | **Fixed.** Positions are name-sorted rings only; status and `lastActivityMs` do not affect layout (`src/scene/layout.ts`) |
 | Starfield positions use unseeded `Math.random()` — star layout shifts on component remount | Low | Background changes on hot reload |
 | ~~Sidebar status priority uses error > working > waiting > done instead of error > waiting > working > done~~ | ~~Medium~~ | **Fixed.** Sidebar now uses error > waiting > working > done, consistent with planet status rings and labels |
-| ~~HUD right offset is 340px but ProjectPanel width is 420px~~ | ~~Low~~ | **Fixed.** HUD now uses `right: selectedId ? '420px' : 0`, matching the 420px panel width |
+| ~~HUD right offset is 340px but ProjectPanel width is 420px~~ | ~~Low~~ | **Fixed**, then obsolete. The side panel is gone; the HUD spans the full width |

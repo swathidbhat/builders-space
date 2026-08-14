@@ -185,6 +185,7 @@ export class CodexWatcher {
           statusSource: 'inferred',
           currentTask: data.latestTask,
           lastAction: data.lastAction,
+          question: data.question,
           lastActivityMs: data.lastActivityMs,
           title: threadName,
           sessionMeta: {

@@ -131,6 +131,7 @@ export class ClaudeWatcher {
             statusSource: 'inferred',
             currentTask: data.latestTask,
             lastAction: data.lastAction,
+            question: data.question,
             lastActivityMs: data.lastActivityMs,
             sessionMeta: {
               projectPath: dirNameToPath(dirName),

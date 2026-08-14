@@ -1,9 +1,17 @@
 import { readFileSync, statSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
+import {
+  firstSentence,
+  meaningfulAgentText,
+  meaningfulUserText,
+} from './userMessages';
 
 export interface TranscriptData {
-  userQuery: string;
+  /** The most recent thing a human actually asked for. */
+  latestTask: string;
   lastAction?: string;
+  /** What the agent is asking, when its last turn was prose rather than a tool call. */
+  question?: string;
   isRecentlyActive: boolean;
   lastActivityMs: number;
 }
@@ -23,8 +31,9 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.trim().split('\n').filter(Boolean);
 
-    let userQuery = '';
+    let latestTask = '';
     let lastAction: string | undefined;
+    let lastAssistantText: string | undefined;
     let lastModifiedMs = 0;
 
     try {
@@ -35,26 +44,40 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
       try {
         const entry = JSON.parse(line);
 
-        if (entry.role === 'user' && !userQuery) {
-          const text = extractTextFromMessage(entry.message);
-          if (text) userQuery = text.slice(0, 200);
+        // Last write wins. This path carries no timestamps, so file order is
+        // chronological order; `meaningfulUserText` is what makes taking the
+        // latest safe, by skipping past command echoes and bare "continue"s.
+        if (entry.role === 'user') {
+          const text = meaningfulUserText(extractTextFromMessage(entry.message));
+          if (text) latestTask = text;
         }
 
         if (entry.role === 'assistant') {
           const text = extractTextFromMessage(entry.message);
-          if (text) lastAction = extractFirstSentence(text);
+          if (text) {
+            lastAction = firstSentence(text, ACTION_MAX_LEN);
+            lastAssistantText = text;
+          }
         }
       } catch {
         continue;
       }
     }
 
-    if (!userQuery && !lastAction) return null;
+    if (!latestTask && !lastAction) return null;
 
     const ageMs = Date.now() - lastModifiedMs;
     const isRecentlyActive = ageMs < 2 * 60 * 1000;
 
-    return { userQuery, lastAction, isRecentlyActive, lastActivityMs: lastModifiedMs };
+    return {
+      latestTask,
+      lastAction,
+      // No tool-use records on this path, so there is no "still working" signal
+      // to exclude on. The UI only reads this when the agent is waiting.
+      question: meaningfulAgentText(lastAssistantText),
+      isRecentlyActive,
+      lastActivityMs: lastModifiedMs,
+    };
   } catch {
     return null;
   }
@@ -63,10 +86,19 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
 export function parseTranscriptFile(filePath: string): TranscriptData | null {
   try {
     const content = readFileSync(filePath, 'utf-8');
-    const queryMatch = content.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
-    if (!queryMatch) return null;
 
-    const userQuery = queryMatch[1].trim().slice(0, 200);
+    // All blocks, not the first: a `.match()` with a non-greedy group stops at
+    // the opening query, which left a retasked session advertising whatever it
+    // was originally asked to do.
+    const blocks = [...content.matchAll(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/g)];
+    if (blocks.length === 0) return null;
+
+    let latestTask = '';
+    for (const block of blocks) {
+      const text = meaningfulUserText(block[1]);
+      if (text) latestTask = text;
+    }
+    if (!latestTask) return null;
 
     let lastModifiedMs = 0;
     try {
@@ -76,7 +108,10 @@ export function parseTranscriptFile(filePath: string): TranscriptData | null {
     const ageMs = Date.now() - lastModifiedMs;
     const isRecentlyActive = ageMs < 2 * 60 * 1000;
 
-    return { userQuery, isRecentlyActive, lastActivityMs: lastModifiedMs };
+    // `question` is deliberately absent: this path has no assistant records at
+    // all — it does not even set `lastAction` — and guessing at the format
+    // would put invented text above an agent's head.
+    return { latestTask, isRecentlyActive, lastActivityMs: lastModifiedMs };
   } catch {
     return null;
   }
@@ -87,6 +122,8 @@ export interface ClaudeSessionData {
   cwd: string;
   latestTask: string;
   lastAction?: string;
+  /** What the agent is asking, when its last turn was prose rather than a tool call. */
+  question?: string;
   slug?: string;
   isActive: boolean;
   lastActivityMs: number;
@@ -102,6 +139,8 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
     let latestTask = '';
     let latestTimestamp = 0;
     let lastAction: string | undefined;
+    let lastAssistantText: string | undefined;
+    let lastTurnEndedInToolUse = false;
     let slug: string | undefined;
 
     for (const line of lines) {
@@ -121,9 +160,14 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
                 .map((c: { text: string }) => c.text)
                 .join(' ');
 
-          if (ts >= latestTimestamp && msgContent.length > 0) {
+          // Claude writes command echoes, skill preambles and interrupt
+          // notices into the user role, and they arrive with timestamps like
+          // any other turn — so the newest user entry is regularly not a human
+          // request at all.
+          const meaningful = meaningfulUserText(msgContent);
+          if (ts >= latestTimestamp && meaningful) {
             latestTimestamp = ts;
-            latestTask = msgContent.slice(0, 200);
+            latestTask = meaningful;
           }
         }
 
@@ -132,14 +176,19 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
             Array.isArray(entry.message.content) ? entry.message.content : [];
 
           const toolUse = [...contentBlocks].reverse().find(c => c.type === 'tool_use');
+          const textBlock = [...contentBlocks].reverse().find(c => c.type === 'text' && c.text);
+
           if (toolUse && toolUse.name) {
             lastAction = formatToolUse(toolUse.name, toolUse.input);
-          } else {
-            const textBlock = [...contentBlocks].reverse().find(c => c.type === 'text' && c.text);
-            if (textBlock?.text) {
-              lastAction = extractFirstSentence(textBlock.text);
-            }
+          } else if (textBlock?.text) {
+            lastAction = firstSentence(textBlock.text, ACTION_MAX_LEN);
           }
+
+          // Tracked per turn, not accumulated: only the final assistant turn
+          // can be a question. A turn ending in a tool call is mid-work and is
+          // not asking you anything, however conversational its prose was.
+          lastTurnEndedInToolUse = !!(toolUse && toolUse.name);
+          lastAssistantText = textBlock?.text;
 
           if (ts > latestTimestamp) latestTimestamp = ts;
         }
@@ -152,7 +201,11 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
 
     const isActive = (Date.now() - latestTimestamp) < 2 * 60 * 1000;
 
-    return { sessionId, cwd, latestTask, lastAction, slug, isActive, lastActivityMs: latestTimestamp };
+    const question = lastTurnEndedInToolUse
+      ? undefined
+      : meaningfulAgentText(lastAssistantText);
+
+    return { sessionId, cwd, latestTask, lastAction, question, slug, isActive, lastActivityMs: latestTimestamp };
   } catch {
     return null;
   }
@@ -173,19 +226,14 @@ function extractTextFromMessage(message: unknown): string | undefined {
   return undefined;
 }
 
+/** How much of an assistant turn we keep as the one-line action. */
+const ACTION_MAX_LEN = 80;
+
 export function shortenPaths(text: string): string {
   return text.replace(/\/(?:[^\s/]+\/){2,}[^\s/]+/g, (match) => {
     const segments = match.split('/').filter(Boolean);
     return segments[segments.length - 1];
   });
-}
-
-function extractFirstSentence(text: string): string {
-  const cleaned = text.replace(/^#+\s*/gm, '').trim();
-  const first = cleaned.split(/(?<=[.!?])\s|\n/)[0]?.trim();
-  if (!first) return cleaned.slice(0, 80);
-  if (first.length > 80) return first.slice(0, 77).replace(/\s+\S*$/, '') + '...';
-  return first;
 }
 
 export function formatToolUse(toolName: string, input?: Record<string, unknown>): string {

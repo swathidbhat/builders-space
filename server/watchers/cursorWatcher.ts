@@ -3,6 +3,7 @@ import { readdirSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import { parseTranscriptDir, parseTranscriptFile } from '../utils/parseTranscript';
+import type { TranscriptData } from '../utils/parseTranscript';
 import { extractProjectName, dirNameToPath } from '../utils/projectName';
 import type { AgentInfo, AgentStatus, ProjectInfo } from '../types';
 
@@ -10,6 +11,44 @@ export type CursorWatcherCallback = (projects: Map<string, ProjectInfo>) => void
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * One agent from a Cursor transcript, whichever shape it arrived in.
+ *
+ * Directory transcripts and `.txt` transcripts differ only in how their id and
+ * path are derived, but they were built by two hand-maintained blocks that had
+ * already drifted — the `.txt` path silently stopped setting `lastAction`.
+ */
+function buildCursorAgent(args: {
+  agentId: string;
+  sessionId: string;
+  data: TranscriptData;
+  ageMs: number;
+  projectPath: string;
+  transcriptPath: string;
+}): AgentInfo {
+  const { agentId, sessionId, data, ageMs, projectPath, transcriptPath } = args;
+
+  let status: AgentStatus;
+  if (data.isRecentlyActive) {
+    status = 'working';
+  } else {
+    status = ageMs < ONE_HOUR_MS ? 'waiting' : 'done';
+  }
+
+  return {
+    id: agentId,
+    source: 'cursor',
+    sessionId,
+    status,
+    statusSource: 'inferred',
+    currentTask: data.latestTask,
+    lastAction: data.lastAction,
+    question: data.question,
+    lastActivityMs: data.lastActivityMs,
+    sessionMeta: { projectPath, transcriptPath },
+  };
+}
 
 export class CursorWatcher {
   private cursorBase: string;
@@ -81,27 +120,16 @@ export class CursorWatcher {
               const agentId = `cursor-agent-${entry.name}`;
               if (agents.some(a => a.id === agentId)) continue;
 
-              let status: AgentStatus;
-              if (data.isRecentlyActive) {
-                status = 'working';
-              } else {
-                status = transcriptAgeMs < ONE_HOUR_MS ? 'waiting' : 'done';
-              }
-
-              agents.push({
-                id: agentId,
-                source: 'cursor',
-                sessionId: entry.name,
-                status,
-                statusSource: 'inferred',
-                currentTask: data.userQuery,
-                lastAction: data.lastAction,
-                lastActivityMs: data.lastActivityMs,
-                sessionMeta: {
+              agents.push(
+                buildCursorAgent({
+                  agentId,
+                  sessionId: entry.name,
+                  data,
+                  ageMs: transcriptAgeMs,
                   projectPath: dirNameToPath(dirName),
                   transcriptPath: subDir,
-                },
-              });
+                }),
+              );
             } else if (entry.name.endsWith('.txt')) {
               const data = parseTranscriptFile(join(transcriptsDir, entry.name));
               if (!data) continue;
@@ -112,27 +140,16 @@ export class CursorWatcher {
               const agentId = `cursor-agent-${basename(entry.name, '.txt')}`;
               if (agents.some(a => a.id === agentId)) continue;
 
-              let status: AgentStatus;
-              if (data.isRecentlyActive) {
-                status = 'working';
-              } else {
-                status = txtAgeMs < ONE_HOUR_MS ? 'waiting' : 'done';
-              }
-
-              agents.push({
-                id: agentId,
-                source: 'cursor',
-                sessionId: basename(entry.name, '.txt'),
-                status,
-                statusSource: 'inferred',
-                currentTask: data.userQuery,
-                lastAction: data.lastAction,
-                lastActivityMs: data.lastActivityMs,
-                sessionMeta: {
+              agents.push(
+                buildCursorAgent({
+                  agentId,
+                  sessionId: basename(entry.name, '.txt'),
+                  data,
+                  ageMs: txtAgeMs,
                   projectPath: dirNameToPath(dirName),
                   transcriptPath: join(transcriptsDir, entry.name),
-                },
-              });
+                }),
+              );
             }
           }
         } catch { /* skip */ }
