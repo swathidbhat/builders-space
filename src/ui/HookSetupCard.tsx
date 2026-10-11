@@ -138,6 +138,7 @@ export function HookSetupCard() {
         onClick={handleExpand}
         title="Hook settings"
         aria-label="Hook settings"
+        data-overlay="hooks"
       >
         {WRENCH_SVG}
       </button>
@@ -148,7 +149,7 @@ export function HookSetupCard() {
   const restartRequired = Boolean(enableResult?.restartRequired);
 
   return (
-    <aside className={styles.card} aria-label="Hooks">
+    <aside className={styles.card} aria-label="Hooks" data-overlay="hooks">
       <div className={styles.header}>
         <span className={styles.title}>Hooks</span>
         <button

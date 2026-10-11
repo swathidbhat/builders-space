@@ -1,0 +1,55 @@
+.dock {
+  position: fixed;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.banner {
+  align-self: center;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  overflow: auto;
+  pointer-events: none;
+  background: rgba(40, 18, 18, 0.92);
+  border: 1px solid rgba(255, 120, 80, 0.45);
+  color: #ffd0c2;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  line-height: 1.35;
+  text-align: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 12px;
+  width: 100%;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.row > * {
+  pointer-events: auto;
+}
+
+@media (max-height: 700px) {
+  .dock {
+    gap: 6px;
+  }
+
+  .banner {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}

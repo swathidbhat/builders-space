@@ -33,6 +33,7 @@ interface SpaceStore {
   selectedPlanetId: string | null;
   cameraMode: 'space' | 'planet';
   sidebarOpen: boolean;
+  sidebarOverlayOpen: boolean;
   humanLingo: boolean;
   lingoPreference: LingoPreference;
   hoveredPlanetId: string | null;
@@ -53,6 +54,7 @@ interface SpaceStore {
   selectPlanet: (id: string) => void;
   deselectPlanet: () => void;
   toggleSidebar: () => void;
+  setSidebarOverlay: (open: boolean) => void;
   toggleHumanLingo: () => void;
   applyAssistantKey: (state: AssistantKeyState) => void;
   setHoveredPlanet: (id: string | null) => void;
@@ -65,6 +67,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
   selectedPlanetId: null,
   cameraMode: 'space',
   sidebarOpen: true,
+  sidebarOverlayOpen: false,
   humanLingo: false,
   lingoPreference: 'auto',
   hoveredPlanetId: null,
@@ -134,6 +137,8 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
 
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
+  setSidebarOverlay: (open) => set({ sidebarOverlayOpen: open }),
+
   toggleHumanLingo: () =>
     set((state) => {
       const humanLingo = !state.humanLingo;
@@ -152,3 +157,13 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
   setHumanizedTexts: (texts) =>
     set((s) => ({ humanizedTexts: rememberTranslations(s.humanizedTexts, texts) })),
 }));
+
+declare global {
+  interface Window {
+    __spaceStore?: typeof useSpaceStore;
+  }
+}
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  window.__spaceStore = useSpaceStore;
+}

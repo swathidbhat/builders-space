@@ -57,11 +57,12 @@ function measuredChrome(): ScreenRect[] {
     'nav[aria-label="Projects"]',
     'aside[aria-label="Project details"]',
     'aside[aria-label="Hooks"]',
+    '[data-bottom-dock]',
   ]) {
     const el = document.querySelector(selector);
     if (!(el instanceof HTMLElement)) continue;
     const rect = el.getBoundingClientRect();
-    if (rect.width < 100 || rect.height < 80) continue;
+    if (rect.width < 100 || rect.height < 32) continue;
     rects.push({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
   }
   return rects;

@@ -41,11 +41,9 @@
 
 @keyframes sidebarIn {
   from {
-    transform: translateX(-100%);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
     opacity: 1;
   }
 }
@@ -197,12 +195,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-width: 0;
+}
+
+.urgentTaskRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 14px;
 }
 
 .urgentTime {
   font-size: 11px;
   color: #d5dced;
-  flex-shrink: 0;
+  flex: none;
   white-space: nowrap;
 }
 
@@ -214,6 +221,15 @@
   overflow: hidden;
   white-space: normal;
   line-height: 1.35;
+}
+
+.urgentTask {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 0;
+}
+
+.urgentDetail {
   padding-left: 14px;
 }
 
@@ -234,8 +250,8 @@
   }
 
   .panel {
-    top: 64px;
-    height: calc(100vh - 64px);
+    top: calc(var(--hud-bottom, 96px) + 8px);
+    height: calc(100vh - var(--hud-bottom, 96px) - 8px);
     box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
     z-index: 75;
   }

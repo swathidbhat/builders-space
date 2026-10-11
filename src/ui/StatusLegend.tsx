@@ -1,6 +1,4 @@
-import { useSpaceStore } from '../store';
 import { STATUS_MARK } from './statusCue';
-import { useCompactLayout } from './useCompactLayout';
 import styles from './StatusLegend.module.css';
 
 const ITEMS = [
@@ -11,14 +9,8 @@ const ITEMS = [
 ] as const;
 
 export function StatusLegend() {
-  const sidebarOpen = useSpaceStore((s) => s.sidebarOpen);
-  const compact = useCompactLayout();
-  const shifted = sidebarOpen && !compact;
   return (
-    <aside
-      className={shifted ? `${styles.legend} ${styles.shifted}` : styles.legend}
-      aria-label="Status legend"
-    >
+    <aside className={styles.legend} aria-label="Status legend" data-overlay="legend">
       <ul className={styles.list}>
         {ITEMS.map((item) => (
           <li key={item.label}>

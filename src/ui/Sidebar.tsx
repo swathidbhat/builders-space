@@ -22,6 +22,11 @@ export function Sidebar() {
     if (!compact) setOverlayOpen(false);
   }, [compact]);
 
+  useEffect(() => {
+    useSpaceStore.getState().setSidebarOverlay(compact && overlayOpen);
+    return () => useSpaceStore.getState().setSidebarOverlay(false);
+  }, [compact, overlayOpen]);
+
   const open = compact ? overlayOpen : sidebarOpen;
   const toggle = () => {
     if (compact) setOverlayOpen((value) => !value);
@@ -33,7 +38,7 @@ export function Sidebar() {
 
   if (!open) {
     return (
-      <nav id="projects-nav" aria-label="Projects">
+      <nav id="projects-nav" aria-label="Projects" data-overlay="projects">
         <button
           type="button"
           className={styles.collapsed}
@@ -52,7 +57,7 @@ export function Sidebar() {
   };
 
   return (
-    <nav id="projects-nav" aria-label="Projects" className={styles.panel}>
+    <nav id="projects-nav" aria-label="Projects" className={styles.panel} data-overlay="projects">
       <div className={styles.head}>
         <span className={styles.heading}>Projects</span>
         <button type="button" className={styles.close} aria-label="Close projects" onClick={toggle}>
@@ -67,12 +72,15 @@ export function Sidebar() {
             {needsYou.map((row) => {
               const isSelected = row.projectId === selectedId;
               const dotColor = row.status === 'error' ? '#ff4444' : '#ffaa44';
+              const pretty = prettifyName(row.projectName);
+              const accessible = `${STATUS_WORD[row.status]}: ${pretty}. ${row.duration}. ${row.task}`;
               return (
                 <button
                   key={row.agentId}
                   type="button"
                   className={isSelected ? `${styles.urgent} ${styles.selected}` : styles.urgent}
-                  title={row.detail}
+                  title={`${pretty}. ${row.duration}. ${row.detail}`}
+                  aria-label={accessible}
                   onClick={() => select(row.projectId)}
                 >
                   <span className={styles.urgentTop}>
@@ -87,11 +95,14 @@ export function Sidebar() {
                     <span className={styles.glyph} aria-hidden="true">
                       {STATUS_MARK[row.status]}
                     </span>
-                    <span className="sr-only">{STATUS_WORD[row.status]}</span>
-                    <span className={styles.urgentProject}>{prettifyName(row.projectName)}</span>
+                    <span className={styles.urgentProject} data-project-name="">
+                      {pretty}
+                    </span>
+                  </span>
+                  <span className={styles.urgentTaskRow}>
+                    <span className={styles.urgentTask}>{row.task}</span>
                     <span className={styles.urgentTime}>{row.duration}</span>
                   </span>
-                  <span className={styles.urgentTask}>{row.task}</span>
                   {row.detail !== row.task && (
                     <span className={styles.urgentDetail}>{row.detail}</span>
                   )}

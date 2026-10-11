@@ -19,11 +19,9 @@
 
 @keyframes slideIn {
   from {
-    transform: translateX(100%);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
     opacity: 1;
   }
 }
@@ -206,21 +204,23 @@
     left: 0;
     width: auto;
     height: auto;
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 400px);
     border-left: none;
     border-top: 1px solid rgba(100, 140, 255, 0.2);
     border-radius: 16px 16px 0 0;
     animation-name: sheetIn;
   }
+
+  .panel.besideList {
+    left: 248px;
+  }
 }
 
 @keyframes sheetIn {
   from {
-    transform: translateY(16px);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
     opacity: 1;
   }
 }

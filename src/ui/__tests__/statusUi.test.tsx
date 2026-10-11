@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BottomDock } from '../BottomDock';
 import { HUD } from '../HUD';
 import { Sidebar } from '../Sidebar';
 import { StatusLegend } from '../StatusLegend';
@@ -85,6 +86,25 @@ describe('status display', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close projects' }));
     expect(useSpaceStore.getState().sidebarOpen).toBe(false);
+  });
+
+  it('keeps Lumen Lab untruncated and in the accessible name', () => {
+    const lumen = testProject('lumen-lab', [{ id: 'a', status: 'error' }]);
+    lumen.agents[0].errorReason = 'TypeError: Cannot read properties of undefined';
+    lumen.agents[0].currentTask = 'verify the stripe webhook signature';
+    lumen.agents[0].quietForMs = 5 * 60_000;
+    useSpaceStore.setState({ projects: [lumen], sidebarOpen: true });
+    render(<Sidebar />);
+
+    const button = within(screen.getByRole('region', { name: 'Needs you' })).getByRole('button', {
+      name: /Lumen Lab/,
+    });
+    expect(button.getAttribute('aria-label')).toMatch(/Error: Lumen Lab/);
+    expect(button.getAttribute('title')).toMatch(/Lumen Lab/);
+    const name = button.querySelector('[data-project-name]');
+    expect(name?.textContent).toBe('Lumen Lab');
+    expect(name?.parentElement?.textContent).not.toMatch(/quiet/);
+    expect(button.textContent).toMatch(/quiet for 5 min/);
   });
 
   it('keeps a narrow sidebar collapsed until its toggle is used', () => {
@@ -197,7 +217,12 @@ describe('status display', () => {
       snapshotSeen: true,
       projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
     });
-    render(<HUD />);
+    render(
+      <>
+        <HUD />
+        <BottomDock />
+      </>,
+    );
     expect(screen.getByText('Disconnected — retrying')).toBeTruthy();
     expect(screen.getByText('1 planet discovered · last update is stale')).toBeTruthy();
   });

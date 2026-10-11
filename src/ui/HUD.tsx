@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useSpaceStore } from '../store';
 import { cssVars } from './cssVars';
 import {
@@ -54,6 +55,23 @@ export function HUD() {
     0,
   );
 
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const apply = () => {
+      document.documentElement.style.setProperty(
+        '--hud-bottom',
+        `${Math.ceil(header.getBoundingClientRect().height)}px`,
+      );
+    };
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [projects, connection, compact, selectedId, phase]);
+
   const hudClass = [
     styles.hud,
     compact ? styles.compact : '',
@@ -64,17 +82,11 @@ export function HUD() {
     .join(' ');
 
   return (
-    <header className={hudClass}>
+    <header ref={headerRef} className={hudClass} data-overlay="hud">
       <div>
         <h1 className={styles.title}>Builders Space</h1>
         <div className={styles.subtitle}>{subtitle}</div>
       </div>
-      {connection === 'stale' && (
-        <div className={styles.banner} role="status">
-          {DISCONNECT_BANNER}
-        </div>
-      )}
-
       <div className={styles.counters} data-counters="">
         <HUDCounter label="Agents" value={totalAgents} />
         <HUDCounter label="Working" value={workingAgents} color="#44ffaa" />

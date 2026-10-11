@@ -83,23 +83,6 @@
   }
 }
 
-.banner {
-  position: fixed;
-  top: 72px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
-  pointer-events: none;
-  background: rgba(40, 18, 18, 0.92);
-  border: 1px solid rgba(255, 120, 80, 0.45);
-  color: #ffc2ad;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  padding: 8px 14px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
 .label {
   font-size: 11px;
   color: #c5cbe0;

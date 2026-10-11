@@ -158,20 +158,21 @@ function escapeChrome(
   let x = box.x;
   let y = box.y;
   for (const rect of forbidden) {
-    const bandWidth = rect.right - rect.left;
-    const fullWidth = bandWidth >= viewport.width * 0.9;
+    const touchesTop = rect.top <= 8;
+    const touchesBottom = rect.bottom >= viewport.height - 24;
+    const touchesLeft = rect.left <= 8;
+    const touchesRight = rect.right >= viewport.width - 8;
+    const tall = rect.bottom - rect.top >= viewport.height * 0.55;
+    const wide = rect.right - rect.left >= viewport.width * 0.45;
     if (!hitsRect({ ...box, x, y }, rect)) continue;
-    if (fullWidth) {
-      const touchesTop = rect.top <= 8;
-      const touchesBottom = rect.bottom >= viewport.height - 24;
-      y =
-        touchesBottom && !touchesTop
-          ? rect.top - box.height / 2 - 4
-          : rect.bottom + box.height / 2 + 4;
-    } else if (rect.left <= 1) {
+    if (tall && touchesLeft && !wide) {
       x = rect.right + box.width / 2 + 8;
-    } else {
+    } else if (tall && touchesRight && !wide) {
       x = rect.left - box.width / 2 - 8;
+    } else if (touchesTop && !touchesBottom) {
+      y = rect.bottom + box.height / 2 + 4;
+    } else {
+      y = rect.top - box.height / 2 - 4;
     }
   }
   return { x, y };
@@ -258,7 +259,14 @@ function nearestClear(
       if (!best || score < best.score) best = { x, y, score };
     }
   }
-  return best ?? preferred;
+  if (best) return best;
+  for (const other of placed) {
+    const beside = other.x + (other.width + box.width) / 2 + 8;
+    const below = other.y + (other.height + box.height) / 2 + 8;
+    if (!blockedAt(box, beside, other.y, forbidden, placed)) return { x: beside, y: other.y };
+    if (!blockedAt(box, other.x, below, forbidden, placed)) return { x: other.x, y: below };
+  }
+  return preferred;
 }
 
 /**

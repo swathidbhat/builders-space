@@ -347,6 +347,21 @@ describe('label placement', () => {
     }
   });
 
+  it('lifts a label above a bottom dock that does not span the screen', () => {
+    const viewport = { width: 1280, height: 800 };
+    const placed = resolveLabelCollisions(
+      [{ id: 'error', x: 700, y: 760, width: 180, height: 40, priority: 0 }],
+      [
+        ...chromeForbidden(1280, 800, { sidebarOpen: true, panelOpen: false }),
+        { left: 260, top: 700, right: 1264, bottom: 800 },
+      ],
+      viewport,
+    );
+    expect(placed[0].hidden).toBe(false);
+    expect(placed[0].y + 20).toBeLessThanOrEqual(700);
+    expect(placed[0].x - 90).toBeGreaterThanOrEqual(248);
+  });
+
   it('slides a label out of the sidebar and the detail panel', () => {
     const viewport = { width: 1000, height: 800 };
     const placed = resolveLabelCollisions(
