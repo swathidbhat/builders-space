@@ -15,13 +15,44 @@ const UNCLEAR_ACTIVITY = 'Unclear activity';
 export interface HumanizeResult {
   texts: Record<string, string>;
   usedLLM: boolean;
+  error?: string;
 }
 
-export async function humanizeTexts(rawTexts: string[]): Promise<HumanizeResult> {
+/** One panel's worth of labels. Larger requests are rejected before any API call. */
+export const HUMANIZE_MAX_ITEMS = 20;
+export const HUMANIZE_MAX_TEXT_CHARS = 500;
+
+export class HumanizeInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HumanizeInputError';
+  }
+}
+
+export function normalizeHumanizeInput(rawTexts: unknown): string[] {
+  if (!Array.isArray(rawTexts)) {
+    throw new HumanizeInputError('texts must be an array of strings');
+  }
+  if (rawTexts.length > HUMANIZE_MAX_ITEMS) {
+    throw new HumanizeInputError(`at most ${HUMANIZE_MAX_ITEMS} texts per request`);
+  }
+  return rawTexts.map((item, index) => {
+    if (typeof item !== 'string') {
+      throw new HumanizeInputError(`texts[${index}] must be a string`);
+    }
+    if (item.length > HUMANIZE_MAX_TEXT_CHARS) {
+      throw new HumanizeInputError(`texts[${index}] exceeds ${HUMANIZE_MAX_TEXT_CHARS} characters`);
+    }
+    return item;
+  });
+}
+
+export async function humanizeTexts(rawTexts: unknown): Promise<HumanizeResult> {
+  const inputs = normalizeHumanizeInput(rawTexts);
   const texts: Record<string, string> = {};
   const uncached: string[] = [];
 
-  for (const raw of rawTexts) {
+  for (const raw of inputs) {
     const cached = getFromCache(raw);
     if (cached) {
       texts[raw] = cached;

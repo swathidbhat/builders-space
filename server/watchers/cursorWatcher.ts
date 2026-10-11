@@ -1,9 +1,10 @@
-import { watch } from 'chokidar';
 import { readdirSync, existsSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { parseTranscriptDir, parseTranscriptFile } from '../utils/parseTranscript';
-import { extractProjectName, dirNameToPath } from '../utils/projectName';
+import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
+import { logCaught } from '../log';
+import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
 import type { AgentInfo, AgentStatus, ProjectInfo } from '../types';
 
 export type CursorWatcherCallback = (projects: Map<string, ProjectInfo>) => void;
@@ -11,39 +12,73 @@ export type CursorWatcherCallback = (projects: Map<string, ProjectInfo>) => void
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
+export interface CursorWatcherOptions {
+  base?: string;
+  fallbackScanMs?: number;
+  missingDirRetryMs?: number;
+}
+
+function stripSlash(path: string): string {
+  return path.replace(/\/+$/, '');
+}
+
 export class CursorWatcher {
   private cursorBase: string;
   private projects = new Map<string, ProjectInfo>();
   private onChange: CursorWatcherCallback;
-  private watcher: ReturnType<typeof watch> | null = null;
+  private jsonlWatch: JsonlWatch | null = null;
+  private scanInterval: ReturnType<typeof setInterval> | null = null;
+  private retryInterval: ReturnType<typeof setInterval> | null = null;
+  private fallbackScanMs: number;
+  private missingDirRetryMs: number;
 
-  constructor(onChange: CursorWatcherCallback) {
-    this.cursorBase = join(homedir(), '.cursor', 'projects');
+  constructor(onChange: CursorWatcherCallback, options: CursorWatcherOptions = {}) {
+    this.cursorBase = options.base ?? join(homedir(), '.cursor', 'projects');
     this.onChange = onChange;
+    this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
+    this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
   }
 
   start(): void {
     if (!existsSync(this.cursorBase)) {
-      console.log('[CursorWatcher] No .cursor/projects directory found, skipping');
+      console.log('[CursorWatcher] No .cursor/projects directory found, will retry');
+      this.retryInterval = setInterval(() => {
+        if (existsSync(this.cursorBase)) {
+          if (this.retryInterval) clearInterval(this.retryInterval);
+          this.retryInterval = null;
+          this.arm();
+        }
+      }, this.missingDirRetryMs);
+      this.retryInterval.unref?.();
       return;
     }
 
-    this.scan();
+    this.arm();
+  }
 
-    this.watcher = watch(join(this.cursorBase, '*/agent-transcripts/**/*.jsonl'), {
-      ignoreInitial: true,
-      awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 100 },
-    });
-
-    this.watcher.on('add', () => this.scan());
-    this.watcher.on('change', () => this.scan());
-    this.watcher.on('unlink', () => this.scan());
-
-    console.log(`[CursorWatcher] Watching ${this.cursorBase}`);
+  whenWatching(): Promise<void> {
+    return this.jsonlWatch?.ready ?? Promise.resolve();
   }
 
   stop(): void {
-    this.watcher?.close();
+    void this.jsonlWatch?.close();
+    this.jsonlWatch = null;
+    if (this.scanInterval) clearInterval(this.scanInterval);
+    if (this.retryInterval) clearInterval(this.retryInterval);
+    this.scanInterval = null;
+    this.retryInterval = null;
+  }
+
+  private arm(): void {
+    this.scan();
+    try {
+      this.jsonlWatch = watchJsonlTree(this.cursorBase, () => this.scan(), 'CursorWatcher');
+    } catch (err) {
+      logCaught('CursorWatcher', err, 'starting file watch');
+    }
+    this.scanInterval = setInterval(() => this.scan(), this.fallbackScanMs);
+    this.scanInterval.unref?.();
+    console.log(`[CursorWatcher] Watching ${this.cursorBase}`);
   }
 
   private scan(): void {
@@ -54,17 +89,20 @@ export class CursorWatcher {
       projectDirs = readdirSync(this.cursorBase, { withFileTypes: true })
         .filter(d => d.isDirectory())
         .map(d => d.name);
-    } catch {
+    } catch (err) {
+      logCaught('CursorWatcher', err, `reading ${this.cursorBase}`);
+      this.onChange(new Map());
       return;
     }
 
     for (const dirName of projectDirs) {
       if (/^\d+$/.test(dirName)) continue;
 
-      const projectPath = join(this.cursorBase, dirName);
+      const encodedPath = join(this.cursorBase, dirName);
       const agents: AgentInfo[] = [];
+      let cwdFromSession: string | undefined;
 
-      const transcriptsDir = join(projectPath, 'agent-transcripts');
+      const transcriptsDir = join(encodedPath, 'agent-transcripts');
       if (existsSync(transcriptsDir)) {
         try {
           const entries = readdirSync(transcriptsDir, { withFileTypes: true });
@@ -80,6 +118,8 @@ export class CursorWatcher {
 
               const agentId = `cursor-agent-${entry.name}`;
               if (agents.some(a => a.id === agentId)) continue;
+
+              if (data.cwd && isAbsolute(data.cwd)) cwdFromSession = stripSlash(data.cwd);
 
               let status: AgentStatus;
               if (data.isRecentlyActive) {
@@ -98,7 +138,7 @@ export class CursorWatcher {
                 lastAction: data.lastAction,
                 lastActivityMs: data.lastActivityMs,
                 sessionMeta: {
-                  projectPath: dirNameToPath(dirName),
+                  projectPath: '',
                   transcriptPath: subDir,
                 },
               });
@@ -129,19 +169,25 @@ export class CursorWatcher {
                 lastAction: data.lastAction,
                 lastActivityMs: data.lastActivityMs,
                 sessionMeta: {
-                  projectPath: dirNameToPath(dirName),
+                  projectPath: '',
                   transcriptPath: join(transcriptsDir, entry.name),
                 },
               });
             }
           }
-        } catch { /* skip */ }
+        } catch (err) {
+          logCaught('CursorWatcher', err, `reading ${transcriptsDir}`);
+        }
       }
 
       if (agents.length === 0) continue;
 
-      const name = extractProjectName(dirName);
-      const path = dirNameToPath(dirName);
+      const path = cwdFromSession ?? resolveEncodedProjectPath(dirName);
+      const name = cwdFromSession ? (basename(path) || extractProjectName(dirName)) : extractProjectName(dirName);
+
+      for (const agent of agents) {
+        if (agent.sessionMeta) agent.sessionMeta.projectPath = path;
+      }
 
       this.projects.set(dirName, {
         id: `cursor-${dirName}`,

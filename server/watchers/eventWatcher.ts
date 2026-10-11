@@ -1,14 +1,30 @@
 import { watch } from 'chokidar';
-import { readFileSync, unlinkSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, unlinkSync, existsSync, readdirSync, statSync, mkdirSync, chmodSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import { StateManager } from '../stateManager';
 import type { HookRuntimeEntry } from '../stateManager';
-import { ensureAppDirs } from '../services/hookSetup';
 import { formatToolUse } from '../utils/parseTranscript';
+import { logCaught } from '../log';
 import type { AgentSource } from '../types';
 
-const EVENTS_DIR = join(homedir(), '.builders-space', 'events');
+/** Leftover event files older than this are deleted and not applied as live status. */
+export const STALE_EVENT_MAX_AGE_MS = 60_000;
+
+export function defaultEventsDir(): string {
+  return join(homedir(), '.builders-space', 'events');
+}
+
+/**
+ * Returns the file mtime to stamp on a live overlay, or null when the file
+ * is too old to treat as something happening now.
+ */
+export function acceptEventTime(fileMtimeMs: number, now = Date.now()): number | null {
+  if (!Number.isFinite(fileMtimeMs)) return null;
+  if (now - fileMtimeMs > STALE_EVENT_MAX_AGE_MS) return null;
+  if (fileMtimeMs > now + 5_000) return now;
+  return fileMtimeMs;
+}
 
 /** Cursor common-schema signals (see https://cursor.com/docs/hooks). */
 function isCursorPayload(event: Record<string, unknown>): boolean {
@@ -44,7 +60,7 @@ function modeForSource(_source: AgentSource): 'realtime' {
   return 'realtime';
 }
 
-export function normalizeFireEvent(event: Record<string, unknown>): HookRuntimeEntry {
+export function normalizeFireEvent(event: Record<string, unknown>, at = Date.now()): HookRuntimeEntry {
   const source = detectSource(event);
   const sessionId = extractSessionId(event);
   const reason = (event.error_message || event.reason || event.status || 'Session ended with error') as string;
@@ -56,7 +72,7 @@ export function normalizeFireEvent(event: Record<string, unknown>): HookRuntimeE
     cwd,
     status: 'error',
     errorReason: reason,
-    lastEventAt: Date.now(),
+    lastEventAt: at,
     terminal: true,
     mode: modeForSource(source),
   };
@@ -77,7 +93,7 @@ function isCursorStopCompletedOrAborted(event: Record<string, unknown>): boolean
   return s === 'completed' || s === 'aborted';
 }
 
-export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntimeEntry | null {
+export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.now()): HookRuntimeEntry | null {
   const source = detectSource(event);
   const sessionId = extractSessionId(event);
   const cwd = extractCwd(event);
@@ -91,7 +107,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
       return {
         source, sessionId, cwd,
         status: 'working',
-        lastEventAt: Date.now(),
+        lastEventAt: at,
         terminal: false,
         mode,
       };
@@ -105,7 +121,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
         source, sessionId, cwd,
         status: 'working',
         lastAction: action,
-        lastEventAt: Date.now(),
+        lastEventAt: at,
         terminal: false,
         mode,
       };
@@ -117,7 +133,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
         return {
           source, sessionId, cwd,
           status: 'waiting',
-          lastEventAt: Date.now(),
+          lastEventAt: at,
           terminal: false,
           mode,
         };
@@ -129,7 +145,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
           source, sessionId, cwd,
           status: 'error',
           errorReason: reason,
-          lastEventAt: Date.now(),
+          lastEventAt: at,
           terminal: true,
           mode,
         };
@@ -138,7 +154,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
       return {
         source, sessionId, cwd,
         status: 'waiting',
-        lastEventAt: Date.now(),
+        lastEventAt: at,
         terminal: false,
         mode,
       };
@@ -154,7 +170,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
           source, sessionId, cwd,
           status: 'error',
           errorReason: errMsg,
-          lastEventAt: Date.now(),
+          lastEventAt: at,
           terminal: true,
           mode,
         };
@@ -163,7 +179,7 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
       return {
         source, sessionId, cwd,
         status: 'done',
-        lastEventAt: Date.now(),
+        lastEventAt: at,
         terminal: true,
         mode,
       };
@@ -177,17 +193,24 @@ export function normalizeStatusEvent(event: Record<string, unknown>): HookRuntim
 export class EventWatcher {
   private watcher: ReturnType<typeof watch> | null = null;
   private stateManager: StateManager;
+  private eventsDir: string;
 
-  constructor(stateManager: StateManager) {
+  constructor(stateManager: StateManager, eventsDir?: string) {
     this.stateManager = stateManager;
+    this.eventsDir = eventsDir ?? defaultEventsDir();
   }
 
   start(): void {
-    ensureAppDirs();
+    try {
+      if (!existsSync(this.eventsDir)) mkdirSync(this.eventsDir, { recursive: true, mode: 0o700 });
+      chmodSync(this.eventsDir, 0o700);
+    } catch (err) {
+      logCaught('EventWatcher', err, `creating ${this.eventsDir}`);
+    }
 
     this.processExistingEvents();
 
-    this.watcher = watch(EVENTS_DIR, {
+    this.watcher = watch(this.eventsDir, {
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
     });
@@ -198,36 +221,47 @@ export class EventWatcher {
     this.watcher.on('change', (filePath) => {
       if (filePath.endsWith('.json')) this.processEvent(filePath);
     });
+    this.watcher.on('error', (err) => logCaught('EventWatcher', err, 'file watch error'));
 
-    console.log(`[EventWatcher] Watching ${EVENTS_DIR}`);
+    console.log(`[EventWatcher] Watching ${this.eventsDir}`);
   }
 
   stop(): void {
-    this.watcher?.close();
+    void this.watcher?.close();
   }
 
   private processExistingEvents(): void {
     try {
-      const files = readdirSync(EVENTS_DIR).filter(f => f.endsWith('.json'));
+      const files = readdirSync(this.eventsDir).filter(f => f.endsWith('.json'));
       for (const file of files) {
-        this.processEvent(join(EVENTS_DIR, file));
+        this.processEvent(join(this.eventsDir, file));
       }
-    } catch { /* directory may not exist yet */ }
+    } catch (err) {
+      logCaught('EventWatcher', err, `reading ${this.eventsDir}`);
+    }
   }
 
   private processEvent(filePath: string): void {
     try {
       if (!existsSync(filePath)) return;
+      const mtimeMs = statSync(filePath).mtimeMs;
+      const at = acceptEventTime(mtimeMs);
       const content = readFileSync(filePath, 'utf-8');
       const event = JSON.parse(content);
       const fileName = basename(filePath);
 
+      if (at === null) {
+        console.warn(`[EventWatcher] Dropping stale event ${fileName} (file mtime ${new Date(mtimeMs).toISOString()})`);
+        unlinkSync(filePath);
+        return;
+      }
+
       let overlay: HookRuntimeEntry | null = null;
 
       if (fileName.startsWith('fire-')) {
-        overlay = normalizeFireEvent(event);
+        overlay = normalizeFireEvent(event, at);
       } else if (fileName.startsWith('status-')) {
-        overlay = normalizeStatusEvent(event);
+        overlay = normalizeStatusEvent(event, at);
       }
 
       if (overlay) {
@@ -236,8 +270,10 @@ export class EventWatcher {
 
       unlinkSync(filePath);
     } catch (err) {
-      console.error('[EventWatcher] Error processing event:', err);
-      try { unlinkSync(filePath); } catch { /* ignore */ }
+      logCaught('EventWatcher', err, filePath);
+      try { unlinkSync(filePath); } catch (unlinkErr) {
+        logCaught('EventWatcher', unlinkErr, `removing ${filePath}`);
+      }
     }
   }
 }

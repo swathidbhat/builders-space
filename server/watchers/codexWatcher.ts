@@ -1,10 +1,10 @@
-import { watch } from 'chokidar';
-import { readdirSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { readdirSync, readFileSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import { execSync } from 'child_process';
 import { parseCodexSessionFile, parseCodexSessionMeta } from '../utils/parseCodexSession';
-import { writeCodexHooksJson } from '../services/hookSetup';
+import { logCaught } from '../log';
+import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
 import type { AgentInfo, AgentStatus, ProjectInfo } from '../types';
 
 export type CodexWatcherCallback = (projects: Map<string, ProjectInfo>) => void;
@@ -13,47 +13,77 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 const MAX_AGE_MS = 48 * 60 * 60 * 1000;
 const STALE_THRESHOLD_MS = 10 * 60 * 1000;
 
+export interface CodexWatcherOptions {
+  sessionsDir?: string;
+  indexFile?: string;
+  fallbackScanMs?: number;
+  missingDirRetryMs?: number;
+}
+
+function stripSlash(path: string): string {
+  return path.replace(/\/+$/, '');
+}
+
 export class CodexWatcher {
-  private codexBase: string;
   private sessionsDir: string;
   private indexFile: string;
   private projects = new Map<string, ProjectInfo>();
   private onChange: CodexWatcherCallback;
-  private watcher: ReturnType<typeof watch> | null = null;
+  private jsonlWatch: JsonlWatch | null = null;
   private scanInterval: ReturnType<typeof setInterval> | null = null;
+  private retryInterval: ReturnType<typeof setInterval> | null = null;
+  private fallbackScanMs: number;
+  private missingDirRetryMs: number;
 
-  constructor(onChange: CodexWatcherCallback) {
-    this.codexBase = join(homedir(), '.codex');
-    this.sessionsDir = join(this.codexBase, 'sessions');
-    this.indexFile = join(this.codexBase, 'session_index.jsonl');
+  constructor(onChange: CodexWatcherCallback, options: CodexWatcherOptions = {}) {
+    const codexBase = join(homedir(), '.codex');
+    this.sessionsDir = options.sessionsDir ?? join(codexBase, 'sessions');
+    this.indexFile = options.indexFile ?? join(codexBase, 'session_index.jsonl');
     this.onChange = onChange;
+    this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
+    this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
   }
 
   start(): void {
     if (!existsSync(this.sessionsDir)) {
-      console.log('[CodexWatcher] No .codex/sessions directory found, skipping');
+      console.log('[CodexWatcher] No .codex/sessions directory found, will retry');
+      this.retryInterval = setInterval(() => {
+        if (existsSync(this.sessionsDir)) {
+          if (this.retryInterval) clearInterval(this.retryInterval);
+          this.retryInterval = null;
+          this.arm();
+        }
+      }, this.missingDirRetryMs);
+      this.retryInterval.unref?.();
       return;
     }
 
-    this.scan();
+    this.arm();
+  }
 
-    this.watcher = watch(join(this.sessionsDir, '**/*.jsonl'), {
-      ignoreInitial: true,
-      awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 200 },
-    });
-
-    this.watcher.on('add', () => this.scan());
-    this.watcher.on('change', () => this.scan());
-    this.watcher.on('unlink', () => this.scan());
-
-    this.scanInterval = setInterval(() => this.scan(), 60_000);
-
-    console.log(`[CodexWatcher] Watching ${this.sessionsDir}`);
+  whenWatching(): Promise<void> {
+    return this.jsonlWatch?.ready ?? Promise.resolve();
   }
 
   stop(): void {
-    this.watcher?.close();
+    void this.jsonlWatch?.close();
+    this.jsonlWatch = null;
     if (this.scanInterval) clearInterval(this.scanInterval);
+    if (this.retryInterval) clearInterval(this.retryInterval);
+    this.scanInterval = null;
+    this.retryInterval = null;
+  }
+
+  private arm(): void {
+    this.scan();
+    try {
+      this.jsonlWatch = watchJsonlTree(this.sessionsDir, () => this.scan(), 'CodexWatcher');
+    } catch (err) {
+      logCaught('CodexWatcher', err, 'starting file watch');
+    }
+    this.scanInterval = setInterval(() => this.scan(), this.fallbackScanMs);
+    this.scanInterval.unref?.();
+    console.log(`[CodexWatcher] Watching ${this.sessionsDir}`);
   }
 
   private getThreadNames(): Map<string, string> {
@@ -68,14 +98,18 @@ export class CodexWatcher {
           if (entry.id && entry.thread_name) {
             names.set(entry.id, entry.thread_name);
           }
-        } catch { /* skip */ }
+        } catch (err) {
+          logCaught('CodexWatcher', err, 'session index line');
+        }
       }
-    } catch { /* file unreadable */ }
+    } catch (err) {
+      logCaught('CodexWatcher', err, `reading ${this.indexFile}`);
+    }
 
     return names;
   }
 
-  private getRunningCodexProcesses(): Set<string> {
+  private getRunningCodexCwds(): Set<string> {
     const cwds = new Set<string>();
     try {
       const output = execSync('ps aux', { encoding: 'utf-8', timeout: 5000 });
@@ -91,10 +125,14 @@ export class CodexWatcher {
             encoding: 'utf-8',
             timeout: 3000,
           }).trim().replace(/^n/, '');
-          if (lsofOut) cwds.add(lsofOut);
-        } catch { /* couldn't get CWD */ }
+          if (lsofOut) cwds.add(stripSlash(lsofOut));
+        } catch {
+          // Process exited or lsof has no cwd.
+        }
       }
-    } catch { /* ps failed */ }
+    } catch (err) {
+      logCaught('CodexWatcher', err, 'ps aux');
+    }
     return cwds;
   }
 
@@ -102,32 +140,41 @@ export class CodexWatcher {
     const files: string[] = [];
     try {
       this.walkDir(this.sessionsDir, files);
-    } catch { /* ignore */ }
+    } catch (err) {
+      logCaught('CodexWatcher', err, `walking ${this.sessionsDir}`);
+    }
     return files;
   }
 
   private walkDir(dir: string, results: string[]): void {
+    let entries;
     try {
-      const entries = readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          this.walkDir(fullPath, results);
-        } else if (entry.name.endsWith('.jsonl')) {
-          results.push(fullPath);
-        }
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch (err) {
+      logCaught('CodexWatcher', err, `reading ${dir}`);
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        this.walkDir(fullPath, results);
+      } else if (entry.name.endsWith('.jsonl')) {
+        results.push(fullPath);
       }
-    } catch { /* skip */ }
+    }
   }
 
   private scan(): void {
     this.projects.clear();
 
     const sessionFiles = this.collectSessionFiles();
-    if (sessionFiles.length === 0) return;
+    if (sessionFiles.length === 0) {
+      this.onChange(new Map());
+      return;
+    }
 
     const threadNames = this.getThreadNames();
-    const runningCwds = this.getRunningCodexProcesses();
+    const runningCwds = this.getRunningCodexCwds();
 
     const projectSessions = new Map<string, Array<{
       file: string;
@@ -142,7 +189,7 @@ export class CodexWatcher {
       const codexAgeMs = Date.now() - meta.lastActivityMs;
       if (codexAgeMs > MAX_AGE_MS) continue;
 
-      const cwd = meta.cwd;
+      const cwd = stripSlash(meta.cwd);
       if (!projectSessions.has(cwd)) {
         projectSessions.set(cwd, []);
       }
@@ -160,9 +207,7 @@ export class CodexWatcher {
         const data = parseCodexSessionFile(session.file);
         if (!data) continue;
 
-        const isProcessRunning = Array.from(runningCwds).some(
-          runningCwd => cwd.startsWith(runningCwd) || runningCwd.startsWith(cwd)
-        );
+        const isProcessRunning = runningCwds.has(stripSlash(cwd));
 
         let status: AgentStatus;
         if (data.isActive) {
@@ -198,7 +243,7 @@ export class CodexWatcher {
       if (agents.length === 0) continue;
 
       const projectName = basename(cwd);
-      const normalizedKey = cwd.toLowerCase().replace(/[_\s]/g, '-').replace(/\/+$/, '');
+      const normalizedKey = cwd.toLowerCase().replace(/\/+$/, '');
 
       this.projects.set(normalizedKey, {
         id: `codex-${normalizedKey}`,
@@ -210,28 +255,5 @@ export class CodexWatcher {
     }
 
     this.onChange(new Map(this.projects));
-    this.installProjectHooks();
-  }
-
-  private installProjectHooks(): void {
-    if (!this.hooksEnabled()) return;
-
-    for (const [, project] of this.projects) {
-      const projectCodexDir = join(project.path, '.codex');
-      const hooksJsonPath = join(projectCodexDir, 'hooks.json');
-
-      try {
-        if (!existsSync(projectCodexDir)) mkdirSync(projectCodexDir, { recursive: true });
-        writeCodexHooksJson(hooksJsonPath);
-      } catch { /* skip — directory may not be writable */ }
-    }
-  }
-
-  private hooksEnabled(): boolean {
-    const globalHooksJson = join(homedir(), '.codex', 'hooks.json');
-    try {
-      const content = readFileSync(globalHooksJson, 'utf-8');
-      return content.includes('status-hook.sh');
-    } catch { return false; }
   }
 }

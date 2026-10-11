@@ -26,7 +26,7 @@ The answer should take one glance, not five tab-switches. That's the core idea �
 
 5. **Tool-agnostic.** Cursor, Claude Code, and Codex disagree on what an "agent" even is. Builders Space doesn't care. If it works on a project and has a status, it's a worker on a planet. All tools are treated as equals.
 
-6. **Zero configuration.** The app discovers active sessions automatically from the standard directories each tool already writes to. No config files, no project registration, no setup beyond `npm run dev`.
+6. **Zero configuration for discovery.** The app discovers active sessions automatically from the standard directories each tool already writes to. No project registration. Hook installation is a separate opt-in: it runs only when you click Enable Hooks, it edits global tool config only, and Disable Hooks removes those edits.
 
 ## The Visual Metaphor
 
@@ -79,7 +79,7 @@ The pixel-art surface view shows agents you need to be aware of — working (pro
 
 **What does the "Human Lingo" toggle do?**
 
-It translates raw agent output (like `Running: git diff HEAD~3...HEAD -- src/`) into short human-readable labels (like "Reviewing recent code changes"). Powered by an LLM with a regex fallback. Toggle it off to see the raw output.
+It translates raw agent output (like `Running: git diff HEAD~3...HEAD -- src/`) into short human-readable labels (like "Reviewing recent code changes"). When `ANTHROPIC_API_KEY` is set, those short action and error strings are sent to Anthropic (at most 20 strings, 500 characters each). Without a key, labels stay on this machine and use the built-in fallback. Toggle it off to see the raw output.
 
 **Why do error agents tremble and have red eyes?**
 
@@ -87,7 +87,7 @@ Every animation maps to a status. Trembling + red eyes + rising embers reads as 
 
 **What does clicking an agent card do?**
 
-It opens the tool where that agent lives. Cursor agents open the Cursor project window. Claude agents open the Claude desktop app. Codex agents open the Codex desktop app. If the desktop app isn't installed, it falls back to resuming the session in Terminal. The dashboard is a launchpad, not just a display.
+It asks the local server to open that agent. The dashboard sends the agent id only. Cursor opens that project's folder in Cursor. Claude Code and Codex resume the session in Terminal when it is not already working, or open the project folder in Terminal when it is.
 
 **How are projects discovered?**
 
@@ -117,12 +117,20 @@ npm run dev
 ```
 
 This starts:
-- A **backend server** on `http://localhost:3002` with independent file watchers for each agent tool
-- A **frontend** on `http://localhost:5174` (or next available port) that renders the 3D space
+- A **backend server** on `http://127.0.0.1:3002` (loopback only) with independent file watchers for each agent tool
+- A **frontend** on `http://127.0.0.1:5174` that renders the 3D space
 
-No configuration needed. The backend automatically discovers active agent sessions from standard tool directories.
+Open the frontend at that address. The dev server injects a per-launch token so the page can call the API. Nothing else on the network, and no other website, can.
 
-A **Hooks** tool icon sits in the bottom-right corner of the dashboard. Click it to expand the hook setup panel, which lets you install shell hooks into Claude Code, Codex, and Cursor with one click. When hooks are active and events are recent, agents from all three tools can report `statusSource: 'realtime'` — lifecycle events (`sessionStart`, `postToolUse`, `stop`, `sessionEnd` for Cursor; PascalCase equivalents for Claude) drive working / waiting / done / error. If hook data goes stale, agents gracefully fall back to file-scanning heuristics. You can enable or disable hooks at any time.
+Session discovery only reads tool logs. It does not modify your repositories or `~/.claude`, `~/.cursor`, or `~/.codex`.
+
+A **Hooks** tool icon sits in the bottom-right corner of the dashboard. Click **Enable Hooks** to install shell hooks into the global Claude Code, Cursor, and Codex configs. That is opt-in: Builders Space does not write `.codex/hooks.json` into your repos, and it does not edit those global configs until you click. **Disable Hooks** removes the hooks and deletes config files that Enable created. If an older build wrote `<repo>/.codex/hooks.json`, delete that file when it only references `~/.builders-space/hooks/`. When hooks are active and events are recent, agents can report `statusSource: 'realtime'`. If hook data goes stale, agents fall back to file-scanning heuristics.
+
+## Security and privacy
+
+The server listens on the loopback interface only (`127.0.0.1`, and `::1` when that address is available). Browser requests whose `Origin` is not a loopback page are rejected. Each launch creates a random token in `~/.builders-space/auth-token` (mode 0600). HTTP and Socket.IO clients must send it. Opening an agent looks the session up on the server and runs a fixed command with an argument array, not a shell string built from the request.
+
+Human Lingo sends the short strings shown in an open panel to Anthropic only when an API key is set and the toggle is on. Hook payloads are stored under `~/.builders-space/events/` with mode 0600 and are removed after they are applied. Events left over from a previous run are not replayed as live status.
 
 ## Architecture
 
@@ -145,7 +153,7 @@ Browser (React + Three.js)          Node.js Backend
 - **CodexWatcher**: Rollout JSONL files in `~/.codex/sessions/`, with `ps aux` process detection
 - **EventWatcher**: Hook events written to `~/.builders-space/events/` — normalizes events into `HookRuntimeEntry` overlays for the StateManager
 
-Each watcher discovers projects agent-first: a project only exists if it has at least one agent session. The **StateManager** merges project maps from all watchers, then applies hook overlays using an explicit authority model: any agent with a trusted, non-expired hook overlay becomes `statusSource: 'realtime'`; otherwise the watcher-derived heuristic is `statusSource: 'inferred'`. **Matching** overlays to agents uses `session_id` / `conversation_id` first; if that does not line up with the transcript-derived id, a **cwd** match against the project path can still apply the overlay. Overlay trust windows: 10 minutes for active states (`working`, `waiting`), 1 hour for terminal states (`done`, `error`). State is emitted to clients via Socket.IO.
+Each watcher discovers projects agent-first: a project only exists if it has at least one agent session. Project paths come from the session's real `cwd` when the log has one, so a folder named `my-app` is not decoded by splitting on hyphens. The **StateManager** merges project maps from all watchers, then applies hook overlays using an explicit authority model: any agent with a trusted, non-expired hook overlay becomes `statusSource: 'realtime'`; otherwise the watcher-derived heuristic is `statusSource: 'inferred'`. **Matching** overlays to agents uses that agent's own `session_id`. An event for one session does not change other agents in the same project. An event with no session id is applied only when the project has a single agent from that tool. Overlay trust windows: 10 minutes for active states (`working`, `waiting`), 1 hour for terminal states (`done`, `error`). State is emitted to clients via Socket.IO.
 
 **Humanization** is client-initiated: when a user opens a project panel with "Human Lingo" mode on, the client sends raw action strings to the server, which translates them via LLM (with a regex fallback) and returns short labels.
 
@@ -163,7 +171,10 @@ builders-space/
 ├── .env.example                     Environment variable template
 │
 ├── server/                          Node.js backend
-│   ├── index.ts                     Express + Socket.IO server
+│   ├── index.ts                     Process entry: loopback listen + launch token
+│   ├── createServer.ts              Express + Socket.IO app
+│   ├── security.ts                  Origin check and per-launch token
+│   ├── openSession.ts               Argv-only agent launch
 │   ├── __tests__/                   Automated tests (vitest)
 │   │   ├── stateManager.test.ts     StateManager authority model, overlay expiry, edge cases
 │   │   └── eventWatcher.test.ts     Event normalization, mode assignment, unknown events

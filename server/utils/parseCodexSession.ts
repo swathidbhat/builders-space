@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from 'fs';
 import { basename } from 'path';
 import { shortenPaths } from './parseTranscript';
+import { logCaught } from '../log';
 
 export interface CodexSessionData {
   sessionId: string;
@@ -69,7 +70,8 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
       isActive,
       lastActivityMs: effectiveTimestamp,
     };
-  } catch {
+  } catch (err) {
+    logCaught('parseCodexSessionFile', err, filePath);
     return null;
   }
 }
@@ -92,7 +94,8 @@ export function parseCodexSessionMeta(filePath: string): {
       cwd: entry.payload.cwd || '',
       lastActivityMs: safeStatMtime(filePath),
     };
-  } catch {
+  } catch (err) {
+    logCaught('parseCodexSessionMeta', err, filePath);
     return null;
   }
 }

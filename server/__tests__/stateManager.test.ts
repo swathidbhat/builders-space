@@ -624,4 +624,93 @@ describe('StateManager', () => {
       expect(state.lastUpdated).toBeGreaterThan(0);
     });
   });
+
+  describe('session status does not leak across agents', () => {
+    it('an overlay for one session does not change another agent in the same project', () => {
+      const now = Date.now();
+      const projects = new Map<string, ProjectInfo>();
+      projects.set('/proj', makeProject({
+        path: '/Users/alice/work/my-app',
+        agents: [
+          makeAgent({ source: 'claude-code', sessionId: 'sess1', status: 'waiting', lastActivityMs: now - 60_000 }),
+          makeAgent({ source: 'claude-code', sessionId: 'sess2', status: 'working', lastActivityMs: now - 5_000 }),
+        ],
+      }));
+      sm.updateClaudeProjects(projects);
+
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/Users/alice/work/my-app',
+        status: 'error',
+        errorReason: 'boom',
+        lastEventAt: now,
+        terminal: true,
+        mode: 'realtime',
+      });
+
+      const agents = sm.getState().projects[0].agents;
+      const sess1 = agents.find(a => a.sessionId === 'sess1')!;
+      const sess2 = agents.find(a => a.sessionId === 'sess2')!;
+      expect(sess1.status).toBe('error');
+      expect(sess1.statusSource).toBe('realtime');
+      expect(sess2.status).toBe('working');
+      expect(sess2.statusSource).toBe('inferred');
+      expect(sess2.errorReason).toBeUndefined();
+    });
+
+    it('an event with no session id does not mark every agent in the project', () => {
+      const now = Date.now();
+      const projects = new Map<string, ProjectInfo>();
+      projects.set('/proj', makeProject({
+        path: '/proj',
+        agents: [
+          makeAgent({ source: 'claude-code', sessionId: 'sess1', status: 'waiting' }),
+          makeAgent({ source: 'claude-code', sessionId: 'sess2', status: 'waiting' }),
+        ],
+      }));
+      sm.updateClaudeProjects(projects);
+
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: '',
+        cwd: '/proj',
+        status: 'error',
+        errorReason: 'unknown session',
+        lastEventAt: now,
+        terminal: true,
+        mode: 'realtime',
+      });
+
+      for (const agent of sm.getState().projects[0].agents) {
+        expect(agent.statusSource).toBe('inferred');
+        expect(agent.status).toBe('waiting');
+      }
+    });
+  });
+
+  describe('project path identity', () => {
+    it('does not merge my_app and my-app', () => {
+      const underscore = new Map<string, ProjectInfo>();
+      underscore.set('/Users/alice/my_app', makeProject({
+        path: '/Users/alice/my_app',
+        name: 'my_app',
+        agents: [makeAgent({ source: 'cursor', sessionId: 'c1', status: 'working' })],
+      }));
+      sm.updateCursorProjects(underscore);
+
+      const hyphen = new Map<string, ProjectInfo>();
+      hyphen.set('/Users/alice/my-app', makeProject({
+        path: '/Users/alice/my-app',
+        name: 'my-app',
+        agents: [makeAgent({ source: 'claude-code', sessionId: 's1', status: 'error' })],
+      }));
+      sm.updateClaudeProjects(hyphen);
+
+      const projects = sm.getState().projects;
+      expect(projects).toHaveLength(2);
+      const names = projects.map(p => p.path).sort();
+      expect(names).toEqual(['/Users/alice/my-app', '/Users/alice/my_app']);
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { API_ORIGIN, authHeaders } from '../api';
 
 type ToolStatus = 'configured' | 'available' | 'not_installed';
 type EnableResult = 'ok' | 'manual' | 'not_installed' | 'error';
@@ -21,7 +22,7 @@ interface EnableResponse {
   codex: EnableToolResult;
 }
 
-const API_BASE = 'http://localhost:3002';
+const API_BASE = API_ORIGIN;
 const TOOLS = ['claude', 'cursor', 'codex'] as const;
 const TOOL_LABELS: Record<string, string> = {
   claude: 'Claude Code',
@@ -53,7 +54,7 @@ export function HookSetupCard() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/hooks/status`);
+      const res = await fetch(`${API_BASE}/api/hooks/status`, { headers: authHeaders() });
       const data: HookStatusResponse = await res.json();
       setStatus(data);
     } catch { /* server not reachable */ }
@@ -74,7 +75,7 @@ export function HookSetupCard() {
   const handleEnable = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/hooks/enable`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/api/hooks/enable`, { method: 'POST', headers: authHeaders() });
       const data: EnableResponse = await res.json();
       setEnableResult(data);
       await fetchStatus();
@@ -85,7 +86,7 @@ export function HookSetupCard() {
   const handleDisable = async () => {
     setLoading(true);
     try {
-      await fetch(`${API_BASE}/api/hooks/disable`, { method: 'POST' });
+      await fetch(`${API_BASE}/api/hooks/disable`, { method: 'POST', headers: authHeaders() });
       setEnableResult(null);
       await fetchStatus();
     } catch { /* failed */ }

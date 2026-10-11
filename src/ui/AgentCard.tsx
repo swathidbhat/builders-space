@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { AgentInfo } from '../types';
 import type { AgentIdentity } from './agentIdentity';
 import { useSpaceStore } from '../store';
+import { API_ORIGIN, authHeaders } from '../api';
 
 const SOURCE_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
@@ -55,10 +56,10 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const openSession = useCallback(async () => {
     if (!agent.sessionMeta) return;
     try {
-      const res = await fetch('http://localhost:3002/api/open-session', {
+      const res = await fetch(`${API_ORIGIN}/api/open-session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: agent.source, status: agent.status, sessionMeta: agent.sessionMeta }),
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ agentId: agent.id }),
       });
       const data = await res.json();
       if (data.ok && agent.source === 'cursor') {
@@ -74,7 +75,7 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
       setToast('Could not connect to server');
     }
     setTimeout(() => setToast(null), 3000);
-  }, [agent.source, agent.status, agent.sessionMeta]);
+  }, [agent.source, agent.id, agent.sessionMeta]);
 
   const dotColor = STATUS_DOT_COLORS[agent.status] || '#666';
   const dotGlow = agent.status === 'working' || agent.status === 'waiting' || agent.status === 'error'

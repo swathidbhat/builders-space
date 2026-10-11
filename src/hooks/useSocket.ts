@@ -1,14 +1,20 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useSpaceStore } from '../store';
 import type { SpaceData, HumanizeResponse } from '../types';
+import { API_ORIGIN, authToken } from '../api';
 
 let sharedSocket: Socket | null = null;
 
 function getSocket(): Socket {
   if (!sharedSocket) {
-    sharedSocket = io('http://localhost:3002', {
+    const token = authToken();
+    if (!token) {
+      console.error('[Socket.IO] Missing launch token. Start with npm run dev so the dashboard can authenticate.');
+    }
+    sharedSocket = io(API_ORIGIN, {
       transports: ['websocket', 'polling'],
+      auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

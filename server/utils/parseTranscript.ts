@@ -1,19 +1,30 @@
 import { readFileSync, statSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
+import { logCaught } from '../log';
 
 export interface TranscriptData {
   userQuery: string;
   lastAction?: string;
   isRecentlyActive: boolean;
   lastActivityMs: number;
+  cwd?: string;
 }
 
 export function parseTranscriptDir(dirPath: string): TranscriptData | null {
   try {
     const files = readdirSync(dirPath).filter(f => f.endsWith('.jsonl'));
     if (files.length === 0) return null;
+    files.sort((a, b) => {
+      try {
+        return statSync(join(dirPath, b)).mtimeMs - statSync(join(dirPath, a)).mtimeMs;
+      } catch (err) {
+        logCaught('parseTranscriptDir', err, `stat ${dirPath}`);
+        return 0;
+      }
+    });
     return parseTranscriptJsonl(join(dirPath, files[0]));
-  } catch {
+  } catch (err) {
+    logCaught('parseTranscriptDir', err, dirPath);
     return null;
   }
 }
@@ -26,6 +37,7 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
     let userQuery = '';
     let lastAction: string | undefined;
     let lastModifiedMs = 0;
+    let cwd: string | undefined;
 
     try {
       lastModifiedMs = statSync(filePath).mtimeMs;
@@ -35,9 +47,14 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
       try {
         const entry = JSON.parse(line);
 
+        if (!cwd) cwd = extractCwdFromEntry(entry);
+
         if (entry.role === 'user' && !userQuery) {
           const text = extractTextFromMessage(entry.message);
-          if (text) userQuery = text.slice(0, 200);
+          if (text) {
+            userQuery = text.slice(0, 200);
+            if (!cwd) cwd = cwdFromText(text);
+          }
         }
 
         if (entry.role === 'assistant') {
@@ -54,10 +71,25 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
     const ageMs = Date.now() - lastModifiedMs;
     const isRecentlyActive = ageMs < 2 * 60 * 1000;
 
-    return { userQuery, lastAction, isRecentlyActive, lastActivityMs: lastModifiedMs };
-  } catch {
+    return { userQuery, lastAction, isRecentlyActive, lastActivityMs: lastModifiedMs, cwd };
+  } catch (err) {
+    logCaught('parseTranscriptJsonl', err, filePath);
     return null;
   }
+}
+
+function extractCwdFromEntry(entry: { cwd?: unknown; workspace_roots?: unknown }): string | undefined {
+  if (typeof entry.cwd === 'string' && entry.cwd.startsWith('/')) return entry.cwd;
+  const roots = entry.workspace_roots;
+  if (Array.isArray(roots) && typeof roots[0] === 'string' && roots[0].startsWith('/')) {
+    return roots[0];
+  }
+  return undefined;
+}
+
+function cwdFromText(text: string): string | undefined {
+  const match = text.match(/Workspace Path:\s*(\/[^\s]+)/);
+  return match?.[1];
 }
 
 export function parseTranscriptFile(filePath: string): TranscriptData | null {
@@ -77,7 +109,8 @@ export function parseTranscriptFile(filePath: string): TranscriptData | null {
     const isRecentlyActive = ageMs < 2 * 60 * 1000;
 
     return { userQuery, isRecentlyActive, lastActivityMs: lastModifiedMs };
-  } catch {
+  } catch (err) {
+    logCaught('parseTranscriptFile', err, filePath);
     return null;
   }
 }
@@ -153,7 +186,8 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
     const isActive = (Date.now() - latestTimestamp) < 2 * 60 * 1000;
 
     return { sessionId, cwd, latestTask, lastAction, slug, isActive, lastActivityMs: latestTimestamp };
-  } catch {
+  } catch (err) {
+    logCaught('parseClaudeSessionFile', err, filePath);
     return null;
   }
 }

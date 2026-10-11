@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { SpaceData, ProjectInfo, AgentSource, AgentStatus } from './types';
+import type { SpaceData, ProjectInfo, AgentSource, AgentStatus, AgentInfo } from './types';
 
 export const HOOK_ACTIVE_TTL_MS = 600_000;    // 10 minutes — non-terminal states
 export const HOOK_TERMINAL_TTL_MS = 3_600_000; // 1 hour — terminal states
@@ -45,6 +45,14 @@ export class StateManager extends EventEmitter {
 
   getState(): SpaceData {
     return this.state;
+  }
+
+  findAgentById(agentId: string): AgentInfo | undefined {
+    for (const project of this.state.projects) {
+      const agent = project.agents.find((candidate) => candidate.id === agentId);
+      if (agent) return agent;
+    }
+    return undefined;
   }
 
   applyHookOverlay(entry: HookRuntimeEntry): void {
@@ -111,7 +119,7 @@ export class StateManager extends EventEmitter {
         const agent = { ...project.agents[i] };
         project.agents[i] = agent;
 
-        const overlay = this.findOverlayForAgent(agent, project.path);
+        const overlay = this.findOverlayForAgent(agent, project.path, project.agents);
 
         if (overlay) {
           agent.statusSource = 'realtime';
@@ -139,8 +147,10 @@ export class StateManager extends EventEmitter {
   private findOverlayForAgent(
     agent: { source: AgentSource; sessionId: string },
     projectPath: string,
+    siblings: { source: AgentSource; sessionId: string }[],
   ): HookRuntimeEntry | undefined {
-    // Tier 1: exact source + sessionId
+    // Match a session's own events only. Another session in the same project
+    // must not inherit this status.
     if (agent.sessionId) {
       for (const entry of this.hookRuntimeByKey.values()) {
         if (entry.source === agent.source && entry.sessionId === agent.sessionId) {
@@ -149,13 +159,18 @@ export class StateManager extends EventEmitter {
       }
     }
 
-    // Tier 2: exact source + cwd (case-insensitive path match)
-    const normalizedPath = projectPath.toLowerCase();
+    // Events with no session id can apply only when this project has a single
+    // agent of that source. Otherwise we cannot tell who they belong to.
+    const sameSource = siblings.filter((candidate) => candidate.source === agent.source);
+    if (sameSource.length !== 1) return undefined;
+
+    const normalizedPath = projectPath.toLowerCase().replace(/\/+$/, '');
     for (const entry of this.hookRuntimeByKey.values()) {
+      if (entry.sessionId) continue;
       if (
         entry.source === agent.source &&
         entry.cwd &&
-        entry.cwd.toLowerCase() === normalizedPath
+        entry.cwd.toLowerCase().replace(/\/+$/, '') === normalizedPath
       ) {
         return entry;
       }
@@ -165,6 +180,6 @@ export class StateManager extends EventEmitter {
   }
 
   private normalizeKey(path: string): string {
-    return path.toLowerCase().replace(/[_\s]/g, '-').replace(/\/+$/, '');
+    return path.toLowerCase().replace(/\/+$/, '');
   }
 }
