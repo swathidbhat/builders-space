@@ -48,7 +48,7 @@ describe('project panel', () => {
 
     render(<ProjectPanel />);
     flushFrames(8);
-    expect(screen.getByRole('heading', { name: 'lumen-lab' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Lumen Lab' })).toBeTruthy();
     const labels = screen
       .getAllByText((_content, element) => {
         const text = element?.textContent ?? '';

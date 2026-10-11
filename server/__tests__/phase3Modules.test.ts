@@ -20,7 +20,7 @@ import {
   projectStatusColor,
 } from '../../shared/status';
 import { readFirstLine, readIncremental } from '../io/incrementalRead';
-import { cwdFromLsof, pidsMatching, runningCwds } from '../process/runningCwds';
+import { cursorPathsFromPs, cwdFromLsof, pidsMatching, runningCwds } from '../process/runningCwds';
 import { parseClaudeLine, parseCodexLine, parseHookEvent, hookString } from '../schema/sessionLog';
 
 function tempDir(): string {
@@ -42,14 +42,27 @@ describe('shared status and humanize bounds', () => {
     expect(derivePlanetState({ agents: [] })).toBe('idle');
   });
 
-  it('infers working, waiting, and done from age and a live process', () => {
+  it('infers working, waiting, and done from the turn, not from silence', () => {
     const now = 1_000_000;
     expect(inferSessionStatus({ lastActivityMs: now - 1_000, now })).toBe('working');
-    expect(inferSessionStatus({ lastActivityMs: now - RECENT_ACTIVITY_MS, now })).toBe('waiting');
-    expect(inferSessionStatus({ lastActivityMs: now - ONE_HOUR_MS, now })).toBe('done');
+    expect(inferSessionStatus({ lastActivityMs: now - RECENT_ACTIVITY_MS, now })).toBe('done');
     expect(
       inferSessionStatus({
-        lastActivityMs: now - STALE_PROCESS_MS,
+        lastActivityMs: now - RECENT_ACTIVITY_MS,
+        now,
+        turnFinished: true,
+      }),
+    ).toBe('waiting');
+    expect(
+      inferSessionStatus({
+        lastActivityMs: now - ONE_HOUR_MS,
+        now,
+        turnFinished: true,
+      }),
+    ).toBe('done');
+    expect(
+      inferSessionStatus({
+        lastActivityMs: now - STALE_PROCESS_MS - 1,
         now,
         processRunning: true,
       }),
@@ -59,6 +72,7 @@ describe('shared status and humanize bounds', () => {
         lastActivityMs: now - STALE_PROCESS_MS - 1,
         now,
         processRunning: true,
+        turnFinished: true,
       }),
     ).toBe('waiting');
   });
@@ -209,6 +223,19 @@ describe('process scan parsing', () => {
     expect(pidsMatching(ps, 'claude')).toEqual(['42']);
     expect(cwdFromLsof('fcwd\nn/tmp/lumen-lab/\np1')).toBe('/tmp/lumen-lab');
     expect(cwdFromLsof('p1')).toBeNull();
+  });
+
+  it('reads Cursor workspace paths from the process command line', () => {
+    const ps = [
+      'ada 15 /usr/bin/cursor /tmp/bs-qa/code/weather-widget-pro',
+      'ada 16 /Applications/Cursor.app/Contents/MacOS/Cursor --folder-uri file:///tmp/side-quest',
+      'ada 17 grep cursor /tmp/ignored',
+    ].join('\n');
+    const found = cursorPathsFromPs(ps);
+    expect(found.pids).toEqual(['15', '16']);
+    expect(found.paths).toContain('/tmp/bs-qa/code/weather-widget-pro');
+    expect(found.paths).toContain('/tmp/side-quest');
+    expect(found.paths.some((path) => path.includes('Cursor.app'))).toBe(false);
   });
 
   it('finds the cwd of a live process without blocking the caller', async () => {

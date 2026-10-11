@@ -23,6 +23,7 @@ export interface CodexSessionData {
   lastAction?: string;
   isActive: boolean;
   lastActivityMs: number;
+  turnFinished: boolean;
 }
 
 interface CodexFold {
@@ -31,6 +32,7 @@ interface CodexFold {
   latestTask?: string;
   lastAction?: string;
   latestTimestamp: number;
+  turnFinished: boolean;
 }
 
 interface CodexMeta {
@@ -89,14 +91,31 @@ function applyCodexLine(fold: CodexFold, line: string): void {
 
   if (entry.type === 'event_msg') {
     const user = parseCodexUserPayload(entry.payload);
-    if (user && user.message.length > 0) fold.latestTask = user.message.slice(0, 200);
+    if (user && user.message.length > 0) {
+      fold.latestTask = user.message.slice(0, 200);
+      fold.turnFinished = false;
+    } else if (codexAssistantSpoke(entry.payload)) {
+      fold.turnFinished = true;
+    }
     return;
   }
 
   if (entry.type === 'response_item') {
     const call = parseCodexCallPayload(entry.payload);
-    if (call) fold.lastAction = formatCodexToolUse(call.name, call.arguments);
+    if (call) {
+      fold.lastAction = formatCodexToolUse(call.name, call.arguments);
+      fold.turnFinished = false;
+      return;
+    }
+    if (codexAssistantSpoke(entry.payload)) fold.turnFinished = true;
   }
+}
+
+function codexAssistantSpoke(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const record = payload as { type?: unknown; role?: unknown; message?: unknown };
+  if (record.type === 'agent_message' || record.type === 'assistant_message') return true;
+  return record.type === 'message' && record.role === 'assistant';
 }
 
 export function parseCodexSessionFile(filePath: string): CodexSessionData | null {
@@ -105,7 +124,7 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
     const fold = foldAppendOnly(
       filePath,
       codexFolds,
-      (): CodexFold => ({ sessionId: '', cwd: '', latestTimestamp: 0 }),
+      (): CodexFold => ({ sessionId: '', cwd: '', latestTimestamp: 0, turnFinished: false }),
       applyCodexLine,
     );
     if (!fold?.sessionId) return null;
@@ -119,6 +138,7 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
       lastAction: fold.lastAction,
       isActive: Date.now() - effectiveTimestamp < RECENT_ACTIVITY_MS,
       lastActivityMs: effectiveTimestamp,
+      turnFinished: fold.turnFinished,
     };
   } catch (err) {
     logCaught('parseCodexSessionFile', err, filePath);

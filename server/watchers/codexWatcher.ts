@@ -199,6 +199,7 @@ export class CodexWatcher {
         const status = inferSessionStatus({
           lastActivityMs: data.lastActivityMs,
           processRunning: runningCwds.has(stripSlash(cwd)),
+          turnFinished: data.turnFinished,
         });
 
         const threadName = threadNames.get(data.sessionId);

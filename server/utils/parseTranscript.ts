@@ -21,12 +21,15 @@ export interface TranscriptData {
   isRecentlyActive: boolean;
   lastActivityMs: number;
   cwd?: string;
+  /** The last message is a completed assistant turn, including a question. */
+  turnFinished: boolean;
 }
 
 interface CursorFold {
   userQuery: string;
   lastAction?: string;
   cwd?: string;
+  lastRole?: string;
 }
 
 interface ClaudeFold {
@@ -36,12 +39,14 @@ interface ClaudeFold {
   latestTimestamp: number;
   lastAction?: string;
   slug?: string;
+  turnFinished: boolean;
 }
 
 interface TxtFold {
   userQuery: string;
   /** Suffix only, so a tag split across an append can still match. Not the whole file. */
   tail: string;
+  turnFinished: boolean;
 }
 
 const TXT_TAIL_MAX = 8_192;
@@ -137,6 +142,8 @@ function applyCursorLine(fold: CursorFold, line: string): void {
     }
   }
 
+  if (entry.role === 'user' || entry.role === 'assistant') fold.lastRole = entry.role;
+
   if (entry.role === 'assistant') {
     const text = cursorMessageText(entry.message);
     if (text) fold.lastAction = extractFirstSentence(text);
@@ -157,6 +164,7 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
     userQuery: fold.userQuery,
     lastAction: fold.lastAction,
     cwd: fold.cwd,
+    turnFinished: fold.lastRole === 'assistant',
     ...activity(lastModifiedMs),
   };
 }
@@ -180,7 +188,11 @@ export function parseTranscriptFile(filePath: string): TranscriptData | null {
       txtFolds.set(filePath, { cursor: read.cursor, value: cached.value });
     }
     if (!cached?.value.userQuery) return null;
-    return { userQuery: cached.value.userQuery, ...activity(safeMtime(filePath)) };
+    return {
+      userQuery: cached.value.userQuery,
+      turnFinished: cached.value.turnFinished,
+      ...activity(safeMtime(filePath)),
+    };
   }
 
   const priorTail = read.mode === 'append' && cached ? cached.value.tail : '';
@@ -196,8 +208,18 @@ export function parseTranscriptFile(filePath: string): TranscriptData | null {
     return null;
   }
   const tail = text.length > TXT_TAIL_MAX ? text.slice(-TXT_TAIL_MAX) : text;
-  txtFolds.set(filePath, { cursor: read.cursor, value: { userQuery, tail } });
-  return { userQuery, ...activity(safeMtime(filePath)) };
+  const turnFinished = txtTurnFinished(text);
+  txtFolds.set(filePath, { cursor: read.cursor, value: { userQuery, tail, turnFinished } });
+  return { userQuery, turnFinished, ...activity(safeMtime(filePath)) };
+}
+
+/** Text after the last user query is the assistant's completed turn. */
+export function txtTurnFinished(text: string): boolean {
+  const close = text.lastIndexOf('</user_query>');
+  if (close !== -1) return text.slice(close + '</user_query>'.length).trim().length > 0;
+  const userAt = Math.max(text.lastIndexOf('\nuser:'), text.lastIndexOf('\nUser:'));
+  const assistantAt = Math.max(text.lastIndexOf('\nassistant:'), text.lastIndexOf('\nAssistant:'));
+  return assistantAt !== -1 && assistantAt > userAt;
 }
 
 export interface ClaudeSessionData {
@@ -208,6 +230,7 @@ export interface ClaudeSessionData {
   slug?: string;
   isActive: boolean;
   lastActivityMs: number;
+  turnFinished: boolean;
 }
 
 function applyClaudeLine(fold: ClaudeFold, line: string): void {
@@ -226,6 +249,7 @@ function applyClaudeLine(fold: ClaudeFold, line: string): void {
 
   if (entry.type === 'user' && content !== undefined) {
     const msgContent = claudeUserText(content);
+    if (msgContent.length > 0) fold.turnFinished = false;
     if (ts >= fold.latestTimestamp && msgContent.length > 0) {
       fold.latestTimestamp = ts;
       fold.latestTask = msgContent.slice(0, 200);
@@ -235,6 +259,8 @@ function applyClaudeLine(fold: ClaudeFold, line: string): void {
   if (entry.type === 'assistant' && content !== undefined) {
     const action = claudeAssistantAction(content);
     if (action) fold.lastAction = action;
+    const reply = claudeUserText(content).trim();
+    fold.turnFinished = reply.length > 0;
     if (ts > fold.latestTimestamp) fold.latestTimestamp = ts;
   }
 }
@@ -267,7 +293,13 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
   const fold = foldAppendOnly(
     filePath,
     claudeFolds,
-    (): ClaudeFold => ({ sessionId: '', cwd: '', latestTask: '', latestTimestamp: 0 }),
+    (): ClaudeFold => ({
+      sessionId: '',
+      cwd: '',
+      latestTask: '',
+      latestTimestamp: 0,
+      turnFinished: false,
+    }),
     applyClaudeLine,
   );
   if (!fold?.sessionId) return null;
@@ -279,6 +311,7 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
     slug: fold.slug,
     isActive: Date.now() - fold.latestTimestamp < RECENT_ACTIVITY_MS,
     lastActivityMs: fold.latestTimestamp,
+    turnFinished: fold.turnFinished,
   };
 }
 

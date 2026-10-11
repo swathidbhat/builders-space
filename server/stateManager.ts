@@ -1,6 +1,8 @@
 import { EventEmitter } from 'events';
 import type { SpaceData, ProjectInfo, AgentSource, AgentStatus, AgentInfo } from './types';
 import { HOOK_ACTIVE_TTL_MS, HOOK_TERMINAL_TTL_MS } from '../shared/config';
+import { hookEntryExpired, loadHookRuntime, saveHookRuntime } from './hookRuntimeStore';
+import { logCaught } from './log';
 
 export { HOOK_ACTIVE_TTL_MS, HOOK_TERMINAL_TTL_MS };
 
@@ -27,6 +29,11 @@ export function makeAgentKey(source: AgentSource, sessionId: string, cwd?: strin
   return `${source}::${sessionId}::${normalizeCwd(cwd) ?? ''}`;
 }
 
+export interface StateManagerOptions {
+  /** When set, hook overlays are reloaded from this file and written back with their TTL. */
+  runtimeFile?: string;
+}
+
 export class StateManager extends EventEmitter {
   private cursorProjects = new Map<string, ProjectInfo>();
   private claudeProjects = new Map<string, ProjectInfo>();
@@ -34,6 +41,20 @@ export class StateManager extends EventEmitter {
   private hookRuntimeByKey = new Map<string, HookRuntimeEntry>();
   private state: SpaceData = { projects: [], lastUpdated: Date.now() };
   private publishedProjects = '';
+  private runtimeFile?: string;
+
+  constructor(options: StateManagerOptions = {}) {
+    super();
+    this.runtimeFile = options.runtimeFile;
+    if (!this.runtimeFile) return;
+    const loaded = loadHookRuntime(this.runtimeFile);
+    for (const entry of loaded.entries) {
+      const cwd = normalizeCwd(entry.cwd);
+      const stored = cwd === entry.cwd ? entry : { ...entry, cwd };
+      this.hookRuntimeByKey.set(makeAgentKey(stored.source, stored.sessionId, stored.cwd), stored);
+    }
+    if (loaded.dropped) this.persistRuntime();
+  }
 
   updateCursorProjects(projects: Map<string, ProjectInfo>): void {
     this.cursorProjects = projects;
@@ -69,6 +90,7 @@ export class StateManager extends EventEmitter {
     const existing = this.hookRuntimeByKey.get(key);
     if (existing && existing.lastEventAt > stored.lastEventAt) return;
     this.hookRuntimeByKey.set(key, stored);
+    this.persistRuntime();
     this.rebuild();
   }
 
@@ -80,6 +102,7 @@ export class StateManager extends EventEmitter {
         this.hookRuntimeByKey.delete(key);
       }
     }
+    this.persistRuntime();
     this.rebuild();
   }
 
@@ -114,13 +137,14 @@ export class StateManager extends EventEmitter {
     }
 
     // Step 2: Prune expired hook overlay entries
+    let expired = false;
     for (const [key, entry] of this.hookRuntimeByKey) {
-      const age = now - entry.lastEventAt;
-      const ttl = entry.terminal ? HOOK_TERMINAL_TTL_MS : HOOK_ACTIVE_TTL_MS;
-      if (age > ttl) {
+      if (hookEntryExpired(entry, now)) {
         this.hookRuntimeByKey.delete(key);
+        expired = true;
       }
     }
+    if (expired) this.persistRuntime();
 
     // Steps 3–6: For each agent, find and apply matching overlay
     const projects = Array.from(merged.values());
@@ -150,9 +174,18 @@ export class StateManager extends EventEmitter {
     if (signature === this.publishedProjects) return;
     this.publishedProjects = signature;
 
+    const publishedAt = Date.now();
+    for (const project of projects) {
+      for (const agent of project.agents) {
+        if (typeof agent.lastActivityMs === 'number') {
+          agent.quietForMs = Math.max(0, publishedAt - agent.lastActivityMs);
+        }
+      }
+    }
+
     this.state = {
       projects,
-      lastUpdated: Date.now(),
+      lastUpdated: publishedAt,
     };
 
     this.emit('change', this.state);
@@ -196,5 +229,14 @@ export class StateManager extends EventEmitter {
 
   private normalizeKey(path: string): string {
     return path.toLowerCase().replace(/\/+$/, '');
+  }
+
+  private persistRuntime(): void {
+    if (!this.runtimeFile) return;
+    try {
+      saveHookRuntime(this.runtimeFile, [...this.hookRuntimeByKey.values()]);
+    } catch (err) {
+      logCaught('hookRuntime', err, this.runtimeFile);
+    }
   }
 }

@@ -16,6 +16,8 @@ const SESSION_EXTENSIONS = ['.jsonl', '.txt'];
  * Chokidar does not expand globs, so the root is a real directory and
  * unrelated files are ignored. Directories are never ignored, or recursion stops.
  * `.txt` is included because Cursor still parses those transcripts.
+ * Directory add and remove are signals too, so a new project or a deleted one
+ * does not wait for the fallback rescan.
  */
 export function watchJsonlTree(root: string, onSignal: () => void, label: string): JsonlWatch {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -40,8 +42,10 @@ export function watchJsonlTree(root: string, onSignal: () => void, label: string
   });
 
   watcher.on('add', schedule);
+  watcher.on('addDir', schedule);
   watcher.on('change', schedule);
   watcher.on('unlink', schedule);
+  watcher.on('unlinkDir', schedule);
   watcher.on('error', (err) => logCaught(label, err, 'file watch error'));
 
   const ready = new Promise<void>((resolve) => {

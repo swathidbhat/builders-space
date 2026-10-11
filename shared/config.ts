@@ -6,9 +6,13 @@ export const API_ORIGIN = `http://127.0.0.1:${SERVER_PORT}`;
 
 export const ONE_HOUR_MS = 60 * 60 * 1000;
 export const MAX_SESSION_AGE_MS = 48 * ONE_HOUR_MS;
-/** Transcript activity newer than this is "working" without a live process. */
+/** A transcript write newer than this is "working", even when the assistant spoke last. */
 export const RECENT_ACTIVITY_MS = 2 * 60 * 1000;
-/** A live process with no new output for this long is "waiting". */
+/**
+ * How long a live process can sit without new output before older builds called it
+ * "waiting". Silence is no longer "needs you"; the constant remains so callers can
+ * describe that window.
+ */
 export const STALE_PROCESS_MS = 10 * 60 * 1000;
 
 export const HOOK_ACTIVE_TTL_MS = 600_000;

@@ -22,7 +22,10 @@ export interface AgentInfo {
   errorReason?: string;
   startedAt?: string;
   elapsedMs?: number;
+  /** Epoch ms of the last transcript write or hook event. The UI derives "for 14 min" from this. */
   lastActivityMs?: number;
+  /** `now - lastActivityMs` at the moment this state was published. Recompute from `lastActivityMs` if the tab stays open. */
+  quietForMs?: number;
   title?: string;
   sessionMeta?: SessionMeta;
 }

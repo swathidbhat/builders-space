@@ -28,6 +28,45 @@ export function cwdFromLsof(output: string): string | null {
   return null;
 }
 
+/**
+ * Workspace paths and pids mentioned on `ps` lines for Cursor.
+ * The editor often keeps the project on its command line (`cursor /path`,
+ * `--folder-uri file:///path`) rather than as the process cwd.
+ */
+export function cursorPathsFromPs(psOutput: string): { pids: string[]; paths: string[] } {
+  const pids: string[] = [];
+  const paths: string[] = [];
+  for (const line of psOutput.split('\n')) {
+    if (!/cursor/i.test(line) || line.includes('grep')) continue;
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 2) continue;
+    const pid = parts[1];
+    if (/^\d+$/.test(pid) && pids.length < MAX_PIDS) pids.push(pid);
+    for (const token of parts) {
+      const path = workspacePathToken(token);
+      if (path) paths.push(path);
+    }
+  }
+  return { pids, paths };
+}
+
+function workspacePathToken(token: string): string | null {
+  let value = token.replace(/^['"]|['"]$/g, '');
+  if (value.startsWith('file://')) {
+    try {
+      value = decodeURIComponent(value.slice('file://'.length));
+    } catch {
+      return null;
+    }
+  }
+  if (!value.startsWith('/')) return null;
+  if (value.includes('.app/')) return null;
+  if (/\/cursor$/i.test(value)) return null;
+  if (value.includes('node_modules')) return null;
+  const stripped = value.replace(/\/+$/, '');
+  return stripped.length > 0 ? stripped : null;
+}
+
 export function sameCwdSet(left: Set<string>, right: Set<string>): boolean {
   if (left.size !== right.size) return false;
   for (const value of left) {
@@ -48,6 +87,35 @@ function execText(file: string, args: string[]): Promise<string> {
       },
     );
   });
+}
+
+/**
+ * Directories a Cursor process is working in: cwd from lsof, plus workspace
+ * paths on the command line. There is no per-chat process the way `claude` has.
+ */
+export async function cursorLiveCwds(): Promise<Set<string>> {
+  let psOutput: string;
+  try {
+    psOutput = await execText('ps', ['aux']);
+  } catch (err) {
+    logCaught('process', err, 'ps aux');
+    return new Set();
+  }
+
+  const { pids, paths } = cursorPathsFromPs(psOutput);
+  const cwds = new Set(paths);
+  await Promise.all(
+    pids.map(async (pid) => {
+      try {
+        const output = await execText('lsof', ['-p', pid, '-a', '-d', 'cwd', '-Fn']);
+        const cwd = cwdFromLsof(output);
+        if (cwd) cwds.add(cwd);
+      } catch {
+        // The process exited, or lsof has no cwd to report.
+      }
+    }),
+  );
+  return cwds;
 }
 
 /**

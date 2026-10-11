@@ -51,14 +51,16 @@ Every visual element in Builders Space maps to something real. Nothing is decora
 
 The same 4-state hierarchy applies everywhere — sidebar dot, planet status rings, planet label. The most urgent status always wins:
 
-| Priority | Status      | Color           | Planet visual                                      | What it means                                  |
-| -------- | ----------- | --------------- | -------------------------------------------------- | ---------------------------------------------- |
-| 1        | **Error**   | Red `#ff4444`   | 3–4 fast red rings expanding outward, flickering   | An agent hit a failure. Go investigate.        |
-| 2        | **Waiting** | Amber `#ffaa44` | Single slow amber ring, calm radar pulse           | An agent needs your input. Go respond.         |
-| 3        | **Working** | Green `#44ffaa` | No ring — planet at full color and normal rotation | Agents are actively working. No action needed. |
-| 4        | **Done**    | Dim `#6688aa`   | No ring — planet dimmed, desaturated, near-still   | All agents finished. Nothing happening.        |
+| Priority | Status      | Color           | Planet visual                                      | What it means                                                                |
+| -------- | ----------- | --------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1        | **Error**   | Red `#ff4444`   | 3–4 fast red rings expanding outward, flickering   | An agent hit a failure. Go investigate.                                      |
+| 2        | **Waiting** | Amber `#ffaa44` | Single slow amber ring, calm radar pulse           | The agent finished its turn and needs your input.                            |
+| 3        | **Working** | Green `#44ffaa` | No ring — planet at full color and normal rotation | Agents are writing, or a live process has not handed the turn back.          |
+| 4        | **Done**    | Dim `#6688aa`   | No ring — planet dimmed, desaturated, near-still   | Quiet, with no finished turn and no live process. Nothing is asking for you. |
 
 If a project has 3 working agents and 1 error agent, the planet shows red rings — because the error needs your attention regardless of the working agents. The sidebar dot matches.
+
+**Waiting is not silence.** A transcript that has not been written for a few minutes is not "needs you". That status means the last message is a completed assistant turn (including a question), or a hook Stop event said the turn ended. A live process that has not handed the turn back stays **working** — quiet, possibly still busy. With no live process and no finished turn, the agent is **done**. Each agent carries `lastActivityMs` (and `quietForMs` at publish time) so a later UI can show how long it has been quiet. File age alone never sets waiting.
 
 ### What the background elements are (and are not)
 
@@ -214,12 +216,12 @@ flowchart LR
 
 **Backend** uses independent watchers that each monitor a tool's session directory:
 
-- **CursorWatcher**: Agent transcripts in `~/.cursor/projects/` (conversation JSONL files)
+- **CursorWatcher**: Agent transcripts in `~/.cursor/projects/` (`*.jsonl` and `*.txt`). Cursor does not spawn a process per chat, so liveness is the editor's cwd plus workspace paths on the `cursor` command line (`ps` / `lsof`), the same snapshot Claude and Codex use for their own processes.
 - **ClaudeWatcher**: JSONL session files in `~/.claude/projects/`, with `ps aux` process detection
 - **CodexWatcher**: Rollout JSONL files in `~/.codex/sessions/`, with `ps aux` process detection
-- **EventWatcher**: Hook events written to `~/.builders-space/events/` — normalizes events into `HookRuntimeEntry` overlays for the StateManager
+- **EventWatcher**: Hook events written to `~/.builders-space/events/` — normalizes events into `HookRuntimeEntry` overlays for the StateManager. Applied overlays are saved to `~/.builders-space/hook-runtime.json` (mode `0600`) and reloaded on startup until their TTL.
 
-Each watcher discovers projects agent-first: a project only exists if it has at least one agent session. Project paths come from the session's real `cwd` when the log has one. When it does not, the encoded directory name is resolved from `/` by probing the filesystem, longest directory first, so a folder named `my-app` stays intact and a root such as `/opt`, `/tmp`, or `/Volumes` works when that directory exists. If nothing on disk matches, the name falls back to splitting well-known parent folders and keeping the rest hyphenated. The **StateManager** merges project maps from all watchers, then applies hook overlays using an explicit authority model: any agent with a trusted, non-expired hook overlay becomes `statusSource: 'realtime'`; otherwise the watcher-derived heuristic is `statusSource: 'inferred'`. **Matching** overlays to agents uses that agent's own `session_id` and, when several events share it, the newest `lastEventAt`. Working directories are stored without a trailing slash, so `/proj/` and `/proj` are the same overlay. An event for one session does not change other agents in the same project. An event with no session id is applied only when the project has a single agent from that tool. Overlay trust windows: 10 minutes for active states (`working`, `waiting`), 1 hour for terminal states (`done`, `error`). State is emitted to clients via Socket.IO.
+Each watcher discovers projects agent-first: a project only exists if it has at least one agent session. Project paths come from the session's real `cwd` when the log has one. When it does not, the encoded directory name is resolved from `/` by probing the filesystem, longest directory first, so a folder named `my-app` stays intact and a root such as `/opt`, `/tmp`, or `/Volumes` works when that directory exists. If nothing on disk matches, the name falls back to splitting well-known parent folders (including `Projects`) and keeping the rest hyphenated, not the last word of a hyphenated folder. When the path does resolve, the display name is that directory's basename (`weather-widget-pro`, not `Pro`). Sidebar, planet labels, and the project panel all title-case that name the same way, and short tokens such as `api` and `ml` stay uppercase. Watchers also listen for directories being added and removed, so a new project appears and a deleted one disappears without waiting for the 60 second rescan. The **StateManager** merges project maps from all watchers, then applies hook overlays using an explicit authority model: any agent with a trusted, non-expired hook overlay becomes `statusSource: 'realtime'`; otherwise the watcher-derived heuristic is `statusSource: 'inferred'`. **Matching** overlays to agents uses that agent's own `session_id` and, when several events share it, the newest `lastEventAt`. Working directories are stored without a trailing slash, so `/proj/` and `/proj` are the same overlay. An event for one session does not change other agents in the same project. An event with no session id is applied only when the project has a single agent from that tool. Overlay trust windows: 10 minutes for active states (`working`, `waiting`), 1 hour for terminal states (`done`, `error`). State is emitted to clients via Socket.IO.
 
 **Humanization** is client-initiated: when a user opens a project panel with "Human Lingo" mode on, the client sends raw action strings to the server, which translates them via LLM (with a regex fallback) and returns short labels.
 
