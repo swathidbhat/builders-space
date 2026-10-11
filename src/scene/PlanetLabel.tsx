@@ -6,27 +6,21 @@ import { DomLabel } from './DomLabel';
 import { labelPriority } from './labelPlacement';
 import styles from './PlanetLabel.module.css';
 
-const stateStyles: Record<
-  PlanetState,
-  { color: string; glow: string; suffix: string; word: string }
-> = {
-  active: { color: '#44ffaa', glow: '0 1px 1px rgba(0,0,0,0.9)', suffix: '', word: 'Working' },
+const stateStyles: Record<PlanetState, { color: string; glow: string; word: string }> = {
+  active: { color: '#44ffaa', glow: '0 1px 1px rgba(0,0,0,0.9)', word: 'Working' },
   idle: {
     color: 'rgba(200,220,255,0.85)',
     glow: '0 1px 1px rgba(0,0,0,0.9)',
-    suffix: '',
     word: 'Done',
   },
   waiting: {
     color: '#ffcc77',
     glow: '0 1px 1px rgba(0,0,0,0.9)',
-    suffix: ' \u2022 needs you',
     word: 'Needs you',
   },
   error: {
     color: '#ff8d8d',
     glow: '0 1px 1px rgba(0,0,0,0.9)',
-    suffix: ' \u2022 error',
     word: 'Error',
   },
 };
@@ -50,6 +44,7 @@ export function PlanetLabel({
   const selected = useSpaceStore((s) => s.selectedPlanetId === projectId);
   const hovered = useSpaceStore((s) => s.hoveredPlanetId === projectId);
   const pretty = prettifyName(name);
+  const needsYou = planetState === 'error' || planetState === 'waiting';
   const tip = `${pretty} · ${style.word} · ${agentCount} ${agentCount === 1 ? 'agent' : 'agents'}`;
 
   return (
@@ -67,18 +62,12 @@ export function PlanetLabel({
         <div className={styles.name} data-planet-name="">
           {pretty}
         </div>
-        {agentCount > 0 && (
+        {needsYou && (
           <div
             className={styles.count}
             style={cssVars({ '--state-color': style.color, '--state-glow': style.glow })}
           >
-            {agentCount} {agentCount === 1 ? 'agent' : 'agents'}
-            {style.suffix}
-          </div>
-        )}
-        {hovered && (
-          <div className={styles.tip} role="tooltip">
-            {tip}
+            {style.word}
           </div>
         )}
       </div>

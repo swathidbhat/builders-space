@@ -54,38 +54,52 @@ export interface AttentionRow {
   quietMs: number;
 }
 
+function attentionRow(project: ProjectInfo, agent: AgentInfo, now: number): AttentionRow {
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    agentId: agent.id,
+    status: agent.status as 'error' | 'waiting',
+    task: agentTask(agent),
+    detail: attentionDetail(agent),
+    duration: activityPhrase(agent, now) ?? 'last activity just now',
+    quietMs: quietMs(agent, now),
+  };
+}
+
+function moreUrgent(next: AttentionRow, prev: AttentionRow): boolean {
+  if (next.status !== prev.status) return next.status === 'error';
+  return next.quietMs > prev.quietMs;
+}
+
+/** One row per project: the agent that most needs you. */
 export function needsYouRows(projects: ProjectInfo[], now = Date.now()): AttentionRow[] {
-  const rows: AttentionRow[] = [];
+  const byProject = new Map<string, AttentionRow>();
   for (const project of projects) {
     for (const agent of project.agents) {
       if (agent.status !== 'error' && agent.status !== 'waiting') continue;
-      const waited = quietMs(agent, now);
-      rows.push({
-        projectId: project.id,
-        projectName: project.name,
-        agentId: agent.id,
-        status: agent.status,
-        task: agentTask(agent),
-        detail: attentionDetail(agent),
-        duration: activityPhrase(agent, now) ?? 'last activity just now',
-        quietMs: waited,
-      });
+      const row = attentionRow(project, agent, now);
+      const prev = byProject.get(project.id);
+      if (!prev || moreUrgent(row, prev)) byProject.set(project.id, row);
     }
   }
-  rows.sort((a, b) => {
+  return [...byProject.values()].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'error' ? -1 : 1;
     return b.quietMs - a.quietMs || a.projectName.localeCompare(b.projectName);
   });
-  return rows;
 }
 
-export function projectsByUrgency(projects: ProjectInfo[]): ProjectInfo[] {
+export function projectsByUrgency(projects: ProjectInfo[], now = Date.now()): ProjectInfo[] {
+  const quiet = new Map(needsYouRows(projects, now).map((row) => [row.projectId, row.quietMs]));
   return [...projects].sort((a, b) => {
     const rankA = dominantStatus(a.agents);
     const rankB = dominantStatus(b.agents);
     const scoreA = rankA === 'empty' ? 4 : STATUS_RANK[rankA];
     const scoreB = rankB === 'empty' ? 4 : STATUS_RANK[rankB];
     if (scoreA !== scoreB) return scoreA - scoreB;
+    const quietA = quiet.get(a.id) ?? 0;
+    const quietB = quiet.get(b.id) ?? 0;
+    if (scoreA <= 1 && quietA !== quietB) return quietB - quietA;
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
 }

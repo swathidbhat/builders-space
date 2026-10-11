@@ -87,11 +87,13 @@ export function HUD() {
         <h1 className={styles.title}>Builders Space</h1>
         <div className={styles.subtitle}>{subtitle}</div>
       </div>
-      <div className={styles.counters} data-counters="">
-        <HUDCounter label="Agents" value={totalAgents} />
-        <HUDCounter label="Working" value={workingAgents} color="#44ffaa" />
+      <div
+        className={styles.counters}
+        data-counters=""
+        title={`${totalAgents} ${totalAgents === 1 ? 'agent' : 'agents'} · ${workingAgents} working`}
+      >
         {waitingAgents > 0 && (
-          <HUDCounter label="Awaiting you" value={waitingAgents} color="#ffaa44" pulse />
+          <HUDCounter label="Needs you" value={waitingAgents} color="#ffaa44" pulse />
         )}
         {errorAgents > 0 && <HUDCounter label="Errors" value={errorAgents} color="#ff4444" pulse />}
       </div>

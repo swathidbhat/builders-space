@@ -1,19 +1,12 @@
 .legend {
-  position: relative;
-  z-index: 1;
-  pointer-events: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(5, 8, 20, 0.72);
+  background: rgba(5, 8, 20, 0.92);
   border: 1px solid rgba(140, 160, 220, 0.16);
-  backdrop-filter: blur(10px);
   font-family: 'Space Grotesk', sans-serif;
-  flex: 1 1 180px;
-  max-width: min(280px, 100%);
-  min-width: 0;
 }
 
 .list {

@@ -10,7 +10,7 @@ const ITEMS = [
 
 export function StatusLegend() {
   return (
-    <aside className={styles.legend} aria-label="Status legend" data-overlay="legend">
+    <aside className={styles.legend} aria-label="Status legend">
       <ul className={styles.list}>
         {ITEMS.map((item) => (
           <li key={item.label}>

@@ -87,8 +87,9 @@
 
 .item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
   width: 100%;
   padding: 7px 14px;
   background: transparent;
@@ -98,6 +99,14 @@
   text-align: left;
   font-family: 'Space Grotesk', sans-serif;
   transition: background 0.15s;
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .item:hover {
@@ -137,6 +146,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-width: 0;
 }
 
 .selectedName {
@@ -151,96 +161,28 @@
   flex-shrink: 0;
 }
 
-.section {
-  padding: 10px 14px 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: #ffcc77;
-  text-transform: uppercase;
-  font-family: 'Orbitron', sans-serif;
-  letter-spacing: 0.08em;
-}
-
-.urgent {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  width: 100%;
-  padding: 8px 14px;
-  background: transparent;
-  border: none;
-  border-left: 2px solid transparent;
-  cursor: pointer;
-  text-align: left;
-  font-family: 'Space Grotesk', sans-serif;
-}
-
-.urgent:hover {
-  background: rgba(255, 170, 68, 0.06);
-}
-
-.urgentTop {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.urgentProject {
-  font-size: 12px;
-  font-weight: 600;
-  color: #dde;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
+.reason,
+.time {
+  margin-left: 26px;
   min-width: 0;
 }
 
-.urgentTaskRow {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  padding-left: 14px;
-}
-
-.urgentTime {
-  font-size: 11px;
-  color: #d5dced;
-  flex: none;
-  white-space: nowrap;
-}
-
-.urgentTask,
-.urgentDetail {
+.reason {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  white-space: normal;
-  line-height: 1.35;
-}
-
-.urgentTask {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-left: 0;
-}
-
-.urgentDetail {
-  padding-left: 14px;
-}
-
-.urgentTask {
   font-size: 12px;
+  line-height: 1.35;
   color: #c5cbe0;
 }
 
-.urgentDetail {
+.time {
+  display: block;
   font-size: 11px;
-  color: #f0c2c2;
+  line-height: 1.3;
+  color: #d5dced;
+  white-space: nowrap;
 }
 
 @media (max-width: 999px) {

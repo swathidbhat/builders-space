@@ -67,7 +67,10 @@ describe('scene components', () => {
     };
 
     useSpaceStore.setState({
-      projects: [testProject('lumen-lab', [{ id: 'a1', status: 'error' }])],
+      projects: [
+        testProject('lumen-lab', [{ id: 'a1', status: 'error' }]),
+        testProject('api-gateway', [{ id: 'b1', status: 'working' }]),
+      ],
       selectedPlanetId: 'lumen-lab',
       cameraMode: 'planet',
     });
@@ -76,6 +79,9 @@ describe('scene components', () => {
       render(<SpaceScene />);
       expect(screen.getByTestId('scene-canvas')).toBeTruthy();
       expect(document.body.textContent).toContain('Lumen Lab');
+      expect(document.body.textContent).toContain('Error');
+      expect(document.body.textContent).toContain('API Gateway');
+      expect(document.body.textContent).not.toMatch(/\d+ agent/);
       const mesh = document.querySelector('mesh');
       expect(mesh).toBeTruthy();
       expect(document.querySelectorAll('mesh').length).toBeGreaterThan(1);
