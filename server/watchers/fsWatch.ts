@@ -11,7 +11,7 @@ export interface JsonlWatch {
 
 /**
  * Watch a directory tree for .jsonl files.
- * Chokidar v4 does not expand globs, so the root is a real directory and
+ * Chokidar does not expand globs, so the root is a real directory and
  * non-jsonl files are ignored. Directories are never ignored, or recursion stops.
  */
 export function watchJsonlTree(root: string, onSignal: () => void, label: string): JsonlWatch {

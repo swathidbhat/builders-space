@@ -85,14 +85,17 @@ If you add a new project (a new planet appears), or a project drops off when all
 Yes:
 
 - **Click a planet** (or its name in the sidebar) to open its detail panel.
-- **Click an agent card** to open that agent's tool — Cursor opens the Cursor window, Claude opens the Claude desktop app, Codex opens the Codex desktop app.
+- **Click an agent card** to ask the local server to open that agent. Cursor opens the project's folder in Cursor. Claude Code and Codex resume the session in Terminal when the agent is not already working and has a session id. Otherwise Terminal opens the project folder. The app does not launch a Claude or Codex desktop app.
 - **Press Escape** or click empty space to close the panel.
 
 ## Do I need to configure anything?
 
-No. The app automatically discovers active AI sessions from the standard directories where each tool stores its data. Just run it and it finds everything.
+Session discovery needs no setup. The app reads the standard directories where each tool already stores its data. If an agent is running, its project shows up as a planet.
 
-The only optional setup is adding an Anthropic API key, which improves the Human Lingo translations. Without it, the app uses built-in rules that cover most cases.
+Two things stay off until you opt in:
+
+- **Hooks.** Click Enable Hooks in the dashboard if you want real-time status events. Until then, nothing is written to `~/.claude`, `~/.cursor`, or `~/.codex`.
+- **Human Lingo via Anthropic.** Add an API key if you want those translations. Without it, the app uses built-in rules and does not contact Anthropic.
 
 ---
 
@@ -144,9 +147,9 @@ Each watcher independently discovers projects by reading session files. A projec
 
 ### How does the Human Lingo translation work?
 
-When you open a project panel, the app collects all the raw action strings that haven't been translated yet and sends them to the server. If you have an Anthropic API key, the server sends them to Claude (a fast, inexpensive model) with instructions to produce 5–8 word status labels in everyday language. Results are cached for an hour so the same action doesn't need to be translated twice.
+When you open a project panel with Human Lingo on, the app sends that panel's short action and error strings to the server. If `ANTHROPIC_API_KEY` is set, the server sends those strings to Anthropic (at most 20 strings, 500 characters each) and asks for a 5–8 word label. Results are cached for an hour. Full transcripts are not sent.
 
-Without an API key, the server uses built-in rules — it knows that "Read" means "Reading," "Shell" means "Running," "Search" means "Searching," and so on. This covers most cases, though the LLM translations are more natural.
+Without an API key, or with the toggle off, nothing is sent. The server uses built-in rules — it knows that "Read" means "Reading," "Shell" means "Running," "Search" means "Searching," and so on.
 
 ### How are planet positions computed?
 

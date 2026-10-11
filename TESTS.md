@@ -2,17 +2,17 @@
 
 Automated coverage lives in Vitest and Playwright. CI runs `npm run test:coverage` and `npm run test:e2e` on Linux. Those suites cover parsers, watcher status, hook setup, open-session commands, auth, the status HUD, sidebar dots, agent cards, the hooks panel, and a fixture-backed dashboard smoke test.
 
-This file is only the checks that still need a person at a Mac. Linux CI cannot launch the Claude, Codex, or Cursor desktop apps, drive Terminal through `osascript`, or judge the 3D scene by eye.
+This file is only the checks that still need a person at a Mac. Linux CI cannot drive `open` or Terminal through `osascript`, or judge the 3D scene by eye.
 
-## Desktop launch
+## Launch from an agent card
 
-1. With Claude.app installed, click a Claude agent card. The Claude app should open, and the toast should say it opened Claude.
-2. Quit and move Claude.app aside, restart the server, and click a Claude card that is not `working` and has a session id. Terminal should run `claude --resume` for that id. The toast should say the session is resuming.
-3. Repeat for Codex.app and `codex resume`.
-4. Click a Cursor card. Cursor should open that project. The toast should say it opened in Cursor.
+The server does not look for Claude.app or Codex.app. Cursor is `open -a Cursor`. Claude Code and Codex are either `osascript` telling Terminal to resume, or `open -a Terminal`.
+
+1. Click a Cursor card whose project path exists. Cursor should open that folder. The toast should say it opened in Cursor.
+2. Click a Claude card that is not `working` and has a session id. Terminal should run `claude --resume` for that id. The toast should say the session is resuming.
+3. Click a Claude card that is `working`, or that has no session id. Terminal should open the project folder. The toast should say the project directory opened.
+4. Repeat steps 2 and 3 for Codex (`codex resume`).
 5. Click a card while the server is stopped. The toast should say it could not connect.
-
-Detection of `/Applications/Claude.app` and `/Applications/Codex.app` runs once at startup. Install an app after the server is up and the click still uses the Terminal fallback until restart.
 
 ## Live process detection
 
