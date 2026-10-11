@@ -4,11 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    # The Phase 3 PR targets the Phase 2 branch until that merges, then this
-    # pull request is retargeted at main. Both bases run the same checks.
-    branches:
-      - main
-      - cursor/phase2-tooling-testing-a797
+    branches: [main]
 
 jobs:
   check:
@@ -17,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20.19'
           cache: npm
       - run: npm ci
       - run: npm run typecheck

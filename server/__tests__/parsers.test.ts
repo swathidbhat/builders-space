@@ -26,7 +26,7 @@ describe('Claude and Cursor transcript parsers', () => {
     const dir = tempDir();
     const session = join(dir, 'session');
     mkdirSync(session);
-    write(
+    const older = write(
       session,
       'older.jsonl',
       JSON.stringify({
@@ -34,6 +34,10 @@ describe('Claude and Cursor transcript parsers', () => {
         message: { content: 'stale prompt' },
       }) + '\n',
     );
+    // Some CI filesystems store mtime in whole seconds. A same-second write
+    // then looks as new as utimesSync(now), and sort keeps directory order.
+    const past = new Date(Date.now() - 60_000);
+    utimesSync(older, past, past);
     const newest = write(
       session,
       'newest.jsonl',

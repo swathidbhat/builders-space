@@ -97,7 +97,7 @@ Alphabetically by project name on concentric rings in a flat plane. Agent status
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20.17+ (see `.nvmrc`; Node 18 is not supported)
+- [Node.js](https://nodejs.org/) 20.19 or newer (see `.nvmrc`; Node 18 is not supported)
 - npm 9+
 - macOS for live agent detection (`open` / `osascript` and the tool log paths). CI runs the automated suite on Linux.
 
@@ -125,25 +125,89 @@ Session discovery only reads tool logs. It does not modify your repositories or 
 
 A **Hooks** tool icon sits in the bottom-right corner of the dashboard. Click **Enable Hooks** to install shell hooks into the global Claude Code, Cursor, and Codex configs. That is opt-in: Builders Space does not write `.codex/hooks.json` into your repos, and it does not edit those global configs until you click. **Disable Hooks** removes the hooks and deletes config files that Enable created. If an older build wrote `<repo>/.codex/hooks.json`, delete that file when it only references `~/.builders-space/hooks/`. When hooks are active and events are recent, agents can report `statusSource: 'realtime'`. If hook data goes stale, agents fall back to file-scanning heuristics.
 
-## Security and privacy
+## Privacy and security
 
-The server listens on the loopback interface only (`127.0.0.1`, and `::1` when that address is available). Browser requests whose `Origin` is not a loopback page are rejected. Each launch creates a random token in `~/.builders-space/auth-token` (mode 0600). HTTP and Socket.IO clients must send it. Opening an agent looks the session up on the server and runs a fixed command with an argument array, not a shell string built from the request.
+The dashboard reads session logs that already exist on this machine. It does not upload those logs. The only network call to a third party is Human Lingo, and only in the cases below. Report a vulnerability the way [SECURITY.md](SECURITY.md) describes.
 
-Human Lingo sends the short strings shown in an open panel to Anthropic only when an API key is set and the toggle is on. Hook payloads are stored under `~/.builders-space/events/` with mode 0600 and are removed after they are applied. Events left over from a previous run are not replayed as live status.
+### What is read locally
+
+While the server is running it reads:
+
+- Claude Code session logs under `~/.claude/projects/` (`*.jsonl`)
+- Cursor agent transcripts under `~/.cursor/projects/*/agent-transcripts/` (`*.jsonl`)
+- Codex session logs under `~/.codex/sessions/` (`*.jsonl`) and `~/.codex/session_index.jsonl`
+- Hook event files under `~/.builders-space/events/`, only after you enable hooks and a tool writes one
+- The working directory of running `claude` and `codex` processes, via `ps` and `lsof`
+
+Sessions whose files are older than 48 hours are dropped. The server uses the path, prompt, last action, and status from those logs. It does not read your repository source.
+
+### What is sent to Anthropic, and how to turn that off
+
+Nothing is sent unless both of these are true: `ANTHROPIC_API_KEY` is set in the environment (`.env` or `.env.local`), and the **Human Lingo** toggle in an open project panel is on.
+
+When both are true, opening a project panel sends that panel's short action and error strings to Anthropic (`messages.create`, model `HUMANIZER_MODEL` or `claude-haiku-4-5-20251001`). A request is at most 20 strings, and each string is at most 500 characters. Full transcripts, file contents, and hook payloads are not included.
+
+To keep every label on this machine, turn Human Lingo off, or leave `ANTHROPIC_API_KEY` unset. With no key, the server uses its built-in wording and does not call Anthropic.
+
+### Localhost and the launch token
+
+The server listens on `127.0.0.1` and, when that address is available, `::1`. It does not listen on other interfaces. A browser request is rejected unless its `Origin` is `http://localhost`, `http://127.0.0.1`, or `http://[::1]`, with an optional port.
+
+Each launch writes a random token to `~/.builders-space/auth-token` (mode `0600`). The Vite dev server injects that token into the page. HTTP routes send it as `Authorization: Bearer`, and the Socket.IO connection sends it as well. Another site, or another user on the machine, cannot read the token from that file's mode or call the API without it.
+
+Opening an agent sends the agent id only. The server looks the session up in its own state and runs a fixed program with an argument array (`open` or `osascript`). The request does not supply a shell command or a path.
+
+### What Enable Hooks and Disable Hooks change
+
+Discovery does not write anything. **Enable Hooks** is a separate click. It writes `~/.builders-space/hooks/status-hook.sh` and `fire-hook.sh` (mode `0755`) and `~/.builders-space/hook-manifest.json` (mode `0600`). It then edits the global tool configs, after copying an existing file into `~/.builders-space/backups/`:
+
+- `~/.claude/settings.json`
+- `~/.cursor/hooks.json`
+- `~/.codex/config.toml` and `~/.codex/hooks.json`
+
+Those hooks append small JSON payloads to `~/.builders-space/events/` (directory mode `0700`, files created with `umask 077`). The server applies an event once and deletes the file. It does not write `.codex/hooks.json` into your repositories.
+
+**Disable Hooks** removes the Builders Space entries from those global configs. Config files that Enable created are deleted. The two hook scripts and the manifest are deleted. Backup copies under `~/.builders-space/backups/` are left in place. Hook status overlays are cleared, and agents go back to file and process inference.
 
 ## Architecture
 
-```
-Browser (React + Three.js)          Node.js Backend
-┌─────────────────────────┐         ┌──────────────────────────┐
-│  3D Space Scene         │◄─SIO──►│  StateManager (merge)     │
-│  ├─ Starfield           │         │  ├─ CursorWatcher         │
-│  ├─ Nebula              │         │  ├─ ClaudeWatcher          │
-│  ├─ Planets (per project)│        │  ├─ CodexWatcher           │
-│  │  └─ Agents (per agent)│        │  ├─ EventWatcher           │
-│  ├─ HUD + Side Panel    │         │  └─ Humanizer (on-demand)  │
-│  └─ HookSetupCard       │         └──────────────────────────┘
-└─────────────────────────┘
+`shared/` is the contract both sides import: types, ports, status priority, and humanize limits. `server/` watches local tool logs and serves state. `src/` renders that state. Neither side redefines the other's types.
+
+```mermaid
+flowchart LR
+  subgraph browser [src]
+    scene[scene]
+    ui[ui]
+    store[store]
+    sock[useSocket]
+  end
+  subgraph node [server]
+    http[createServer]
+    state[StateManager]
+    watch[watchers]
+    human[humanizer]
+    hooks[hookSetup]
+    launch[openSession]
+  end
+  shared[shared]
+  disk["tool logs and ~/.builders-space"]
+  anthropic[Anthropic API]
+
+  scene --> store
+  ui --> store
+  sock --> store
+  sock <-->|"Socket.IO + token"| http
+  http --> state
+  http --> hooks
+  http --> launch
+  http --> human
+  watch --> state
+  state --> http
+  watch --> disk
+  hooks --> disk
+  human -->|"only when Human Lingo is on and a key is set"| anthropic
+  shared --> browser
+  shared --> node
 ```
 
 **Backend** uses independent watchers that each monitor a tool's session directory:
@@ -163,65 +227,49 @@ Each watcher discovers projects agent-first: a project only exists if it has at 
 
 ```
 builders-space/
-├── index.html                       HTML shell
-├── package.json                     Dependencies and scripts
-├── tsconfig.json                    TypeScript config
-├── vite.config.ts                   Vite build config
-├── vitest.config.ts                 Vitest test runner config
-├── .env.example                     Environment variable template
-│
-├── server/                          Node.js backend
-│   ├── index.ts                     Process entry: loopback listen + launch token
-│   ├── createServer.ts              Express + Socket.IO app
-│   ├── security.ts                  Origin check and per-launch token
-│   ├── openSession.ts               Argv-only agent launch
-│   ├── __tests__/                   Automated tests (vitest)
-│   │   ├── stateManager.test.ts     StateManager authority model, overlay expiry, edge cases
-│   │   └── eventWatcher.test.ts     Event normalization, mode assignment, unknown events
-│   ├── types.ts                     Shared data types (AgentInfo, AgentStatusSource)
-│   ├── stateManager.ts              Runtime authority: merges watcher state, applies hook overlays, emits changes
-│   ├── watchers/
-│   │   ├── cursorWatcher.ts         Cursor agent transcript watcher
-│   │   ├── claudeWatcher.ts         Claude Code session watcher
-│   │   ├── codexWatcher.ts          Codex rollout session watcher
-│   │   └── eventWatcher.ts          Hook event watcher (status + error events)
-│   ├── services/
-│   │   ├── hookSetup.ts             Hook installation/removal (status + fire hooks)
-│   │   └── humanizer.ts             LLM-powered jargon translation
-│   └── utils/
-│       ├── parseTranscript.ts       Cursor/Claude transcript parser
-│       ├── parseCodexSession.ts     Codex rollout JSONL parser
-│       └── projectName.ts           Directory name → project name
-│
-└── src/                             React frontend
-    ├── main.tsx                     Entry point
-    ├── App.tsx                      Root component
-    ├── types.ts                     Frontend type definitions
-    ├── store.ts                     Zustand state store
-    ├── hooks/
-    │   └── useSocket.ts             Socket.IO connection hook
-    ├── scene/
-    │   ├── SpaceScene.tsx           Main 3D canvas, camera, lighting, nebula
-    │   ├── layout.ts                Stable orbital positions (name-sorted rings; unit-tested)
-    │   ├── __tests__/layout.test.ts Vitest tests for `layoutOrbitalLanes`
-    │   ├── Starfield.tsx            Particle starfield (custom shader)
-    │   ├── Planet.tsx               Procedural planet with type-based shader
-    │   └── PlanetLabel.tsx          Floating HTML label above each planet
-    └── ui/
-        ├── HUD.tsx                  Top bar with counters
-        ├── Sidebar.tsx              Collapsible project index (left panel)
-        ├── ProjectPanel.tsx         Side panel when a planet is selected
-        ├── PlanetSurface.tsx        Pixel-art planet surface with agent sprites
-        ├── AgentCard.tsx            Individual agent status card
-        ├── HookSetupCard.tsx        Hook management panel (persistent tool icon, enable/disable hooks)
-        └── agentIdentity.ts         Deterministic name/color identity for agents
+├── index.html                  HTML shell
+├── package.json                Dependencies and scripts
+├── tsconfig.json               TypeScript config
+├── vite.config.ts              Vite dev server and build
+├── vitest.config.ts            Unit tests and coverage thresholds
+├── playwright.config.ts        Browser tests
+├── .env.example                Environment variable template
+├── shared/                     Types, ports, status priority, humanize limits
+│   ├── types.ts                Agent, project, and socket payload types
+│   ├── config.ts               Ports, TTLs, humanize caps
+│   ├── status.ts               Status priority shared by server and UI
+│   └── humanize.ts             Client-side input bound before a request
+├── server/
+│   ├── index.ts                Process entry: loopback listen and launch token
+│   ├── createServer.ts         Express 5 and Socket.IO
+│   ├── security.ts             Origin check and per-launch token
+│   ├── openSession.ts          Argv-only agent launch
+│   ├── stateManager.ts         Merge watchers, apply hook overlays, emit changes
+│   ├── types.ts                Re-exports shared types; socket events stay here
+│   ├── io/incrementalRead.ts   Tail session files instead of rereading them
+│   ├── process/                Async ps and lsof, with a short-lived cwd cache
+│   ├── schema/sessionLog.ts    zod checks for session log lines
+│   ├── watchers/               Cursor, Claude, Codex, hook events, shared fs watch
+│   ├── services/               hookSetup and humanizer
+│   └── utils/                  Transcript parsers and project names
+├── src/
+│   ├── App.tsx                 Root component; the 3D scene is loaded lazily
+│   ├── store.ts                Zustand store
+│   ├── api.ts                  Authenticated fetch helper
+│   ├── types.ts                Re-exports shared types
+│   ├── hooks/useSocket.ts      Socket.IO connection
+│   ├── scene/                  Canvas, planets, rings, starfield, orbital layout
+│   └── ui/                     HUD, sidebar, project panel, surface, agent cards, hooks
+└── e2e/                        Playwright smoke test against fixture sessions
 ```
+
+Unit tests sit next to the code in `server/__tests__/`, `src/**/__tests__/`, and `*.test.ts`. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to run them.
 
 ## Tech Stack
 
-- **Frontend**: React 18, Three.js, React Three Fiber, Drei, Zustand, Vite
-- **Backend**: Node.js, Express, Socket.IO, chokidar
-- **Language**: TypeScript throughout
+- **Frontend**: React 19, Three.js, React Three Fiber 9, Drei 10, Zustand, Vite 8
+- **Backend**: Node.js, Express 5, Socket.IO, chokidar 5
+- **Language**: TypeScript 5.9 throughout
 - **Rendering**: Custom GLSL shaders for planets, stars, and nebula (Three.js `ShaderMaterial`, `RingGeometry`, additive blending)
 
 ## Checks
@@ -236,9 +284,9 @@ npm audit --audit-level=high
 npm run test:e2e
 ```
 
-`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 80% on `server/` and 60% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`.
+`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 80% on `server/` and `shared/`, and 60% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`, on Node 20.19.
 
-`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 20.17 or newer is required.
+`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 20.19 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

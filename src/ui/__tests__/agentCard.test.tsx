@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentCard } from '../AgentCard';
 import { useSpaceStore } from '../../store';
@@ -124,7 +124,9 @@ describe('agent cards', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),
     );
-    await vi.advanceTimersByTimeAsync(3000);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
     expect(screen.queryByText(/Opened in Cursor/)).toBeNull();
   });
 
