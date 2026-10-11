@@ -43,4 +43,5 @@ export interface SpaceData {
 export interface HumanizeResponse {
   texts: Record<string, string>;
   usedLLM: boolean;
+  error?: string;
 }

@@ -47,6 +47,7 @@ export interface ServerToClientEvents {
 export interface HumanizeResponse {
   texts: Record<string, string>;
   usedLLM: boolean;
+  error?: string;
 }
 
 export interface ClientToServerEvents {
