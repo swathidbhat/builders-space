@@ -79,14 +79,9 @@ function probeEncodedPath(dirName: string, exists: PathExists): string | null {
   const segments = cleaned.split('-').filter((segment) => segment.length > 0);
   if (segments.length === 0) return null;
 
-  let parent = '';
-  let index = 0;
-  if ((segments[0] === 'Users' || segments[0] === 'home') && segments.length >= 2) {
-    parent = `/${segments[0]}/${segments[1]}`;
-    index = 2;
-  } else {
-    return null;
-  }
+  if (!((segments[0] === 'Users' || segments[0] === 'home') && segments.length >= 2)) return null;
+  const parent = `/${segments[0]}/${segments[1]}`;
+  const index = 2;
 
   const resolved = resolveRemainder(parent, segments.slice(index), exists);
   if (resolved && exists(resolved)) return resolved;

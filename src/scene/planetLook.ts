@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Color } from 'three';
 
 export function hashString(str: string): number {
   let hash = 0;
@@ -219,15 +219,15 @@ export const fragmentShader = `
 // --- Color config (identity — stable per project name, never changes) ---
 
 export interface PlanetTypeConfig {
-  color1: THREE.Color;
-  color2: THREE.Color;
-  color3: THREE.Color;
-  rimColor: THREE.Color;
+  color1: Color;
+  color2: Color;
+  color3: Color;
+  rimColor: Color;
 }
 
 export function buildColors(type: PlanetType, rand: () => number): PlanetTypeConfig {
   const hsl = (h: number, s: number, l: number) => {
-    const c = new THREE.Color();
+    const c = new Color();
     c.setHSL(h / 360, s, l);
     return c;
   };

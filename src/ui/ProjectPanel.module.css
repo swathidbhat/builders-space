@@ -1,0 +1,191 @@
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  height: 100vh;
+  background: linear-gradient(135deg, rgba(10, 10, 30, 0.95), rgba(5, 5, 20, 0.98));
+  backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(100, 140, 255, 0.1);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  z-index: 100;
+  font-family: 'Space Grotesk', sans-serif;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.titles {
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  font-size: 18px;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  font-family: 'Space Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.esc {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.esc:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--stat-bg);
+  border-radius: 8px;
+  text-align: center;
+  min-width: 60px;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--stat-color);
+}
+
+.statLabel {
+  font-size: 10px;
+  color: #666;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.agentsHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.agentsLabel {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+
+.toggle {
+  display: flex;
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 2px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.highlight {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  background: rgba(100, 150, 255, 0.18);
+  border: 1px solid rgba(100, 150, 255, 0.25);
+  border-radius: 10px;
+  transition:
+    left 0.25s ease,
+    width 0.25s ease;
+}
+
+.highlightRaw {
+  left: 2px;
+  width: calc(50% - 1px);
+}
+
+.highlightHuman {
+  left: calc(50% - 1px);
+  width: calc(50% + 1px);
+}
+
+.option {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 3px 8px;
+  transition: color 0.2s ease;
+  user-select: none;
+}
+
+.optionOn {
+  color: #8ab4ff;
+}
+
+.optionOff {
+  color: #555;
+}
+
+.empty {
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+  padding: 20px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

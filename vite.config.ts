@@ -4,6 +4,7 @@ import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { CLIENT_PORT } from './shared/config.ts';
+import { slimThreePlugin } from './vite/slimThreePlugin.ts';
 
 function readLaunchToken(): string {
   const tokenPath = path.join(homedir(), '.builders-space', 'auth-token');
@@ -30,10 +31,37 @@ function buildersAuthPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), buildersAuthPlugin()],
+  plugins: [react(), slimThreePlugin(), buildersAuthPlugin()],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'three-core',
+              test: /node_modules[\\/]three[\\/]build[\\/]three\.core/,
+              priority: 30,
+              includeDependenciesRecursively: false,
+            },
+            {
+              name: 'three-renderer',
+              test: /node_modules[\\/]three[\\/]build[\\/]three\.module/,
+              priority: 30,
+              includeDependenciesRecursively: false,
+            },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
+    },
+  },
+  optimizeDeps: {
+    rolldownOptions: {
+      plugins: [slimThreePlugin()],
     },
   },
   server: {

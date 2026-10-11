@@ -1,0 +1,56 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nameWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.name {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.status {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.manual {
+  margin-top: 4px;
+}
+
+.toggle {
+  background: none;
+  border: none;
+  color: #fb923c;
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0;
+  font-family: monospace;
+}
+
+.snippet {
+  margin-top: 4px;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}

@@ -1,12 +1,14 @@
 import { Suspense, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
-import * as THREE from 'three';
+import { OrbitControls } from '@react-three/drei/core/OrbitControls';
+import { AdditiveBlending, NoToneMapping, Vector3, type Points } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Starfield } from './Starfield';
 import { Planet } from './Planet';
 import { useSpaceStore } from '../store';
 import { layoutOrbitalLanes } from './layout';
+import { planetCameraTarget, spaceCameraTarget } from './cameraTarget';
+import styles from './SpaceScene.module.css';
 
 function useOrbitalLayout() {
   const projects = useSpaceStore((s) => s.projects);
@@ -20,10 +22,10 @@ function CameraController() {
   const cameraMode = useSpaceStore((s) => s.cameraMode);
   const controlsRef = useRef<OrbitControlsImpl>(null);
 
-  const targetPos = useRef(new THREE.Vector3(0, 20, 30));
-  const targetLookAt = useRef(new THREE.Vector3(0, 0, 0));
-  const transitioning = useRef(false);
-  const prevSelection = useRef<{ mode: string; id: string | null }>({
+  const targetPosRef = useRef(new Vector3(0, 20, 30));
+  const targetLookAtRef = useRef(new Vector3(0, 0, 0));
+  const transitioningRef = useRef(false);
+  const prevSelectionRef = useRef<{ mode: string; id: string | null }>({
     mode: 'space',
     id: null,
   });
@@ -32,27 +34,24 @@ function CameraController() {
 
   useEffect(() => {
     const selectionChanged =
-      cameraMode !== prevSelection.current.mode || selectedId !== prevSelection.current.id;
+      cameraMode !== prevSelectionRef.current.mode || selectedId !== prevSelectionRef.current.id;
 
     if (cameraMode === 'planet' && selectedId) {
       const idx = projects.findIndex((p) => p.id === selectedId);
       if (idx >= 0 && positions[idx]) {
-        const [x, y, z] = positions[idx];
-        targetPos.current.set(x + 4, y + 2, z + 4);
-        targetLookAt.current.set(x, y, z);
+        const target = planetCameraTarget(positions[idx]);
+        targetPosRef.current.set(target.pos.x, target.pos.y, target.pos.z);
+        targetLookAtRef.current.set(target.lookAt.x, target.lookAt.y, target.lookAt.z);
       }
     } else {
-      const maxR = ringRadii.length > 0 ? Math.max(...ringRadii) : 10;
-      const fovRad = (60 / 2) * (Math.PI / 180);
-      const fitDist = (maxR * 1.5) / Math.tan(fovRad);
-      const dist = Math.max(14, fitDist);
-      targetPos.current.set(0, dist * 0.65, dist * 0.6);
-      targetLookAt.current.set(0, 0, 0);
+      const target = spaceCameraTarget(ringRadii);
+      targetPosRef.current.set(target.pos.x, target.pos.y, target.pos.z);
+      targetLookAtRef.current.set(target.lookAt.x, target.lookAt.y, target.lookAt.z);
     }
 
     if (selectionChanged) {
-      transitioning.current = true;
-      prevSelection.current = { mode: cameraMode, id: selectedId };
+      transitioningRef.current = true;
+      prevSelectionRef.current = { mode: cameraMode, id: selectedId };
     }
   }, [cameraMode, selectedId, projects, positions, ringRadii]);
 
@@ -62,20 +61,20 @@ function CameraController() {
 
     const factor = 1 - Math.exp(-5 * delta);
 
-    camera.position.lerp(targetPos.current, factor);
-    controls.target.lerp(targetLookAt.current, factor);
+    camera.position.lerp(targetPosRef.current, factor);
+    controls.target.lerp(targetLookAtRef.current, factor);
 
-    if (transitioning.current) {
+    if (transitioningRef.current) {
       controls.enabled = false;
 
       const settled =
-        camera.position.distanceTo(targetPos.current) < 0.05 &&
-        controls.target.distanceTo(targetLookAt.current) < 0.05;
+        camera.position.distanceTo(targetPosRef.current) < 0.05 &&
+        controls.target.distanceTo(targetLookAtRef.current) < 0.05;
 
       if (settled) {
-        camera.position.copy(targetPos.current);
-        controls.target.copy(targetLookAt.current);
-        transitioning.current = false;
+        camera.position.copy(targetPosRef.current);
+        controls.target.copy(targetLookAtRef.current);
+        transitioningRef.current = false;
         controls.enabled = true;
       }
     }
@@ -117,7 +116,7 @@ const nebulaFragmentShader = `
 `;
 
 function Nebula() {
-  const ref = useRef<THREE.Points>(null);
+  const ref = useRef<Points>(null);
   const count = 40;
 
   const [positions, colors, sizes] = useMemo(() => {
@@ -172,7 +171,7 @@ function Nebula() {
         fragmentShader={nebulaFragmentShader}
         transparent
         depthWrite={false}
-        blending={THREE.AdditiveBlending}
+        blending={AdditiveBlending}
         vertexColors
       />
     </points>
@@ -210,19 +209,11 @@ export function SpaceScene() {
   return (
     <Canvas
       camera={{ position: [0, 20, 30], fov: 60, near: 0.1, far: 500 }}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        background: '#000008',
-        zIndex: 1,
-      }}
+      className={styles.canvas}
       onPointerMissed={() => {
         useSpaceStore.getState().deselectPlanet();
       }}
-      gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
+      gl={{ antialias: true, toneMapping: NoToneMapping }}
     >
       <ambientLight intensity={0.15} />
       <directionalLight position={[10, 10, 5]} intensity={0.8} />

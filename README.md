@@ -97,7 +97,7 @@ Alphabetically by project name on concentric rings in a flat plane. Agent status
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20.19 or newer (see `.nvmrc`; Node 18 is not supported)
+- [Node.js](https://nodejs.org/) 22.22.2 or newer (see `.nvmrc`; Node 20 is not supported)
 - npm 9+
 - macOS for live agent detection (`open` / `osascript` and the tool log paths). CI runs the automated suite on Linux.
 
@@ -269,7 +269,8 @@ Unit tests sit next to the code in `server/__tests__/`, `src/**/__tests__/`, and
 
 - **Frontend**: React 19, Three.js, React Three Fiber 9, Drei 10, Zustand, Vite 8
 - **Backend**: Node.js, Express 5, Socket.IO, chokidar 5
-- **Language**: TypeScript 5.9 throughout
+- **Language**: TypeScript 5.9 throughout (TypeScript 7 is blocked by `typescript-eslint`)
+- **Checks**: ESLint 10 with `@eslint-react`, Vitest 5, jsdom 30
 - **Rendering**: Custom GLSL shaders for planets, stars, and nebula (Three.js `ShaderMaterial`, `RingGeometry`, additive blending)
 
 ## Checks
@@ -284,9 +285,9 @@ npm audit --audit-level=high
 npm run test:e2e
 ```
 
-`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 80% on `server/` and `shared/`, and 60% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`, on Node 20.19.
+`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 90% on `server/` and `shared/`, and 70% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`, on Node 22.22.2.
 
-`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 20.19 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
+`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 22.22.2 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

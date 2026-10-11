@@ -1,0 +1,23 @@
+.label {
+  color: #fff;
+  font-family: 'Space Grotesk', sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.name {
+  font-size: 16px;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 10px rgba(100, 180, 255, 0.5);
+}
+
+.count {
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 2px;
+  color: var(--state-color);
+  text-shadow: var(--state-glow);
+}

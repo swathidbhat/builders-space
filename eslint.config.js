@@ -1,6 +1,6 @@
 import eslint from '@eslint/js';
+import eslintReact from '@eslint-react/eslint-plugin';
 import tseslint from 'typescript-eslint';
-import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
 
@@ -16,29 +16,27 @@ export default tseslint.config(
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  // eslint-plugin-react peers only through ESLint 9. @eslint-react is the maintained
+  // replacement and allows ESLint 10.
+  eslintReact.configs['recommended-typescript'],
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
-      react,
       'react-hooks': reactHooks,
     },
-    languageOptions: {
-      parserOptions: {
-        ecmaFeatures: { jsx: true },
-      },
-    },
-    settings: {
-      react: { version: '19.3' },
-    },
     rules: {
-      ...react.configs.recommended.rules,
-      ...react.configs['jsx-runtime'].rules,
-      // Classic Rules of Hooks. The plugin's recommended preset also turns on
-      // React Compiler checks (purity, immutability, refs). This app does not
-      // run the compiler, and the scene mutates Three.js objects inside useFrame.
+      // Classic Rules of Hooks. @eslint-react's preset also turns on React Compiler
+      // checks (purity, use-memo, set-state-in-effect). This app does not run the
+      // compiler, and the scene mutates Three.js objects inside useFrame.
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
-      'react/prop-types': 'off',
+      '@eslint-react/rules-of-hooks': 'off',
+      '@eslint-react/exhaustive-deps': 'off',
+      '@eslint-react/purity': 'off',
+      '@eslint-react/set-state-in-effect': 'off',
+      '@eslint-react/use-memo': 'off',
+      '@eslint-react/use-state': 'off',
+      '@eslint-react/dom-no-unknown-property': 'error',
     },
   },
   {
@@ -54,7 +52,7 @@ export default tseslint.config(
     files: ['src/scene/**/*.{ts,tsx}'],
     rules: {
       // react-three-fiber attaches Three.js props (position, args, geometry) that are not DOM.
-      'react/no-unknown-property': 'off',
+      '@eslint-react/dom-no-unknown-property': 'off',
     },
   },
   prettier,
