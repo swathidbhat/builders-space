@@ -1,5 +1,6 @@
 import { Suspense, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { layoutLiveLabels } from './labelRegistry';
 import { OrbitControls } from '@react-three/drei/core/OrbitControls';
 import { AdditiveBlending, NoToneMapping, Vector3, type Points } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -178,6 +179,22 @@ function Nebula() {
   );
 }
 
+function LabelLayoutDriver() {
+  useFrame((state) => {
+    const width = state.size?.width ?? 0;
+    const height = state.size?.height ?? 0;
+    if (width <= 0 || height <= 0) return;
+    const { sidebarOpen, selectedPlanetId } = useSpaceStore.getState();
+    layoutLiveLabels({
+      width,
+      height,
+      sidebarOpen,
+      panelOpen: selectedPlanetId !== null,
+    });
+  });
+  return null;
+}
+
 function PlanetSystem() {
   const projects = useSpaceStore((s) => s.projects);
   const { positions } = useOrbitalLayout();
@@ -226,6 +243,7 @@ export function SpaceScene() {
       </Suspense>
 
       <CameraController />
+      <LabelLayoutDriver />
     </Canvas>
   );
 }

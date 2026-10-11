@@ -1,11 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 function transportNoise(message: string): boolean {
   return /WebSocket|socket\.io|ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|closed before the connection is established/i.test(
     message,
   );
+}
+
+function lumenLab(page: Page) {
+  return page
+    .getByRole('region', { name: 'All projects' })
+    .getByRole('button', { name: /Lumen Lab/ });
 }
 
 function waitUntilGone(pid: number): Promise<void> {
@@ -30,7 +36,7 @@ test('dashboard renders live fixture sessions', async ({ page }) => {
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Builders Space' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Lumen Lab/ })).toBeVisible({ timeout: 20_000 });
+  await expect(lumenLab(page)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('1 planet discovered')).toBeVisible();
 
   const canvas = page.locator('canvas');
@@ -41,13 +47,45 @@ test('dashboard renders live fixture sessions', async ({ page }) => {
   expect(box.width).toBeGreaterThan(0);
   expect(box.height).toBeGreaterThan(0);
 
-  await page.getByRole('button', { name: /Lumen Lab/ }).click();
+  const needsYou = page.getByRole('region', { name: 'Needs you' });
+  await expect(needsYou).toBeVisible();
+  await expect(needsYou).toContainText('TypeError: Cannot read properties of undefined');
+  await expect(needsYou).toContainText('verify the stripe webhook signature');
+
+  const label = page.locator('[data-planet-label]').first();
+  await expect(label).toBeVisible();
+  const readable = await label.evaluate((el) => {
+    const name = el.querySelector('[data-planet-name]');
+    const rect = (name ?? el).getBoundingClientRect();
+    const font = parseFloat(getComputedStyle(name ?? el).fontSize);
+    const unscaled = name instanceof HTMLElement ? name.offsetHeight : el.offsetHeight;
+    const effective = unscaled > 0 ? font * (rect.height / unscaled) : rect.height;
+    return { box: rect.height, effective };
+  });
+  expect(readable.box).toBeGreaterThanOrEqual(12);
+  expect(readable.effective).toBeGreaterThanOrEqual(12);
+
+  await lumenLab(page).click();
   await expect(page.getByText('Claude').first()).toBeVisible();
   await expect(page.getByText('Cursor').first()).toBeVisible();
   await expect(page.getByText('Codex').first()).toBeVisible();
-  await page.getByText('Raw', { exact: true }).click();
   await expect(page.getByText('Read:App.tsx')).toBeVisible();
+  await expect(page.getByText(/TypeError: Cannot read properties of undefined/)).toHaveCount(2);
   expect(errors, errors.join('\n')).toEqual([]);
+
+  const shots = process.env.BS_SHOTS;
+  if (shots) {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `${shots}/after-selected-1920.png` });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `${shots}/after-sky-1920.png` });
+    await page.screenshot({
+      path: `${shots}/after-sidebar.png`,
+      clip: { x: 0, y: 0, width: 280, height: 640 },
+    });
+  }
 });
 
 test('shows a disconnected sky and recovers after the API restarts', async ({ page }) => {
@@ -59,7 +97,7 @@ test('shows a disconnected sky and recovers after the API restarts', async ({ pa
   page.on('pageerror', (err) => errors.push(err.message));
 
   await page.goto('/');
-  await expect(page.getByRole('button', { name: /Lumen Lab/ })).toBeVisible({ timeout: 20_000 });
+  await expect(lumenLab(page)).toBeVisible({ timeout: 20_000 });
 
   const runtime = JSON.parse(readFileSync('e2e/.runtime.json', 'utf8')) as {
     home: string;
@@ -74,7 +112,7 @@ test('shows a disconnected sky and recovers after the API restarts', async ({ pa
     },
   );
   await expect(page.getByText(/last update is stale/)).toBeVisible();
-  await expect(page.getByRole('button', { name: /Lumen Lab/ })).toBeVisible();
+  await expect(lumenLab(page)).toBeVisible();
 
   const restarted = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
     env: { ...process.env, HOME: runtime.home },
@@ -84,7 +122,7 @@ test('shows a disconnected sky and recovers after the API restarts', async ({ pa
     await expect(
       page.getByRole('status').filter({ hasText: 'Disconnected — retrying' }),
     ).toHaveCount(0, { timeout: 30_000 });
-    await expect(page.getByRole('button', { name: /Lumen Lab/ })).toBeVisible();
+    await expect(lumenLab(page)).toBeVisible();
     await expect(page.getByText('1 planet discovered', { exact: true })).toBeVisible();
   } finally {
     restarted.kill('SIGTERM');

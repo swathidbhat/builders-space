@@ -126,6 +126,8 @@
 .toggle {
   display: flex;
   position: relative;
+  flex-shrink: 0;
+  white-space: nowrap;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
@@ -165,6 +167,7 @@
   justify-content: center;
   align-items: center;
   padding: 3px 8px;
+  white-space: nowrap;
   transition: color 0.2s ease;
   user-select: none;
 }

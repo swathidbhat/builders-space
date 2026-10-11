@@ -35,6 +35,44 @@ writeFileSync(
     }),
   ].join('\n') + '\n',
 );
+writeFileSync(
+  join(claudeDir, 'sess-checkout.jsonl'),
+  [
+    JSON.stringify({
+      type: 'user',
+      sessionId: 'sess-checkout',
+      cwd: project,
+      timestamp: now,
+      slug: 'lumen-lab',
+      message: { role: 'user', content: 'verify the stripe webhook signature' },
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      sessionId: 'sess-checkout',
+      cwd: project,
+      timestamp: now,
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Checking the signature helper.' }],
+      },
+    }),
+  ].join('\n') + '\n',
+);
+
+const eventsDir = join(home, '.builders-space', 'events');
+mkdirSync(eventsDir, { recursive: true, mode: 0o700 });
+writeFileSync(
+  join(eventsDir, 'status-checkout.json'),
+  JSON.stringify({
+    hook_event_name: 'Stop',
+    status: 'error',
+    error_message:
+      'TypeError: Cannot read properties of undefined (reading "signature") at verifyStripeSignature (src/webhooks/stripe.ts:42:17)',
+    session_id: 'sess-checkout',
+    cwd: project,
+    source: 'claude',
+  }),
+);
 
 const cursorDir = join(
   home,

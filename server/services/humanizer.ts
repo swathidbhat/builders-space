@@ -11,8 +11,9 @@ import {
   markAnthropicKeyRejected,
   usableAnthropicKey,
 } from '../anthropicKey';
+import { shouldPassThrough, UNCLEAR_ACTIVITY } from '../../shared/humanize';
 
-export { HUMANIZE_MAX_ITEMS, HUMANIZE_MAX_TEXT_CHARS };
+export { HUMANIZE_MAX_ITEMS, HUMANIZE_MAX_TEXT_CHARS, UNCLEAR_ACTIVITY };
 
 interface CacheEntry {
   humanized: string;
@@ -22,8 +23,7 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-/** Rule-based path (no API key or LLM failure): only known `Tool:detail` lines are paraphrased. */
-const UNCLEAR_ACTIVITY = 'Unclear activity';
+/** Rule-based path (no API key or LLM failure): known tools are paraphrased; plain English is kept. */
 
 export interface HumanizeResult {
   texts: Record<string, string>;
@@ -202,6 +202,15 @@ const TOOL_VERBS: Record<string, string> = {
   TodoWrite: 'Planning tasks',
 };
 
+function shortDetail(detail: string): string {
+  const keep =
+    detail.includes('...') ||
+    /^(?:\.\/|\/|go |npm |pnpm |yarn |node |pytest |cargo |make )/.test(detail);
+  const limit = keep ? 80 : 25;
+  if (detail.length <= limit) return detail;
+  return detail.slice(0, limit - 3).replace(/\s+\S*$/, '') + '...';
+}
+
 function simpleFallback(raw: string): string {
   const stripped = raw
     .trim()
@@ -210,18 +219,17 @@ function simpleFallback(raw: string): string {
   if (!stripped) return UNCLEAR_ACTIVITY;
 
   const colonIdx = stripped.indexOf(':');
-  if (colonIdx > 0 && colonIdx < 20) {
+  if (colonIdx > 0 && colonIdx < 20 && /^[A-Za-z][A-Za-z0-9]*$/.test(stripped.slice(0, colonIdx))) {
     const tool = stripped.slice(0, colonIdx);
     const detail = stripped.slice(colonIdx + 1).trim();
     const verb = TOOL_VERBS[tool];
     if (verb) {
       if (!detail || detail === 'subtask') return verb;
-      const short = detail.length > 25 ? detail.slice(0, 22) + '...' : detail;
-      return `${verb} ${short}`;
+      return `${verb} ${shortDetail(detail)}`;
     }
-    return UNCLEAR_ACTIVITY;
   }
 
+  if (shouldPassThrough(stripped)) return stripped;
   return UNCLEAR_ACTIVITY;
 }
 

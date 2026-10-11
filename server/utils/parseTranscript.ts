@@ -316,9 +316,11 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
 }
 
 export function shortenPaths(text: string): string {
-  return text.replace(/\/(?:[^\s/]+\/){2,}[^\s/]+/g, (match) => {
+  return text.replace(/(?<![.\w])\/(?:[^\s/]+\/){2,}[^\s/]+/g, (match) => {
     const segments = match.split('/').filter(Boolean);
-    return segments[segments.length - 1];
+    const last = segments[segments.length - 1];
+    if (!last || last === '.' || last === '..' || last === '...') return match;
+    return last;
   });
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { shouldPassThrough, visibleActivity } from '../../shared/humanize';
 import {
   humanizeTexts,
   normalizeHumanizeInput,
@@ -86,6 +87,9 @@ describe('humanize input limits', () => {
         'Nope:something',
         '<tag>   </tag>',
         'plain sentence without a tool prefix',
+        'TypeError: Cannot read properties of undefined (reading "signature")',
+        'Should I also backfill existing orders?',
+        'Shell:go test ./internal/ratelimit/...',
       ];
       const result = await humanizeTexts(raw);
       expect(result.usedLLM).toBe(false);
@@ -97,7 +101,27 @@ describe('humanize input limits', () => {
       );
       expect(result.texts['Nope:something']).toBe('Unclear activity');
       expect(result.texts['<tag>   </tag>']).toBe('Unclear activity');
-      expect(result.texts['plain sentence without a tool prefix']).toBe('Unclear activity');
+      expect(result.texts['plain sentence without a tool prefix']).toBe(
+        'plain sentence without a tool prefix',
+      );
+      expect(
+        result.texts['TypeError: Cannot read properties of undefined (reading "signature")'],
+      ).toBe('TypeError: Cannot read properties of undefined (reading "signature")');
+      expect(result.texts['Should I also backfill existing orders?']).toBe(
+        'Should I also backfill existing orders?',
+      );
+      expect(result.texts['Shell:go test ./internal/ratelimit/...']).toBe(
+        'Running go test ./internal/ratelimit/...',
+      );
+      expect(shouldPassThrough('   ')).toBe(false);
+      expect(shouldPassThrough('<b></b>')).toBe(false);
+      expect(visibleActivity('Read:App.tsx', 'Reading the app', false)).toBe('Read:App.tsx');
+      expect(visibleActivity('Read:App.tsx', 'Reading the app', true)).toBe('Reading the app');
+      expect(visibleActivity('TypeError: broken', 'Unclear activity', true)).toBe(
+        'TypeError: broken',
+      );
+      expect(visibleActivity('Nope:something', 'Unclear activity', true)).toBe('Unclear activity');
+      expect(visibleActivity('Nope:something', undefined, true)).toBe('Nope:something');
     } finally {
       if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = previous;
