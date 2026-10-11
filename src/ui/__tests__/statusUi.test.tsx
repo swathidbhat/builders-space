@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HUD } from '../HUD';
 import { Sidebar } from '../Sidebar';
 import { useSpaceStore } from '../../store';
@@ -23,6 +23,13 @@ describe('status display', () => {
       humanLingo: true,
       humanizedTexts: {},
       lastUpdated: 0,
+      connection: 'connecting',
+      dataStale: false,
+      snapshotSeen: false,
+      scanStartedAt: null,
+      holdPreviousUntil: 0,
+      pendingEmpty: false,
+      assistantRejected: false,
     });
   });
 
@@ -113,8 +120,43 @@ describe('status display', () => {
     expect(screen.queryByText('Awaiting you')).toBeNull();
   });
 
-  it('shows the scanning line when nothing has been discovered', () => {
+  it('shows a loading line until the first snapshot arrives', () => {
     render(<HUD />);
-    expect(screen.getByText('Scanning for planets...')).toBeTruthy();
+    expect(screen.getByText('Loading the sky…')).toBeTruthy();
+    expect(screen.queryByText('Scanning for planets...')).toBeNull();
+  });
+
+  it('keeps the last count and shows a retry banner when the connection is stale', () => {
+    useSpaceStore.setState({
+      connection: 'stale',
+      dataStale: true,
+      snapshotSeen: true,
+      projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
+    });
+    render(<HUD />);
+    expect(screen.getByText('Disconnected — retrying')).toBeTruthy();
+    expect(screen.getByText('1 planet discovered · last update is stale')).toBeTruthy();
+  });
+
+  it('replaces the search line after the empty timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const started = Date.now();
+      useSpaceStore.setState({
+        connection: 'live',
+        snapshotSeen: true,
+        scanStartedAt: started,
+        projects: [],
+      });
+      render(<HUD />);
+      expect(screen.getByText('Looking for sessions…')).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8_000);
+      });
+      expect(screen.getByText('No sessions yet')).toBeTruthy();
+      expect(screen.queryByText('Scanning for planets...')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -4,6 +4,9 @@ import { HUD } from './ui/HUD';
 import { ProjectPanel } from './ui/ProjectPanel';
 import { Sidebar } from './ui/Sidebar';
 import { HookSetupCard } from './ui/HookSetupCard';
+import { SkyLoading } from './ui/SkyLoading';
+import { SkyStatus } from './ui/SkyStatus';
+import { AssistantNotice } from './ui/AssistantNotice';
 
 const SpaceScene = lazy(() =>
   import('./scene/SpaceScene').then((module) => ({ default: module.SpaceScene })),
@@ -14,13 +17,15 @@ export function App() {
 
   return (
     <>
-      <Suspense fallback={null}>
+      <Suspense fallback={<SkyLoading />}>
         <SpaceScene />
       </Suspense>
+      <SkyStatus />
       <Sidebar />
       <HUD />
       <ProjectPanel />
       <HookSetupCard />
+      <AssistantNotice />
     </>
   );
 }

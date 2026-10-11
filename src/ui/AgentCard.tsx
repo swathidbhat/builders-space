@@ -70,7 +70,9 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
       } else if (data.ok) {
         setToast('Opened project directory in Terminal');
       } else {
-        setToast(`Failed: ${data.error}`);
+        setToast(
+          typeof data.error === 'string' && data.error ? data.error : 'Could not open the session.',
+        );
       }
     } catch {
       setToast('Could not connect to server');

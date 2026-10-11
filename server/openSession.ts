@@ -84,6 +84,19 @@ export function buildOpenSessionCommand(agent: AgentInfo): OpenSessionResult {
   return { error: `Unknown source: ${agent.source}` };
 }
 
+export const MACOS_SESSION_MESSAGE = 'Opening sessions is only supported on macOS';
+
+export function openSessionError(err: unknown, platform = process.platform): string {
+  const code =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : '';
+  const message = err instanceof Error ? err.message : String(err);
+  const spawnMiss = code === 'ENOENT' || /spawn\s+(?:osascript|open)\b/i.test(message);
+  if (platform !== 'darwin' || spawnMiss) return MACOS_SESSION_MESSAGE;
+  return 'Could not open the session.';
+}
+
 export function runCommand(file: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(file, args, { timeout: 15_000 }, (err) => {

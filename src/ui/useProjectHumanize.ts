@@ -24,6 +24,9 @@ export function useProjectHumanize(project: ProjectInfo | undefined, humanLingo:
     lastHumanizeRef.current = key;
 
     requestHumanize(rawTexts).then((result) => {
+      if (result.error && /rejected the API key/i.test(result.error)) {
+        useSpaceStore.getState().markAssistantRejected();
+      }
       if (Object.keys(result.texts).length > 0) setHumanizedTexts(result.texts);
     });
   }, [project, humanLingo, humanizedTexts, setHumanizedTexts]);

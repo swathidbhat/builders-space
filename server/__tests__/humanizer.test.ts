@@ -6,6 +6,7 @@ import {
   HUMANIZE_MAX_ITEMS,
   HUMANIZE_MAX_TEXT_CHARS,
 } from '../services/humanizer';
+import { anthropicKeyState, resetAnthropicKeyState } from '../anthropicKey';
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 
@@ -105,7 +106,7 @@ describe('humanize input limits', () => {
 
   it('uses the model when a key is set, then the cache, then the fallback', async () => {
     const previous = process.env.ANTHROPIC_API_KEY;
-    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key-0123456789abcdef';
     create.mockResolvedValueOnce({
       content: [{ type: 'text', text: '1. "Reading the login screen"\n2.\n' }],
     });
@@ -127,7 +128,16 @@ describe('humanize input limits', () => {
 
       create.mockRejectedValueOnce(new Error('overloaded'));
       const failed = await humanizeTexts(['Shell:brand-new-command']);
+      expect(failed.usedLLM).toBe(false);
+      expect(failed.error).toMatch(/could not reach/i);
       expect(failed.texts['Shell:brand-new-command']).toMatch(/Running/);
+
+      create.mockResolvedValueOnce({
+        content: [{ type: 'text', text: '1. Running the tests' }],
+      });
+      const retried = await humanizeTexts(['Shell:brand-new-command']);
+      expect(retried.usedLLM).toBe(true);
+      expect(retried.texts['Shell:brand-new-command']).toBe('Running the tests');
     } finally {
       if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = previous;
@@ -152,6 +162,49 @@ describe('humanize input limits', () => {
       expect(again.texts['Read:evict-0-0.ts']).toMatch(/Reading/);
     } finally {
       vi.useRealTimers();
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  it('treats the example placeholder and other unusable keys as no key', async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    create.mockClear();
+    try {
+      for (const key of ['your-api-key-here', 'test-key', 'short key with spaces', '   ']) {
+        process.env.ANTHROPIC_API_KEY = key;
+        const result = await humanizeTexts([`Read:${key}.ts`]);
+        expect(result.usedLLM).toBe(false);
+        expect(result.texts[`Read:${key}.ts`]).toMatch(/Reading/);
+      }
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  it('does not cache a 401 as a model translation and reports the rejection', async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key-0123456789abcdef';
+    resetAnthropicKeyState();
+    create.mockRejectedValueOnce(
+      Object.assign(new Error('401 invalid x-api-key'), { status: 401 }),
+    );
+    try {
+      const failed = await humanizeTexts(['Shell:rejected-key-command']);
+      expect(failed.usedLLM).toBe(false);
+      expect(failed.error).toMatch(/rejected the API key/);
+      expect(failed.texts['Shell:rejected-key-command']).toMatch(/Running/);
+      expect(anthropicKeyState()).toBe('rejected');
+
+      create.mockClear();
+      create.mockResolvedValueOnce({ content: [{ type: 'text', text: '1. Running a command' }] });
+      const again = await humanizeTexts(['Shell:rejected-key-command']);
+      expect(create).toHaveBeenCalled();
+      expect(again.usedLLM).toBe(true);
+    } finally {
+      resetAnthropicKeyState();
       if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = previous;
     }

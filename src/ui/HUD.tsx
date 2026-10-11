@@ -1,11 +1,42 @@
 import { useSpaceStore } from '../store';
 import { cssVars } from './cssVars';
+import {
+  DISCONNECT_BANNER,
+  LOADING_SKY,
+  NO_SESSIONS,
+  planetSubtitle,
+  SEARCHING_SKY,
+  skyPhase,
+} from './skyCopy';
+import { useSkyClock } from './useSkyClock';
 import styles from './HUD.module.css';
 
 export function HUD() {
   const projects = useSpaceStore((s) => s.projects);
   const selectedId = useSpaceStore((s) => s.selectedPlanetId);
   const sidebarOpen = useSpaceStore((s) => s.sidebarOpen);
+  const connection = useSpaceStore((s) => s.connection);
+  const dataStale = useSpaceStore((s) => s.dataStale);
+  const snapshotSeen = useSpaceStore((s) => s.snapshotSeen);
+  const scanStartedAt = useSpaceStore((s) => s.scanStartedAt);
+  const now = useSkyClock();
+  const phase = skyPhase({
+    connection,
+    projectCount: projects.length,
+    snapshotSeen,
+    scanStartedAt,
+    now,
+  });
+  const subtitle =
+    projects.length > 0
+      ? planetSubtitle(projects.length, dataStale || connection === 'stale')
+      : phase === 'retrying'
+        ? DISCONNECT_BANNER
+        : phase === 'searching'
+          ? SEARCHING_SKY
+          : phase === 'empty'
+            ? NO_SESSIONS
+            : LOADING_SKY;
 
   const totalAgents = projects.reduce((sum, project) => sum + project.agents.length, 0);
   const workingAgents = projects.reduce(
@@ -33,12 +64,13 @@ export function HUD() {
     <div className={hudClass}>
       <div>
         <h1 className={styles.title}>Builders Space</h1>
-        <div className={styles.subtitle}>
-          {projects.length === 0
-            ? 'Scanning for planets...'
-            : `${projects.length} ${projects.length === 1 ? 'planet' : 'planets'} discovered`}
-        </div>
+        <div className={styles.subtitle}>{subtitle}</div>
       </div>
+      {connection === 'stale' && (
+        <div className={styles.banner} role="status">
+          {DISCONNECT_BANNER}
+        </div>
+      )}
 
       <div className={styles.counters}>
         <HUDCounter label="Agents" value={totalAgents} />

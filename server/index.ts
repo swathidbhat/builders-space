@@ -1,9 +1,9 @@
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env' });
-dotenv.config({ path: '.env.local', override: true });
-
+import { loadLocalEnv } from './loadEnv';
+import { usableAnthropicKey } from './anthropicKey';
 import { createBuildersServer, PORT } from './createServer';
 import { logCaught } from './log';
+
+loadLocalEnv();
 
 const runtime = createBuildersServer({ startWatchers: true, publishToken: true });
 
@@ -13,9 +13,9 @@ runtime
     console.log(`\n  Builders Space server running on http://127.0.0.1:${port}`);
     console.log(`  IPv6 loopback: http://[::1]:${port} (when that address is available)`);
     console.log(`  Socket.IO: ws://127.0.0.1:${port}\n`);
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!usableAnthropicKey()) {
       console.warn(
-        '  ANTHROPIC_API_KEY not set — humanizer will use basic fallback. Add it to .env\n',
+        '  ANTHROPIC_API_KEY is missing or still the example placeholder — humanizer will use basic fallback. Add a real key to .env\n',
       );
     }
   })
@@ -24,6 +24,9 @@ runtime
     process.exit(1);
   });
 
-process.on('SIGINT', () => {
+function shutdown() {
   void runtime.close().finally(() => process.exit(0));
-});
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

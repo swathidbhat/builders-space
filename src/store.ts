@@ -20,6 +20,11 @@ function rememberTranslations(
   return trimmed;
 }
 
+export type ConnectionState = 'connecting' | 'live' | 'stale';
+
+/** How long a reconnect may keep the previous sky before an empty snapshot replaces it. */
+export const STALE_HOLD_MS = 12_000;
+
 interface SpaceStore {
   projects: ProjectInfo[];
   lastUpdated: number;
@@ -28,8 +33,19 @@ interface SpaceStore {
   sidebarOpen: boolean;
   humanLingo: boolean;
   humanizedTexts: Record<string, string>;
+  connection: ConnectionState;
+  dataStale: boolean;
+  snapshotSeen: boolean;
+  scanStartedAt: number | null;
+  holdPreviousUntil: number;
+  pendingEmpty: boolean;
+  assistantRejected: boolean;
 
   setData: (data: SpaceData) => void;
+  markDisconnected: () => void;
+  markSocketUp: () => void;
+  releaseHold: () => void;
+  markAssistantRejected: () => void;
   selectPlanet: (id: string) => void;
   deselectPlanet: () => void;
   toggleSidebar: () => void;
@@ -45,12 +61,60 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
   sidebarOpen: true,
   humanLingo: true,
   humanizedTexts: {},
+  connection: 'connecting',
+  dataStale: false,
+  snapshotSeen: false,
+  scanStartedAt: null,
+  holdPreviousUntil: 0,
+  pendingEmpty: false,
+  assistantRejected: false,
 
   setData: (data) =>
-    set({
-      projects: data.projects.filter((p) => p.agents.length > 0),
-      lastUpdated: data.lastUpdated,
+    set((state) => {
+      const projects = data.projects.filter((p) => p.agents.length > 0);
+      const holding =
+        projects.length === 0 && state.projects.length > 0 && Date.now() < state.holdPreviousUntil;
+      if (holding) return { pendingEmpty: true, snapshotSeen: true };
+      return {
+        projects,
+        lastUpdated: data.lastUpdated,
+        connection: 'live',
+        dataStale: false,
+        snapshotSeen: true,
+        holdPreviousUntil: 0,
+        pendingEmpty: false,
+        scanStartedAt: projects.length === 0 ? (state.scanStartedAt ?? Date.now()) : null,
+      };
     }),
+
+  markDisconnected: () =>
+    set((state) => ({
+      connection: 'stale',
+      dataStale: state.snapshotSeen || state.projects.length > 0,
+      holdPreviousUntil: Number.POSITIVE_INFINITY,
+    })),
+
+  markSocketUp: () =>
+    set((state) => ({
+      holdPreviousUntil: state.projects.length > 0 ? Date.now() + STALE_HOLD_MS : 0,
+    })),
+
+  releaseHold: () =>
+    set((state) => {
+      if (Date.now() < state.holdPreviousUntil) return {};
+      if (!state.pendingEmpty) return { holdPreviousUntil: 0 };
+      return {
+        projects: [],
+        connection: 'live',
+        dataStale: false,
+        holdPreviousUntil: 0,
+        pendingEmpty: false,
+        snapshotSeen: true,
+        scanStartedAt: state.scanStartedAt ?? Date.now(),
+      };
+    }),
+
+  markAssistantRejected: () => set({ assistantRejected: true }),
 
   selectPlanet: (id) => set({ selectedPlanetId: id, cameraMode: 'planet' }),
 

@@ -4,6 +4,7 @@ import { useSpaceStore } from '../store';
 import type { SpaceData, HumanizeResponse } from '../types';
 import { API_ORIGIN, authToken } from '../api';
 import { boundHumanizeInput } from '../../shared/humanize';
+import { scheduleTokenRefresh } from '../refreshLaunchToken';
 
 let sharedSocket: Socket | null = null;
 
@@ -17,7 +18,9 @@ function getSocket(): Socket {
     }
     sharedSocket = io(API_ORIGIN, {
       transports: ['websocket', 'polling'],
-      auth: { token },
+      auth: (cb) => {
+        cb({ token: authToken() });
+      },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -28,6 +31,7 @@ function getSocket(): Socket {
 
 export function useSocket() {
   const setData = useSpaceStore((s) => s.setData);
+  const holdPreviousUntil = useSpaceStore((s) => s.holdPreviousUntil);
 
   useEffect(() => {
     const socket = getSocket();
@@ -36,14 +40,26 @@ export function useSocket() {
       setData(data);
     }
 
-    socket.on('space:state', onState);
-    socket.on('connect', () => {
+    function onConnect() {
       console.log('[Socket.IO] Connected');
+      useSpaceStore.getState().markSocketUp();
       socket.emit('space:request-state');
-    });
-    socket.on('disconnect', () => {
+    }
+
+    function onDisconnect() {
       console.log('[Socket.IO] Disconnected');
-    });
+      useSpaceStore.getState().markDisconnected();
+    }
+
+    function onConnectError(err: Error) {
+      useSpaceStore.getState().markDisconnected();
+      if (/unauthorized/i.test(err?.message ?? '')) scheduleTokenRefresh(socket);
+    }
+
+    socket.on('space:state', onState);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
 
     if (socket.connected) {
       socket.emit('space:request-state');
@@ -51,8 +67,18 @@ export function useSocket() {
 
     return () => {
       socket.off('space:state', onState);
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
     };
   }, [setData]);
+
+  useEffect(() => {
+    if (!Number.isFinite(holdPreviousUntil) || holdPreviousUntil <= 0) return;
+    const delay = Math.max(0, holdPreviousUntil - Date.now());
+    const timer = setTimeout(() => useSpaceStore.getState().releaseHold(), delay);
+    return () => clearTimeout(timer);
+  }, [holdPreviousUntil]);
 }
 
 export function requestHumanize(rawTexts: string[]): Promise<HumanizeResponse> {

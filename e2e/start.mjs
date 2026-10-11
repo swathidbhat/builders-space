@@ -88,7 +88,10 @@ writeFileSync(
 );
 
 const env = { ...process.env, HOME: home };
-const server = spawn('npx', ['tsx', 'server/index.ts'], { env, stdio: 'inherit' });
+const server = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
+  env,
+  stdio: 'inherit',
+});
 const tokenPath = join(home, '.builders-space', 'auth-token');
 
 for (let i = 0; i < 100 && !existsSync(tokenPath); i++) {
@@ -99,6 +102,14 @@ if (!existsSync(tokenPath)) {
   server.kill('SIGTERM');
   process.exit(1);
 }
+
+const runtimePath = join(process.cwd(), 'e2e', '.runtime.json');
+
+function writeRuntime(pid) {
+  writeFileSync(runtimePath, JSON.stringify({ home, pid }));
+}
+
+writeRuntime(server.pid);
 
 const client = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', '5174', '--strictPort'], {
   env,
@@ -112,8 +123,10 @@ function shutdown() {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
-server.on('exit', (code) => {
-  if (code) process.exit(code ?? 1);
+// The restart test kills the API on purpose. Vite has to stay up so the page can
+// re-read the new launch token without a manual reload.
+server.on('exit', () => {
+  writeRuntime(null);
 });
 client.on('exit', (code) => {
   if (code) process.exit(code ?? 1);

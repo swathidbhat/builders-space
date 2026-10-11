@@ -9,6 +9,7 @@ test-results/
 .env
 .env.*
 !.env.example
+e2e/.runtime.json
 DECISIONS.md
 BUGS.md
 TEST_PLAN.md

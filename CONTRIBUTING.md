@@ -2,16 +2,17 @@
 
 ## Setup
 
-- Node.js 22.22.2 or newer (`.nvmrc` is `22.22.2`, the current LTS line). Node 20 is not supported.
+- Node.js 22.22.2 or newer (`.nvmrc` is `22.22.2`, the current LTS line). Node 20 is not supported. `engine-strict` and `scripts/check-node.mjs` enforce it.
 - npm 9 or newer.
+- Linux or macOS for the dashboard and session discovery. Opening a session from a card is macOS-only.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
 
-`ANTHROPIC_API_KEY` in `.env` is optional. Leave it unset and Human Lingo stays on this machine. The dashboard is at `http://127.0.0.1:5174`. The API is at `http://127.0.0.1:3002` and only accepts the per-launch token the dev server injects.
+`ANTHROPIC_API_KEY` in `.env` is optional. Leave it commented and Human Lingo stays on this machine. The example placeholder is not a key. The dashboard is at `http://127.0.0.1:5174`. The API is at `http://127.0.0.1:3002` and only accepts the per-launch token the dev server injects.
 
 ## Scripts
 
@@ -49,7 +50,7 @@ Dependabot opens a weekly pull request for grouped npm updates and a weekly pull
 
 ## Pre-commit
 
-`npm install` installs a `simple-git-hooks` pre-commit hook. The hook runs lint-staged: ESLint `--fix` and Prettier on staged TypeScript, and Prettier on staged JSON, Markdown, YAML, and CSS. If the hook rejects a commit, fix the reported files and commit again. `npm run prepare` reinstalls the hook.
+`npm ci` installs a `simple-git-hooks` pre-commit hook. The hook runs lint-staged: ESLint `--fix` and Prettier on staged TypeScript, and Prettier on staged JSON, Markdown, YAML, and CSS. If the hook rejects a commit, fix the reported files and commit again. `npm run prepare` reinstalls the hook.
 
 ## Dependency upgrades we did not take
 
