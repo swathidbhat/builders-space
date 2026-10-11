@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { CLIENT_PORT } from './shared/config';
+import { CLIENT_PORT } from './shared/config.ts';
 
 function readLaunchToken(): string {
   const tokenPath = path.join(homedir(), '.builders-space', 'auth-token');
@@ -33,7 +33,7 @@ export default defineConfig({
   plugins: [react(), buildersAuthPlugin()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   server: {
