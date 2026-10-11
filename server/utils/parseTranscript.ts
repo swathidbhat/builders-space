@@ -1,6 +1,18 @@
-import { readFileSync, statSync, readdirSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
+import { RECENT_ACTIVITY_MS } from '../../shared/config';
 import { logCaught } from '../log';
+import { foldAppendOnly, readIncremental, type FoldCache } from '../io/incrementalRead';
+import {
+  claudeBlocks,
+  cursorCwd,
+  cursorMessageText,
+  parseClaudeLine,
+  parseCursorLine,
+  stringField,
+  timestampMs,
+  type ClaudeLine,
+} from '../schema/sessionLog';
 
 export interface TranscriptData {
   userQuery: string;
@@ -8,6 +20,40 @@ export interface TranscriptData {
   isRecentlyActive: boolean;
   lastActivityMs: number;
   cwd?: string;
+}
+
+interface CursorFold {
+  userQuery: string;
+  lastAction?: string;
+  cwd?: string;
+}
+
+interface ClaudeFold {
+  sessionId: string;
+  cwd: string;
+  latestTask: string;
+  latestTimestamp: number;
+  lastAction?: string;
+  slug?: string;
+}
+
+const cursorFolds = new Map<string, FoldCache<CursorFold>>();
+const claudeFolds = new Map<string, FoldCache<ClaudeFold>>();
+const txtFolds = new Map<string, FoldCache<{ userQuery: string; text: string }>>();
+
+function safeMtime(filePath: string): number {
+  try {
+    return statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function activity(lastActivityMs: number): { isRecentlyActive: boolean; lastActivityMs: number } {
+  return {
+    lastActivityMs,
+    isRecentlyActive: Date.now() - lastActivityMs < RECENT_ACTIVITY_MS,
+  };
 }
 
 export function parseTranscriptDir(dirPath: string): TranscriptData | null {
@@ -29,67 +75,47 @@ export function parseTranscriptDir(dirPath: string): TranscriptData | null {
   }
 }
 
-function parseTranscriptJsonl(filePath: string): TranscriptData | null {
+function applyCursorLine(fold: CursorFold, line: string): void {
+  let raw: unknown;
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean);
+    raw = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const entry = parseCursorLine(raw);
+  if (!entry) return;
 
-    let userQuery = '';
-    let lastAction: string | undefined;
-    let lastModifiedMs = 0;
-    let cwd: string | undefined;
+  if (!fold.cwd) fold.cwd = cursorCwd(entry);
 
-    try {
-      lastModifiedMs = statSync(filePath).mtimeMs;
-    } catch {
-      /* ignore */
+  if (entry.role === 'user' && !fold.userQuery) {
+    const text = cursorMessageText(entry.message);
+    if (text) {
+      fold.userQuery = text.slice(0, 200);
+      if (!fold.cwd) fold.cwd = cwdFromText(text);
     }
+  }
 
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line);
-
-        if (!cwd) cwd = extractCwdFromEntry(entry);
-
-        if (entry.role === 'user' && !userQuery) {
-          const text = extractTextFromMessage(entry.message);
-          if (text) {
-            userQuery = text.slice(0, 200);
-            if (!cwd) cwd = cwdFromText(text);
-          }
-        }
-
-        if (entry.role === 'assistant') {
-          const text = extractTextFromMessage(entry.message);
-          if (text) lastAction = extractFirstSentence(text);
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    if (!userQuery && !lastAction) return null;
-
-    const ageMs = Date.now() - lastModifiedMs;
-    const isRecentlyActive = ageMs < 2 * 60 * 1000;
-
-    return { userQuery, lastAction, isRecentlyActive, lastActivityMs: lastModifiedMs, cwd };
-  } catch (err) {
-    logCaught('parseTranscriptJsonl', err, filePath);
-    return null;
+  if (entry.role === 'assistant') {
+    const text = cursorMessageText(entry.message);
+    if (text) fold.lastAction = extractFirstSentence(text);
   }
 }
 
-function extractCwdFromEntry(entry: {
-  cwd?: unknown;
-  workspace_roots?: unknown;
-}): string | undefined {
-  if (typeof entry.cwd === 'string' && entry.cwd.startsWith('/')) return entry.cwd;
-  const roots = entry.workspace_roots;
-  if (Array.isArray(roots) && typeof roots[0] === 'string' && roots[0].startsWith('/')) {
-    return roots[0];
-  }
-  return undefined;
+function parseTranscriptJsonl(filePath: string): TranscriptData | null {
+  const fold = foldAppendOnly(
+    filePath,
+    cursorFolds,
+    (): CursorFold => ({ userQuery: '' }),
+    applyCursorLine,
+  );
+  if (!fold || (!fold.userQuery && !fold.lastAction)) return null;
+  const lastModifiedMs = safeMtime(filePath);
+  return {
+    userQuery: fold.userQuery,
+    lastAction: fold.lastAction,
+    cwd: fold.cwd,
+    ...activity(lastModifiedMs),
+  };
 }
 
 function cwdFromText(text: string): string | undefined {
@@ -98,28 +124,27 @@ function cwdFromText(text: string): string | undefined {
 }
 
 export function parseTranscriptFile(filePath: string): TranscriptData | null {
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    const queryMatch = content.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
-    if (!queryMatch) return null;
-
-    const userQuery = queryMatch[1].trim().slice(0, 200);
-
-    let lastModifiedMs = 0;
-    try {
-      lastModifiedMs = statSync(filePath).mtimeMs;
-    } catch {
-      /* ignore */
-    }
-
-    const ageMs = Date.now() - lastModifiedMs;
-    const isRecentlyActive = ageMs < 2 * 60 * 1000;
-
-    return { userQuery, isRecentlyActive, lastActivityMs: lastModifiedMs };
-  } catch (err) {
-    logCaught('parseTranscriptFile', err, filePath);
+  const cached = txtFolds.get(filePath);
+  const read = readIncremental(filePath, cached?.cursor);
+  if (!read) {
+    txtFolds.delete(filePath);
     return null;
   }
+
+  let userQuery = cached?.value.userQuery;
+  if (read.mode !== 'unchanged') {
+    const text = read.mode === 'append' && cached ? cached.value.text + read.chunk : read.chunk;
+    const queryMatch = text.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
+    if (!queryMatch) {
+      txtFolds.delete(filePath);
+      return null;
+    }
+    userQuery = queryMatch[1].trim().slice(0, 200);
+    txtFolds.set(filePath, { cursor: read.cursor, value: { userQuery, text } });
+  }
+
+  if (!userQuery) return null;
+  return { userQuery, ...activity(safeMtime(filePath)) };
 }
 
 export interface ClaudeSessionData {
@@ -132,99 +157,75 @@ export interface ClaudeSessionData {
   lastActivityMs: number;
 }
 
-export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | null {
+function applyClaudeLine(fold: ClaudeFold, line: string): void {
+  let raw: unknown;
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean);
+    raw = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const entry = parseClaudeLine(raw);
+  if (!entry) return;
+  takeClaudeIdentity(fold, entry);
 
-    let sessionId = '';
-    let cwd = '';
-    let latestTask = '';
-    let latestTimestamp = 0;
-    let lastAction: string | undefined;
-    let slug: string | undefined;
+  const ts = timestampMs(entry.timestamp);
+  const content = entry.message?.content;
 
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line);
-        if (entry.sessionId && !sessionId) sessionId = entry.sessionId;
-        if (entry.cwd && !cwd) cwd = entry.cwd;
-        if (entry.slug && !slug) slug = entry.slug;
-
-        const ts = entry.timestamp ? new Date(entry.timestamp).getTime() : 0;
-
-        if (entry.type === 'user' && entry.message?.content) {
-          const msgContent =
-            typeof entry.message.content === 'string'
-              ? entry.message.content
-              : entry.message.content
-                  .filter((c: { type: string }) => c.type === 'text')
-                  .map((c: { text: string }) => c.text)
-                  .join(' ');
-
-          if (ts >= latestTimestamp && msgContent.length > 0) {
-            latestTimestamp = ts;
-            latestTask = msgContent.slice(0, 200);
-          }
-        }
-
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const contentBlocks: Array<{
-            type: string;
-            name?: string;
-            text?: string;
-            input?: Record<string, unknown>;
-          }> = Array.isArray(entry.message.content) ? entry.message.content : [];
-
-          const toolUse = [...contentBlocks].reverse().find((c) => c.type === 'tool_use');
-          if (toolUse && toolUse.name) {
-            lastAction = formatToolUse(toolUse.name, toolUse.input);
-          } else {
-            const textBlock = [...contentBlocks].reverse().find((c) => c.type === 'text' && c.text);
-            if (textBlock?.text) {
-              lastAction = extractFirstSentence(textBlock.text);
-            }
-          }
-
-          if (ts > latestTimestamp) latestTimestamp = ts;
-        }
-      } catch {
-        continue;
-      }
+  if (entry.type === 'user' && content !== undefined) {
+    const msgContent = claudeUserText(content);
+    if (ts >= fold.latestTimestamp && msgContent.length > 0) {
+      fold.latestTimestamp = ts;
+      fold.latestTask = msgContent.slice(0, 200);
     }
+  }
 
-    if (!sessionId) return null;
-
-    const isActive = Date.now() - latestTimestamp < 2 * 60 * 1000;
-
-    return {
-      sessionId,
-      cwd,
-      latestTask,
-      lastAction,
-      slug,
-      isActive,
-      lastActivityMs: latestTimestamp,
-    };
-  } catch (err) {
-    logCaught('parseClaudeSessionFile', err, filePath);
-    return null;
+  if (entry.type === 'assistant' && content !== undefined) {
+    const action = claudeAssistantAction(content);
+    if (action) fold.lastAction = action;
+    if (ts > fold.latestTimestamp) fold.latestTimestamp = ts;
   }
 }
 
-function extractTextFromMessage(message: unknown): string | undefined {
-  if (!message || typeof message !== 'object') return undefined;
-  const msg = message as { content?: unknown };
+function takeClaudeIdentity(fold: ClaudeFold, entry: ClaudeLine): void {
+  if (entry.sessionId && !fold.sessionId) fold.sessionId = entry.sessionId;
+  if (entry.cwd && !fold.cwd) fold.cwd = entry.cwd;
+  if (entry.slug && !fold.slug) fold.slug = entry.slug;
+}
 
-  if (typeof msg.content === 'string') return msg.content;
-  if (Array.isArray(msg.content)) {
-    for (const block of msg.content) {
-      if (block?.type === 'text' && typeof block.text === 'string') {
-        return block.text;
-      }
-    }
-  }
+function claudeUserText(content: string | unknown[]): string {
+  if (typeof content === 'string') return content;
+  return claudeBlocks(content)
+    .filter((block) => block.type === 'text' && block.text)
+    .map((block) => block.text)
+    .join(' ');
+}
+
+function claudeAssistantAction(content: string | unknown[]): string | undefined {
+  const blocks = claudeBlocks(content);
+  const toolUse = [...blocks].reverse().find((block) => block.type === 'tool_use' && block.name);
+  if (toolUse?.name) return formatToolUse(toolUse.name, toolUse.input);
+  const textBlock = [...blocks].reverse().find((block) => block.type === 'text' && block.text);
+  if (textBlock?.text) return extractFirstSentence(textBlock.text);
   return undefined;
+}
+
+export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | null {
+  const fold = foldAppendOnly(
+    filePath,
+    claudeFolds,
+    (): ClaudeFold => ({ sessionId: '', cwd: '', latestTask: '', latestTimestamp: 0 }),
+    applyClaudeLine,
+  );
+  if (!fold?.sessionId) return null;
+  return {
+    sessionId: fold.sessionId,
+    cwd: fold.cwd,
+    latestTask: fold.latestTask,
+    lastAction: fold.lastAction,
+    slug: fold.slug,
+    isActive: Date.now() - fold.latestTimestamp < RECENT_ACTIVITY_MS,
+    lastActivityMs: fold.latestTimestamp,
+  };
 }
 
 export function shortenPaths(text: string): string {
@@ -245,7 +246,7 @@ function extractFirstSentence(text: string): string {
 export function formatToolUse(toolName: string, input?: Record<string, unknown>): string {
   if (!input) return toolName;
 
-  const path = (input.file_path || input.path || input.file || '') as string;
+  const path = stringField(input, 'file_path', 'path', 'file');
   const shortPath = path ? basename(path) : '';
 
   switch (toolName) {
@@ -258,21 +259,21 @@ export function formatToolUse(toolName: string, input?: Record<string, unknown>)
       return shortPath ? `Edit:${shortPath}` : 'Edit';
     case 'Shell':
     case 'Bash': {
-      const cmd = shortenPaths((input.command || '') as string).slice(0, 60);
+      const cmd = shortenPaths(stringField(input, 'command')).slice(0, 60);
       return cmd ? `Shell:${cmd}` : 'Shell';
     }
     case 'Grep':
     case 'Search': {
-      const pattern = ((input.pattern || input.query || '') as string).slice(0, 40);
+      const pattern = stringField(input, 'pattern', 'query').slice(0, 40);
       return pattern ? `Search:${pattern}` : 'Search';
     }
     case 'Glob':
     case 'ListFiles': {
-      const glob = ((input.pattern || input.glob_pattern || '') as string).slice(0, 40);
+      const glob = stringField(input, 'pattern', 'glob_pattern').slice(0, 40);
       return glob ? `Glob:${glob}` : 'Glob';
     }
     case 'WebSearch': {
-      const query = ((input.search_term || input.query || '') as string).slice(0, 40);
+      const query = stringField(input, 'search_term', 'query').slice(0, 40);
       return query ? `WebSearch:${query}` : 'WebSearch';
     }
     case 'Task':

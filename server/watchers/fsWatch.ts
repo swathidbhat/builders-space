@@ -1,14 +1,8 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { logCaught } from '../log';
+import { FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS, WATCH_DEBOUNCE_MS } from '../../shared/config';
 
-/** Coalesce bursts of writes so a session append does not rescan once per chunk. */
-export const WATCH_DEBOUNCE_MS = 300;
-
-/** Poll in case a filesystem event is dropped (macOS FSEvents can miss some). */
-export const FALLBACK_SCAN_MS = 60_000;
-
-/** If the tool directory does not exist yet, keep looking until it does. */
-export const MISSING_DIR_RETRY_MS = 15_000;
+export { FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS, WATCH_DEBOUNCE_MS };
 
 export interface JsonlWatch {
   ready: Promise<void>;

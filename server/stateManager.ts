@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 import type { SpaceData, ProjectInfo, AgentSource, AgentStatus, AgentInfo } from './types';
+import { HOOK_ACTIVE_TTL_MS, HOOK_TERMINAL_TTL_MS } from '../shared/config';
 
-export const HOOK_ACTIVE_TTL_MS = 600_000; // 10 minutes — non-terminal states
-export const HOOK_TERMINAL_TTL_MS = 3_600_000; // 1 hour — terminal states
+export { HOOK_ACTIVE_TTL_MS, HOOK_TERMINAL_TTL_MS };
 
 export interface HookRuntimeEntry {
   source: AgentSource;
@@ -27,6 +27,7 @@ export class StateManager extends EventEmitter {
   private codexProjects = new Map<string, ProjectInfo>();
   private hookRuntimeByKey = new Map<string, HookRuntimeEntry>();
   private state: SpaceData = { projects: [], lastUpdated: Date.now() };
+  private publishedProjects = '';
 
   updateCursorProjects(projects: Map<string, ProjectInfo>): void {
     this.cursorProjects = projects;
@@ -135,7 +136,10 @@ export class StateManager extends EventEmitter {
       }
     }
 
-    // Step 7: Emit
+    const signature = JSON.stringify(projects);
+    if (signature === this.publishedProjects) return;
+    this.publishedProjects = signature;
+
     this.state = {
       projects,
       lastUpdated: Date.now(),

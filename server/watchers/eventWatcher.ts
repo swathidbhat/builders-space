@@ -15,9 +15,10 @@ import type { HookRuntimeEntry } from '../stateManager';
 import { formatToolUse } from '../utils/parseTranscript';
 import { logCaught } from '../log';
 import type { AgentSource } from '../types';
+import { STALE_EVENT_MAX_AGE_MS } from '../../shared/config';
+import { hookString, isRecord, parseHookEvent, type HookEvent } from '../schema/sessionLog';
 
-/** Leftover event files older than this are deleted and not applied as live status. */
-export const STALE_EVENT_MAX_AGE_MS = 60_000;
+export { STALE_EVENT_MAX_AGE_MS };
 
 export function defaultEventsDir(): string {
   return join(homedir(), '.builders-space', 'events');
@@ -34,8 +35,12 @@ export function acceptEventTime(fileMtimeMs: number, now = Date.now()): number |
   return fileMtimeMs;
 }
 
+function asHook(event: Record<string, unknown>): HookEvent {
+  return parseHookEvent(event) ?? {};
+}
+
 /** Cursor common-schema signals (see https://cursor.com/docs/hooks). */
-function isCursorPayload(event: Record<string, unknown>): boolean {
+function isCursorPayload(event: HookEvent): boolean {
   return (
     event.cursor_version !== undefined ||
     Array.isArray(event.workspace_roots) ||
@@ -43,7 +48,8 @@ function isCursorPayload(event: Record<string, unknown>): boolean {
   );
 }
 
-export function detectSource(event: Record<string, unknown>): AgentSource {
+export function detectSource(raw: Record<string, unknown>): AgentSource {
+  const event = asHook(raw);
   if (event.tool === 'codex' || event.source === 'codex') return 'codex';
   if (event.tool === 'cursor' || event.source === 'cursor') return 'cursor';
   if (isCursorPayload(event)) return 'cursor';
@@ -52,31 +58,29 @@ export function detectSource(event: Record<string, unknown>): AgentSource {
   return 'claude-code';
 }
 
-export function extractSessionId(event: Record<string, unknown>): string {
-  return (event.session_id || event.sessionId || event.conversation_id || '') as string;
+export function extractSessionId(raw: Record<string, unknown>): string {
+  return hookString(asHook(raw), 'session_id', 'sessionId', 'conversation_id');
 }
 
-export function extractCwd(event: Record<string, unknown>): string | undefined {
-  const cwd = event.cwd ?? event.working_directory;
-  if (typeof cwd === 'string' && cwd) return cwd;
-  const roots = event.workspace_roots;
-  if (Array.isArray(roots) && roots.length > 0 && typeof roots[0] === 'string') {
-    return roots[0];
-  }
+export function extractCwd(raw: Record<string, unknown>): string | undefined {
+  const event = asHook(raw);
+  const cwd = hookString(event, 'cwd', 'working_directory');
+  if (cwd) return cwd;
+  const root = event.workspace_roots?.[0];
+  if (typeof root === 'string' && root.length > 0) return root;
   return undefined;
 }
 
 export function normalizeFireEvent(
-  event: Record<string, unknown>,
+  raw: Record<string, unknown>,
   at = Date.now(),
 ): HookRuntimeEntry {
-  const source = detectSource(event);
-  const sessionId = extractSessionId(event);
-  const reason = (event.error_message ||
-    event.reason ||
-    event.status ||
-    'Session ended with error') as string;
-  const cwd = extractCwd(event);
+  const event = asHook(raw);
+  const source = detectSource(raw);
+  const sessionId = extractSessionId(raw);
+  const reason =
+    hookString(event, 'error_message', 'reason', 'status') || 'Session ended with error';
+  const cwd = extractCwd(raw);
 
   return {
     source,
@@ -90,7 +94,7 @@ export function normalizeFireEvent(
   };
 }
 
-function isStopHookError(event: Record<string, unknown>): boolean {
+function isStopHookError(event: HookEvent): boolean {
   const status = event.status;
   if (status === 'error') return true;
   if (typeof status === 'string' && status.toLowerCase() === 'error') return true;
@@ -100,19 +104,20 @@ function isStopHookError(event: Record<string, unknown>): boolean {
 }
 
 /** Cursor `stop` hook: status may be completed | aborted | error */
-function isCursorStopCompletedOrAborted(event: Record<string, unknown>): boolean {
+function isCursorStopCompletedOrAborted(event: HookEvent): boolean {
   const s = event.status;
   return s === 'completed' || s === 'aborted';
 }
 
 export function normalizeStatusEvent(
-  event: Record<string, unknown>,
+  raw: Record<string, unknown>,
   at = Date.now(),
 ): HookRuntimeEntry | null {
-  const source = detectSource(event);
-  const sessionId = extractSessionId(event);
-  const cwd = extractCwd(event);
-  const hookEvent = (event.hook_event_name || event.event || '') as string;
+  const event = asHook(raw);
+  const source = detectSource(raw);
+  const sessionId = extractSessionId(raw);
+  const cwd = extractCwd(raw);
+  const hookEvent = hookString(event, 'hook_event_name', 'event');
   const mode = 'realtime' as const;
 
   switch (hookEvent) {
@@ -131,8 +136,8 @@ export function normalizeStatusEvent(
 
     case 'PostToolUse':
     case 'postToolUse': {
-      const toolName = (event.tool_name || event.tool || '') as string;
-      const toolInput = event.tool_input as Record<string, unknown> | undefined;
+      const toolName = hookString(event, 'tool_name', 'tool');
+      const toolInput = isRecord(event.tool_input) ? event.tool_input : undefined;
       const action = toolName ? formatToolUse(toolName, toolInput) : undefined;
       return {
         source,
@@ -161,9 +166,7 @@ export function normalizeStatusEvent(
       }
 
       if (isStopHookError(event)) {
-        const reason = (event.error_message ||
-          event.reason ||
-          'Agent stopped with error') as string;
+        const reason = hookString(event, 'error_message', 'reason') || 'Agent stopped with error';
         return {
           source,
           sessionId,
@@ -192,9 +195,8 @@ export function normalizeStatusEvent(
     case 'sessionEnd': {
       const reasonStr = typeof event.reason === 'string' ? event.reason : '';
       if (reasonStr === 'error') {
-        const errMsg = (event.error_message ||
-          event.final_status ||
-          'Session ended with error') as string;
+        const errMsg =
+          hookString(event, 'error_message', 'final_status') || 'Session ended with error';
         return {
           source,
           sessionId,
@@ -280,7 +282,9 @@ export class EventWatcher {
       const mtimeMs = statSync(filePath).mtimeMs;
       const at = acceptEventTime(mtimeMs);
       const content = readFileSync(filePath, 'utf-8');
-      const event = JSON.parse(content);
+      const parsed: unknown = JSON.parse(content);
+      if (!isRecord(parsed)) throw new Error('event is not an object');
+      const event = parsed;
       const fileName = basename(filePath);
 
       if (at === null) {

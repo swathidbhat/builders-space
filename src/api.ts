@@ -1,4 +1,4 @@
-export const API_ORIGIN = 'http://127.0.0.1:3002';
+export { API_ORIGIN } from '../shared/config';
 
 declare global {
   interface Window {

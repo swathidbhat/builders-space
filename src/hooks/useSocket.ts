@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useSpaceStore } from '../store';
 import type { SpaceData, HumanizeResponse } from '../types';
 import { API_ORIGIN, authToken } from '../api';
+import { boundHumanizeInput } from '../../shared/humanize';
 
 let sharedSocket: Socket | null = null;
 
@@ -61,7 +62,7 @@ export function requestHumanize(rawTexts: string[]): Promise<HumanizeResponse> {
       resolve({ texts: {}, usedLLM: false });
       return;
     }
-    socket.emit('space:humanize', rawTexts, (result: HumanizeResponse) => {
+    socket.emit('space:humanize', boundHumanizeInput(rawTexts), (result: HumanizeResponse) => {
       resolve(result);
     });
   });

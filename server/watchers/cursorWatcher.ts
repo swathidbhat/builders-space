@@ -5,12 +5,11 @@ import { parseTranscriptDir, parseTranscriptFile } from '../utils/parseTranscrip
 import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
-import type { AgentInfo, AgentStatus, ProjectInfo } from '../types';
+import { MAX_SESSION_AGE_MS } from '../../shared/config';
+import { inferSessionStatus } from '../../shared/status';
+import type { AgentInfo, ProjectInfo } from '../types';
 
 export type CursorWatcherCallback = (projects: Map<string, ProjectInfo>) => void;
-
-const ONE_HOUR_MS = 60 * 60 * 1000;
-const MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
 export interface CursorWatcherOptions {
   base?: string;
@@ -114,19 +113,14 @@ export class CursorWatcher {
               if (!data) continue;
 
               const transcriptAgeMs = Date.now() - data.lastActivityMs;
-              if (transcriptAgeMs > MAX_AGE_MS) continue;
+              if (transcriptAgeMs > MAX_SESSION_AGE_MS) continue;
 
               const agentId = `cursor-agent-${entry.name}`;
               if (agents.some((a) => a.id === agentId)) continue;
 
               if (data.cwd && isAbsolute(data.cwd)) cwdFromSession = stripSlash(data.cwd);
 
-              let status: AgentStatus;
-              if (data.isRecentlyActive) {
-                status = 'working';
-              } else {
-                status = transcriptAgeMs < ONE_HOUR_MS ? 'waiting' : 'done';
-              }
+              const status = inferSessionStatus({ lastActivityMs: data.lastActivityMs });
 
               agents.push({
                 id: agentId,
@@ -147,17 +141,12 @@ export class CursorWatcher {
               if (!data) continue;
 
               const txtAgeMs = Date.now() - data.lastActivityMs;
-              if (txtAgeMs > MAX_AGE_MS) continue;
+              if (txtAgeMs > MAX_SESSION_AGE_MS) continue;
 
               const agentId = `cursor-agent-${basename(entry.name, '.txt')}`;
               if (agents.some((a) => a.id === agentId)) continue;
 
-              let status: AgentStatus;
-              if (data.isRecentlyActive) {
-                status = 'working';
-              } else {
-                status = txtAgeMs < ONE_HOUR_MS ? 'waiting' : 'done';
-              }
+              const status = inferSessionStatus({ lastActivityMs: data.lastActivityMs });
 
               agents.push({
                 id: agentId,

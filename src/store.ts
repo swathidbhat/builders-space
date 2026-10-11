@@ -1,5 +1,24 @@
 import { create } from 'zustand';
+import { CLIENT_TRANSLATION_CACHE_MAX } from '../shared/config';
 import type { ProjectInfo, SpaceData } from './types';
+
+function rememberTranslations(
+  current: Record<string, string>,
+  texts: Record<string, string>,
+): Record<string, string> {
+  const merged = { ...current };
+  for (const [key, value] of Object.entries(texts)) {
+    delete merged[key];
+    merged[key] = value;
+  }
+  const keys = Object.keys(merged);
+  if (keys.length <= CLIENT_TRANSLATION_CACHE_MAX) return merged;
+  const trimmed: Record<string, string> = {};
+  for (const key of keys.slice(keys.length - CLIENT_TRANSLATION_CACHE_MAX)) {
+    trimmed[key] = merged[key];
+  }
+  return trimmed;
+}
 
 interface SpaceStore {
   projects: ProjectInfo[];
@@ -41,5 +60,6 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
 
   toggleHumanLingo: () => set((s) => ({ humanLingo: !s.humanLingo })),
 
-  setHumanizedTexts: (texts) => set((s) => ({ humanizedTexts: { ...s.humanizedTexts, ...texts } })),
+  setHumanizedTexts: (texts) =>
+    set((s) => ({ humanizedTexts: rememberTranslations(s.humanizedTexts, texts) })),
 }));

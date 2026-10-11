@@ -1,19 +1,9 @@
 import { useMemo } from 'react';
+import { projectStatusColor } from '../../shared/status';
 import { useSpaceStore } from '../store';
 
 function prettifyName(raw: string): string {
   return raw.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function getStatusColor(project: { agents: { status: string }[] }): string {
-  const hasError = project.agents.some((a) => a.status === 'error');
-  if (hasError) return '#ff4444';
-  const hasWaiting = project.agents.some((a) => a.status === 'waiting');
-  if (hasWaiting) return '#ffaa44';
-  const hasWorking = project.agents.some((a) => a.status === 'working');
-  if (hasWorking) return '#44ffaa';
-  if (project.agents.length > 0) return '#6688aa';
-  return '#444';
 }
 
 export function Sidebar() {
@@ -146,7 +136,7 @@ export function Sidebar() {
       >
         {sorted.map((p) => {
           const isSelected = p.id === selectedId;
-          const dotColor = getStatusColor(p);
+          const dotColor = projectStatusColor(p.agents);
 
           return (
             <button

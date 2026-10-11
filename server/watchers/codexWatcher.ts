@@ -1,17 +1,17 @@
-import { readdirSync, readFileSync, existsSync } from 'fs';
+import { readdirSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import { execSync } from 'child_process';
 import { parseCodexSessionFile, parseCodexSessionMeta } from '../utils/parseCodexSession';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
-import type { AgentInfo, AgentStatus, ProjectInfo } from '../types';
+import { CwdCache } from '../process/cwdCache';
+import { foldAppendOnly, type FoldCache } from '../io/incrementalRead';
+import { parseIndexLine } from '../schema/sessionLog';
+import { MAX_SESSION_AGE_MS } from '../../shared/config';
+import { inferSessionStatus } from '../../shared/status';
+import type { AgentInfo, ProjectInfo } from '../types';
 
 export type CodexWatcherCallback = (projects: Map<string, ProjectInfo>) => void;
-
-const ONE_HOUR_MS = 60 * 60 * 1000;
-const MAX_AGE_MS = 48 * 60 * 60 * 1000;
-const STALE_THRESHOLD_MS = 10 * 60 * 1000;
 
 export interface CodexWatcherOptions {
   sessionsDir?: string;
@@ -34,6 +34,8 @@ export class CodexWatcher {
   private retryInterval: ReturnType<typeof setInterval> | null = null;
   private fallbackScanMs: number;
   private missingDirRetryMs: number;
+  private processes: CwdCache;
+  private indexCache = new Map<string, FoldCache<Map<string, string>>>();
 
   constructor(onChange: CodexWatcherCallback, options: CodexWatcherOptions = {}) {
     const codexBase = join(homedir(), '.codex');
@@ -42,6 +44,7 @@ export class CodexWatcher {
     this.onChange = onChange;
     this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
     this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
+    this.processes = new CwdCache('codex', () => this.scan());
   }
 
   start(): void {
@@ -66,6 +69,7 @@ export class CodexWatcher {
   }
 
   stop(): void {
+    this.processes.stop();
     void this.jsonlWatch?.close();
     this.jsonlWatch = null;
     if (this.scanInterval) clearInterval(this.scanInterval);
@@ -76,6 +80,7 @@ export class CodexWatcher {
 
   private arm(): void {
     this.scan();
+    this.processes.start();
     try {
       this.jsonlWatch = watchJsonlTree(this.sessionsDir, () => this.scan(), 'CodexWatcher');
     } catch (err) {
@@ -87,55 +92,21 @@ export class CodexWatcher {
   }
 
   private getThreadNames(): Map<string, string> {
-    const names = new Map<string, string>();
-    if (!existsSync(this.indexFile)) return names;
-
-    try {
-      const content = readFileSync(this.indexFile, 'utf-8');
-      for (const line of content.trim().split('\n').filter(Boolean)) {
+    if (!existsSync(this.indexFile)) return new Map();
+    const names = foldAppendOnly(
+      this.indexFile,
+      this.indexCache,
+      () => new Map<string, string>(),
+      (fold, line) => {
         try {
-          const entry = JSON.parse(line);
-          if (entry.id && entry.thread_name) {
-            names.set(entry.id, entry.thread_name);
-          }
+          const entry = parseIndexLine(JSON.parse(line));
+          if (entry) fold.set(entry.id, entry.thread_name);
         } catch (err) {
           logCaught('CodexWatcher', err, 'session index line');
         }
-      }
-    } catch (err) {
-      logCaught('CodexWatcher', err, `reading ${this.indexFile}`);
-    }
-
-    return names;
-  }
-
-  private getRunningCodexCwds(): Set<string> {
-    const cwds = new Set<string>();
-    try {
-      const output = execSync('ps aux', { encoding: 'utf-8', timeout: 5000 });
-      for (const line of output.split('\n')) {
-        if (!line.includes('codex') || line.includes('grep')) continue;
-        const parts = line.trim().split(/\s+/);
-        if (parts.length < 2) continue;
-        const pid = parseInt(parts[1], 10);
-        if (isNaN(pid)) continue;
-
-        try {
-          const lsofOut = execSync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | head -1`, {
-            encoding: 'utf-8',
-            timeout: 3000,
-          })
-            .trim()
-            .replace(/^n/, '');
-          if (lsofOut) cwds.add(stripSlash(lsofOut));
-        } catch {
-          // Process exited or lsof has no cwd.
-        }
-      }
-    } catch (err) {
-      logCaught('CodexWatcher', err, 'ps aux');
-    }
-    return cwds;
+      },
+    );
+    return names ?? new Map();
   }
 
   private collectSessionFiles(): string[] {
@@ -176,7 +147,7 @@ export class CodexWatcher {
     }
 
     const threadNames = this.getThreadNames();
-    const runningCwds = this.getRunningCodexCwds();
+    const runningCwds = this.processes.current();
 
     const projectSessions = new Map<
       string,
@@ -192,7 +163,7 @@ export class CodexWatcher {
       if (!meta || !meta.cwd) continue;
 
       const codexAgeMs = Date.now() - meta.lastActivityMs;
-      if (codexAgeMs > MAX_AGE_MS) continue;
+      if (codexAgeMs > MAX_SESSION_AGE_MS) continue;
 
       const cwd = stripSlash(meta.cwd);
       if (!projectSessions.has(cwd)) {
@@ -212,18 +183,10 @@ export class CodexWatcher {
         const data = parseCodexSessionFile(session.file);
         if (!data) continue;
 
-        const isProcessRunning = runningCwds.has(stripSlash(cwd));
-
-        let status: AgentStatus;
-        if (data.isActive) {
-          status = 'working';
-        } else if (isProcessRunning) {
-          const ageMs = Date.now() - data.lastActivityMs;
-          status = ageMs > STALE_THRESHOLD_MS ? 'waiting' : 'working';
-        } else {
-          const ageMs = Date.now() - data.lastActivityMs;
-          status = ageMs < ONE_HOUR_MS ? 'waiting' : 'done';
-        }
+        const status = inferSessionStatus({
+          lastActivityMs: data.lastActivityMs,
+          processRunning: runningCwds.has(stripSlash(cwd)),
+        });
 
         const threadName = threadNames.get(data.sessionId);
 
