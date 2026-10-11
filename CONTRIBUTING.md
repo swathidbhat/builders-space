@@ -62,5 +62,6 @@ These majors are current upstream and are intentionally not installed. Each one 
 | `eslint`                         | 10.12  | `eslint-plugin-react` 7.37.5 peers ESLint through `^9.7` only, and ESLint 9.39.5 is marked deprecated upstream. Stay on 9.39.5 until that plugin allows ESLint 10. |
 | `jsdom`                          | 30.1.2 | Engines are `^22.22.2 \|\| ^24.15 \|\| >=26`. Stay on 29.1.1, which still allows Node 20.19.                                                                       |
 | `lint-staged`                    | 17.6.0 | Engines are `>=22.22.1`. Stay on 16.4.0.                                                                                                                           |
+| `concurrently`                   | 10.0.6 | Engines are `>=22`. `npm run dev` stays on 9.2.5.                                                                                                                  |
 
 Revisit this table when the Node floor moves to 22.22 or the peer ranges above widen.
