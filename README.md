@@ -99,17 +99,19 @@ Alphabetically by project name on concentric rings in a flat plane. Agent status
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 22.22.2 or newer (see `.nvmrc`; Node 20 is not supported)
+- [Node.js](https://nodejs.org/) 22.22.2 or newer (see `.nvmrc`; Node 20 is not supported). `.npmrc` sets `engine-strict=true`, and `preinstall` / `predev` refuse an older Node with a version message.
 - npm 9+
-- macOS for live agent detection (`open` / `osascript` and the tool log paths). CI runs the automated suite on Linux.
+
+Linux and macOS both run the dashboard, the file watchers, hooks, and Human Lingo. Session files are read from `~/.claude/projects/`, `~/.cursor/projects/`, and `~/.codex/sessions/` on either system. Opening a session from an agent card (`open` / `osascript`) is macOS-only. On Linux that click explains the limit instead of showing a spawn error. CI runs the automated suite on Linux.
 
 ## How to Run
 
 ```bash
-# Install dependencies
-npm install
+# Install from the lockfile
+npm ci
 
-# Copy the example env file and add your Anthropic API key (optional — enables LLM-powered jargon translation)
+# Optional: copy the example env file and uncomment ANTHROPIC_API_KEY with a real key.
+# The placeholder in .env.example is commented out and is ignored if you paste it as-is.
 cp .env.example .env
 
 # Start the app (backend + frontend together)
@@ -149,7 +151,7 @@ Nothing is sent unless both of these are true: `ANTHROPIC_API_KEY` is set in the
 
 When both are true, opening a project panel sends that panel's short action and error strings to Anthropic (`messages.create`, model `HUMANIZER_MODEL` or `claude-haiku-4-5-20251001`). A request is at most 20 strings, and each string is at most 500 characters. Full transcripts, file contents, and hook payloads are not included.
 
-To keep every label on this machine, turn Human Lingo off, or leave `ANTHROPIC_API_KEY` unset. With no key, the server uses its built-in wording and does not call Anthropic.
+To keep every label on this machine, turn Human Lingo off, or leave `ANTHROPIC_API_KEY` unset. With no key, the server uses its built-in wording and does not call Anthropic. The example placeholder (`your-api-key-here`) and other obviously invalid values are treated as no key. If Anthropic rejects a key, the dashboard says so once; the failure is not only a terminal log.
 
 ### Localhost and the launch token
 
@@ -291,7 +293,7 @@ npm run test:e2e
 
 `npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 90% on `server/` and `shared/`, and 70% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`, on Node 22.22.2.
 
-`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 22.22.2 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
+`npm ci` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 22.22.2 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

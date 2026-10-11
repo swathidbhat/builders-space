@@ -131,7 +131,11 @@ describe('agent cards', () => {
   });
 
   it('distinguishes resume, directory open, failure, and a down server', async () => {
-    const responses = [{ ok: true, resumed: true }, { ok: true }, { ok: false, error: 'no app' }];
+    const responses = [
+      { ok: true, resumed: true },
+      { ok: true },
+      { ok: false, error: 'Opening sessions is only supported on macOS' },
+    ];
     const fetchMock = vi.fn(async () => ({
       json: async () => responses.shift(),
     }));
@@ -155,7 +159,10 @@ describe('agent cards', () => {
 
     rerender(<AgentCard agent={agent} identity={testIdentity('Lyra')} humanLingo={false} />);
     fireEvent.click(screen.getByText('Lyra'));
-    await vi.waitFor(() => expect(screen.getByText('Failed: no app')).toBeTruthy());
+    await vi.waitFor(() =>
+      expect(screen.getByText('Opening sessions is only supported on macOS')).toBeTruthy(),
+    );
+    expect(screen.queryByText(/spawn/)).toBeNull();
 
     fetchMock.mockRejectedValueOnce(new Error('offline'));
     rerender(<AgentCard agent={agent} identity={testIdentity('Lyra')} humanLingo={false} />);

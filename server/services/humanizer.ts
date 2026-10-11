@@ -5,6 +5,12 @@ import {
   HUMANIZE_MAX_ITEMS,
   HUMANIZE_MAX_TEXT_CHARS,
 } from '../../shared/config';
+import {
+  ANTHROPIC_KEY_REJECTED,
+  isAnthropicAuthRejection,
+  markAnthropicKeyRejected,
+  usableAnthropicKey,
+} from '../anthropicKey';
 
 export { HUMANIZE_MAX_ITEMS, HUMANIZE_MAX_TEXT_CHARS };
 
@@ -68,7 +74,7 @@ export async function humanizeTexts(rawTexts: unknown): Promise<HumanizeResult> 
     return { texts, usedLLM: inputs.length > 0 && inputs.every((raw) => cacheFromLLM(raw)) };
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!usableAnthropicKey()) {
     for (const raw of uncached) {
       const fb = simpleFallback(raw);
       setInCache(raw, fb, false);
@@ -78,31 +84,54 @@ export async function humanizeTexts(rawTexts: unknown): Promise<HumanizeResult> 
   }
 
   const BATCH_SIZE = 20;
+  let usedLLM = true;
+  let error: string | undefined;
   for (let start = 0; start < uncached.length; start += BATCH_SIZE) {
     const batch = uncached.slice(start, start + BATCH_SIZE);
     const batchResults = await callLLM(batch);
+    if (!batchResults.fromLLM) {
+      usedLLM = false;
+      error = batchResults.error;
+      for (let i = 0; i < batch.length; i++) {
+        texts[batch[i]] = batchResults.labels[i] || simpleFallback(batch[i]);
+      }
+      break;
+    }
     for (let i = 0; i < batch.length; i++) {
-      const label = batchResults[i] || simpleFallback(batch[i]);
+      const label = batchResults.labels[i] || simpleFallback(batch[i]);
       setInCache(batch[i], label, true);
       texts[batch[i]] = label;
     }
   }
 
-  return { texts, usedLLM: true };
+  return error ? { texts, usedLLM, error } : { texts, usedLLM };
+}
+
+interface LlmBatch {
+  labels: string[];
+  fromLLM: boolean;
+  error?: string;
 }
 
 let anthropic: Anthropic | null = null;
+let clientKey: string | null = null;
 
 function getClient(): Anthropic | null {
-  if (anthropic) return anthropic;
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  anthropic = new Anthropic();
+  const key = usableAnthropicKey();
+  if (!key) {
+    anthropic = null;
+    clientKey = null;
+    return null;
+  }
+  if (anthropic && clientKey === key) return anthropic;
+  anthropic = new Anthropic({ apiKey: key });
+  clientKey = key;
   return anthropic;
 }
 
-async function callLLM(inputs: string[]): Promise<string[]> {
+async function callLLM(inputs: string[]): Promise<LlmBatch> {
   const client = getClient();
-  if (!client) return inputs.map(simpleFallback);
+  if (!client) return { labels: inputs.map(simpleFallback), fromLLM: false };
 
   try {
     const numbered = inputs.map((t, i) => `${i + 1}. ${t}`).join('\n');
@@ -138,11 +167,23 @@ Rules:
         parsed.push(simpleFallback(inputs[i]));
       }
     }
-    return parsed;
+    return { labels: parsed, fromLLM: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Humanizer] LLM call failed:', message);
-    return inputs.map(simpleFallback);
+    if (isAnthropicAuthRejection(err)) {
+      markAnthropicKeyRejected();
+      return {
+        labels: inputs.map(simpleFallback),
+        fromLLM: false,
+        error: ANTHROPIC_KEY_REJECTED,
+      };
+    }
+    return {
+      labels: inputs.map(simpleFallback),
+      fromLLM: false,
+      error: 'Human Lingo could not reach Anthropic.',
+    };
   }
 }
 

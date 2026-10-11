@@ -9,7 +9,13 @@ import { StateManager } from './stateManager';
 import { defaultHookRuntimeFile } from './hookRuntimeStore';
 import { humanizeTexts, HumanizeInputError } from './services/humanizer';
 import { getHookStatus, enableHooks, disableHooks, ensureAppDirs } from './services/hookSetup';
-import { buildOpenSessionCommand, runCommand, type CommandSpec } from './openSession';
+import {
+  buildOpenSessionCommand,
+  openSessionError,
+  runCommand,
+  type CommandSpec,
+} from './openSession';
+import { anthropicKeyState } from './anthropicKey';
 import {
   bearerToken,
   createLaunchToken,
@@ -184,7 +190,7 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
   });
 
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', state: stateManager.getState() });
+    res.json({ status: 'ok', assistant: anthropicKeyState(), state: stateManager.getState() });
   });
 
   app.get('/api/hooks/status', (_req, res) => {
@@ -224,9 +230,8 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
     execute(spec.file, spec.args).then(
       () => res.json({ ok: true, source: agent.source, resumed: built.resumed }),
       (err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error('[open-session] Failed:', message);
-        res.json({ ok: false, error: message });
+        console.error('[open-session] Failed:', err);
+        res.json({ ok: false, error: openSessionError(err) });
       },
     );
   });

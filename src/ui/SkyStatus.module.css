@@ -1,0 +1,45 @@
+.wrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.card {
+  width: min(440px, calc(100% - 48px));
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: rgba(8, 10, 22, 0.88);
+  border: 1px solid rgba(140, 170, 255, 0.28);
+  color: #c9d4ea;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.card p {
+  margin: 0 0 10px;
+}
+
+.card code {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: #9eb6ff;
+}
+
+.tools {
+  margin: 0 0 10px;
+  padding-left: 18px;
+}

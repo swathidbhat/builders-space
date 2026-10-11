@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { describe, it, expect } from 'vitest';
-import { buildOpenSessionCommand, runCommand } from '../openSession';
+import { buildOpenSessionCommand, openSessionError, runCommand } from '../openSession';
 import type { AgentInfo } from '../types';
 
 function agent(overrides: Partial<AgentInfo> & Pick<AgentInfo, 'source'>): AgentInfo {
@@ -85,5 +85,18 @@ describe('buildOpenSessionCommand', () => {
   it('runs a command from an argv list and rejects a failing one', async () => {
     await expect(runCommand('true', [])).resolves.toBeUndefined();
     await expect(runCommand('false', [])).rejects.toThrow();
+  });
+
+  it('turns a raw spawn failure into a macOS-only message', () => {
+    const err = Object.assign(new Error('spawn osascript ENOENT'), { code: 'ENOENT' });
+    expect(openSessionError(err, 'linux')).toBe('Opening sessions is only supported on macOS');
+    expect(openSessionError(err, 'darwin')).toBe('Opening sessions is only supported on macOS');
+    expect(openSessionError(err, 'darwin')).not.toMatch(/spawn|ENOENT/);
+    expect(openSessionError(new Error('osascript timed out'), 'darwin')).toBe(
+      'Could not open the session.',
+    );
+    expect(openSessionError(new Error('osascript timed out'), 'linux')).toBe(
+      'Opening sessions is only supported on macOS',
+    );
   });
 });

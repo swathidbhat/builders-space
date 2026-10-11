@@ -1,0 +1,36 @@
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 70;
+  width: min(520px, calc(100% - 32px));
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(12, 16, 32, 0.94);
+  border: 1px solid rgba(120, 160, 255, 0.35);
+  color: #d5def2;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  pointer-events: auto;
+}
+
+.notice p {
+  margin: 0;
+  flex: 1;
+}
+
+.dismiss {
+  flex: none;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  cursor: pointer;
+}
