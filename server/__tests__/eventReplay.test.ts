@@ -21,14 +21,16 @@ function seed(sm: StateManager): void {
     name: 'proj',
     path: '/proj',
     fileCount: 0,
-    agents: [{
-      id: 'claude-sess1',
-      source: 'claude-code',
-      sessionId: 'sess1',
-      status: 'waiting',
-      statusSource: 'inferred',
-      lastActivityMs: Date.now() - 60_000,
-    }],
+    agents: [
+      {
+        id: 'claude-sess1',
+        source: 'claude-code',
+        sessionId: 'sess1',
+        status: 'waiting',
+        statusSource: 'inferred',
+        lastActivityMs: Date.now() - 60_000,
+      },
+    ],
   });
   sm.updateClaudeProjects(projects);
 }
@@ -37,13 +39,16 @@ describe('stale hook events', () => {
   it('does not apply a leftover event file as live status', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bs-events-'));
     const file = join(dir, 'status-old.json');
-    writeFileSync(file, JSON.stringify({
-      hook_event_name: 'PostToolUse',
-      session_id: 'sess1',
-      cwd: '/proj',
-      tool_name: 'Read',
-      tool_input: { file_path: 'a.ts' },
-    }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        session_id: 'sess1',
+        cwd: '/proj',
+        tool_name: 'Read',
+        tool_input: { file_path: 'a.ts' },
+      }),
+    );
     const old = new Date(Date.now() - 10 * 60 * 1000);
     utimesSync(file, old, old);
 
@@ -57,20 +62,25 @@ describe('stale hook events', () => {
     const agent = sm.getState().projects[0].agents[0];
     expect(agent.statusSource).toBe('inferred');
     expect(agent.status).toBe('waiting');
-    expect(warn.mock.calls.some((call) => String(call[0]).includes('Dropping stale event'))).toBe(true);
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('Dropping stale event'))).toBe(
+      true,
+    );
   });
 
   it('stamps a fresh event with the file time instead of processing time', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bs-events-'));
     mkdirSync(dir, { recursive: true });
     const file = join(dir, 'status-fresh.json');
-    writeFileSync(file, JSON.stringify({
-      hook_event_name: 'Stop',
-      session_id: 'sess1',
-      cwd: '/proj',
-      status: 'error',
-      error_message: 'disk full',
-    }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        session_id: 'sess1',
+        cwd: '/proj',
+        status: 'error',
+        error_message: 'disk full',
+      }),
+    );
     const stamped = Date.now() - 10_000;
     const when = new Date(stamped);
     utimesSync(file, when, when);

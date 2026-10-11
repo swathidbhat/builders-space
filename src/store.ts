@@ -29,22 +29,17 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
 
   setData: (data) =>
     set({
-      projects: data.projects.filter(p => p.agents.length > 0),
+      projects: data.projects.filter((p) => p.agents.length > 0),
       lastUpdated: data.lastUpdated,
     }),
 
-  selectPlanet: (id) =>
-    set({ selectedPlanetId: id, cameraMode: 'planet' }),
+  selectPlanet: (id) => set({ selectedPlanetId: id, cameraMode: 'planet' }),
 
-  deselectPlanet: () =>
-    set({ selectedPlanetId: null, cameraMode: 'space' }),
+  deselectPlanet: () => set({ selectedPlanetId: null, cameraMode: 'space' }),
 
-  toggleSidebar: () =>
-    set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
-  toggleHumanLingo: () =>
-    set((s) => ({ humanLingo: !s.humanLingo })),
+  toggleHumanLingo: () => set((s) => ({ humanLingo: !s.humanLingo })),
 
-  setHumanizedTexts: (texts) =>
-    set((s) => ({ humanizedTexts: { ...s.humanizedTexts, ...texts } })),
+  setHumanizedTexts: (texts) => set((s) => ({ humanizedTexts: { ...s.humanizedTexts, ...texts } })),
 }));

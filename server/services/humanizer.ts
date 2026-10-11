@@ -119,7 +119,10 @@ Rules:
     });
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     const parsed: string[] = [];
 
     for (let i = 0; i < inputs.length; i++) {
@@ -138,15 +141,25 @@ Rules:
 }
 
 const TOOL_VERBS: Record<string, string> = {
-  Write: 'Writing', Read: 'Reading', Edit: 'Editing',
-  Shell: 'Running', Bash: 'Running', Search: 'Searching',
-  Grep: 'Searching', Glob: 'Finding files', WebSearch: 'Researching',
-  WebFetch: 'Fetching a page', Task: 'Delegating work',
+  Write: 'Writing',
+  Read: 'Reading',
+  Edit: 'Editing',
+  Shell: 'Running',
+  Bash: 'Running',
+  Search: 'Searching',
+  Grep: 'Searching',
+  Glob: 'Finding files',
+  WebSearch: 'Researching',
+  WebFetch: 'Fetching a page',
+  Task: 'Delegating work',
   TodoWrite: 'Planning tasks',
 };
 
 function simpleFallback(raw: string): string {
-  const stripped = raw.trim().replace(/<[^>]+>/g, '').trim();
+  const stripped = raw
+    .trim()
+    .replace(/<[^>]+>/g, '')
+    .trim();
   if (!stripped) return UNCLEAR_ACTIVITY;
 
   const colonIdx = stripped.indexOf(':');

@@ -1,8 +1,6 @@
 # Builders Space
 
-
 https://github.com/user-attachments/assets/5118a62b-e610-43ef-b556-1169afeac5e7
-
 
 An ambient awareness dashboard for multi-agent coding work, rendered as an immersive deep-space scene. Each of your projects appears as a planet. Each coding agent (Claude, Codex, Cursor) working on a project appears as a worker on that planet's surface. Expanding status rings around a planet signal when it needs your attention — red for errors, amber for waiting. Technical jargon is translated into human lingo so you always know what's happening at a glance.
 
@@ -10,7 +8,7 @@ An ambient awareness dashboard for multi-agent coding work, rendered as an immer
 
 If you use AI coding tools — Cursor, Claude Code, Codex — you've probably had three or four of them running at once across different projects. Each tool has its own window, its own logs, its own technical language. If one gets stuck and needs your input, you might not notice for twenty minutes. If one hits an error, you find out when you eventually switch back to that tab.
 
-Builders Space exists because there was no single place to answer the question: *"What are all my agents doing right now, and does any of them need me?"*
+Builders Space exists because there was no single place to answer the question: _"What are all my agents doing right now, and does any of them need me?"_
 
 The answer should take one glance, not five tab-switches. That's the core idea — **ambient awareness**. The dashboard sits in a corner of your screen and you absorb the state of everything peripherally, the same way you'd notice a red light on a car dashboard without actively reading the instrument cluster.
 
@@ -18,7 +16,7 @@ The answer should take one glance, not five tab-switches. That's the core idea �
 
 1. **Ambient awareness over active monitoring.** You should never have to read a log or click into a panel to know the overall state. Color, motion, and scale do the work — red rings pulse when something breaks, amber rings breathe when something waits, and idle planets dim. Your peripheral vision catches it.
 
-2. **Attention-first hierarchy.** Every status surface — sidebar dot, planet rings, HUD counter — shows the *most urgent* state, not the most common. One error agent among five working agents means red, not green. The system is designed around what needs *you*, not what's going well.
+2. **Attention-first hierarchy.** Every status surface — sidebar dot, planet rings, HUD counter — shows the _most urgent_ state, not the most common. One error agent among five working agents means red, not green. The system is designed around what needs _you_, not what's going well.
 
 3. **Visual coherence.** Every element maps to something real. Stars are ambient background. Nebulae are atmospheric depth. Planets are projects. Workers are agents. Nothing is decorative if it could be mistaken for a meaningful object.
 
@@ -32,33 +30,33 @@ The answer should take one glance, not five tab-switches. That's the core idea �
 
 Every visual element in Builders Space maps to something real. Nothing is decorative-only if it could be confused with a meaningful object -- coherence is a core design principle.
 
-| Real World | Builders Space | Why |
-|---|---|---|
-| Your workspace | Deep space | The void you build within |
-| A project (git repo) | A planet | Each project is a self-contained world |
-| A project | Planet (uniform size) | All planets are the same size — visual consistency aids navigation |
-| Where a planet sits in space | Concentric rings, alphabetical by project name | Placement is **stable** while the project list is unchanged — agent status and activity timestamps do not move planets |
-| Project identity | Planet color and terrain | Seeded from project name; the same project always looks the same |
-| Planet visual type | One of 5 archetypes (gas giant, rocky, oceanic, volcanic, ice) | Purely cosmetic variety inspired by NASA exoplanet diversity; does not map to any project property |
-| A coding agent (Claude / Codex / Cursor) | A worker on the planet surface | Workers actively building on the world |
-| Planet needs attention | Expanding status rings (HUD overlay) | Red rings = error (fast, multiple, flickering). Amber ring = waiting (slow, single, calm). No ring = no action needed |
-| Planet idle | Dimmed, desaturated, near-still planet | Like a shop with the lights off — the eye naturally skips over it |
-| Agent actively working | Worker digging or walking, kicking up dust and debris | Visibly busy — you can see the work happening |
-| Agent hit an error | Worker trembling, red eyes, sparks and embers rising | Something broke — immediately visible distress |
-| Agent waiting for you | Worker sitting with animated "..." thought bubble | Needs your input before it can continue |
-| Agent done | Listed in the agent cards with its last action shown | Finished; no action needed from you |
-| Technical jargon (`git diff`, `npm install`, etc.) | Human Lingo status labels ("Reviewing recent changes", "Installing project tools") | Always human-readable, never developer jargon |
+| Real World                                         | Builders Space                                                                     | Why                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Your workspace                                     | Deep space                                                                         | The void you build within                                                                                              |
+| A project (git repo)                               | A planet                                                                           | Each project is a self-contained world                                                                                 |
+| A project                                          | Planet (uniform size)                                                              | All planets are the same size — visual consistency aids navigation                                                     |
+| Where a planet sits in space                       | Concentric rings, alphabetical by project name                                     | Placement is **stable** while the project list is unchanged — agent status and activity timestamps do not move planets |
+| Project identity                                   | Planet color and terrain                                                           | Seeded from project name; the same project always looks the same                                                       |
+| Planet visual type                                 | One of 5 archetypes (gas giant, rocky, oceanic, volcanic, ice)                     | Purely cosmetic variety inspired by NASA exoplanet diversity; does not map to any project property                     |
+| A coding agent (Claude / Codex / Cursor)           | A worker on the planet surface                                                     | Workers actively building on the world                                                                                 |
+| Planet needs attention                             | Expanding status rings (HUD overlay)                                               | Red rings = error (fast, multiple, flickering). Amber ring = waiting (slow, single, calm). No ring = no action needed  |
+| Planet idle                                        | Dimmed, desaturated, near-still planet                                             | Like a shop with the lights off — the eye naturally skips over it                                                      |
+| Agent actively working                             | Worker digging or walking, kicking up dust and debris                              | Visibly busy — you can see the work happening                                                                          |
+| Agent hit an error                                 | Worker trembling, red eyes, sparks and embers rising                               | Something broke — immediately visible distress                                                                         |
+| Agent waiting for you                              | Worker sitting with animated "..." thought bubble                                  | Needs your input before it can continue                                                                                |
+| Agent done                                         | Listed in the agent cards with its last action shown                               | Finished; no action needed from you                                                                                    |
+| Technical jargon (`git diff`, `npm install`, etc.) | Human Lingo status labels ("Reviewing recent changes", "Installing project tools") | Always human-readable, never developer jargon                                                                          |
 
 ### Status system
 
 The same 4-state hierarchy applies everywhere — sidebar dot, planet status rings, planet label. The most urgent status always wins:
 
-| Priority | Status | Color | Planet visual | What it means |
-|---|---|---|---|---|
-| 1 | **Error** | Red `#ff4444` | 3–4 fast red rings expanding outward, flickering | An agent hit a failure. Go investigate. |
-| 2 | **Waiting** | Amber `#ffaa44` | Single slow amber ring, calm radar pulse | An agent needs your input. Go respond. |
-| 3 | **Working** | Green `#44ffaa` | No ring — planet at full color and normal rotation | Agents are actively working. No action needed. |
-| 4 | **Done** | Dim `#6688aa` | No ring — planet dimmed, desaturated, near-still | All agents finished. Nothing happening. |
+| Priority | Status      | Color           | Planet visual                                      | What it means                                  |
+| -------- | ----------- | --------------- | -------------------------------------------------- | ---------------------------------------------- |
+| 1        | **Error**   | Red `#ff4444`   | 3–4 fast red rings expanding outward, flickering   | An agent hit a failure. Go investigate.        |
+| 2        | **Waiting** | Amber `#ffaa44` | Single slow amber ring, calm radar pulse           | An agent needs your input. Go respond.         |
+| 3        | **Working** | Green `#44ffaa` | No ring — planet at full color and normal rotation | Agents are actively working. No action needed. |
+| 4        | **Done**    | Dim `#6688aa`   | No ring — planet dimmed, desaturated, near-still   | All agents finished. Nothing happening.        |
 
 If a project has 3 working agents and 1 error agent, the planet shows red rings — because the error needs your attention regardless of the working agents. The sidebar dot matches.
 
@@ -99,9 +97,9 @@ Alphabetically by project name on concentric rings in a flat plane. Agent status
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+ (LTS recommended)
-- npm 9+ (ships with Node 18+)
-- macOS (agent detection reads macOS-specific paths; Linux/Windows support is not tested)
+- [Node.js](https://nodejs.org/) 20.17+ (see `.nvmrc`; Node 18 is not supported)
+- npm 9+
+- macOS for live agent detection (`open` / `osascript` and the tool log paths). CI runs the automated suite on Linux.
 
 ## How to Run
 
@@ -117,6 +115,7 @@ npm run dev
 ```
 
 This starts:
+
 - A **backend server** on `http://127.0.0.1:3002` (loopback only) with independent file watchers for each agent tool
 - A **frontend** on `http://127.0.0.1:5174` that renders the 3D space
 
@@ -148,6 +147,7 @@ Browser (React + Three.js)          Node.js Backend
 ```
 
 **Backend** uses independent watchers that each monitor a tool's session directory:
+
 - **CursorWatcher**: Agent transcripts in `~/.cursor/projects/` (conversation JSONL files)
 - **ClaudeWatcher**: JSONL session files in `~/.claude/projects/`, with `ps aux` process detection
 - **CodexWatcher**: Rollout JSONL files in `~/.codex/sessions/`, with `ps aux` process detection
@@ -223,6 +223,22 @@ builders-space/
 - **Backend**: Node.js, Express, Socket.IO, chokidar
 - **Language**: TypeScript throughout
 - **Rendering**: Custom GLSL shaders for planets, stars, and nebula (Three.js `ShaderMaterial`, `RingGeometry`, additive blending)
+
+## Checks
+
+```bash
+npm run typecheck
+npm run lint
+npm run format:check
+npm run test:coverage
+npm run build
+npm audit --audit-level=high
+npm run test:e2e
+```
+
+`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 80% on `server/` and 60% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`.
+
+`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 20.17 or newer is required.
 
 ## License
 

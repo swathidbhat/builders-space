@@ -1,17 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { HookRuntimeEntry } from '../stateManager';
-
-type ApplyFn = (entry: HookRuntimeEntry) => void;
-
-function createMockStateManager() {
-  const overlays: HookRuntimeEntry[] = [];
-  return {
-    overlays,
-    applyHookOverlay: vi.fn((entry: HookRuntimeEntry) => {
-      overlays.push(entry);
-    }),
-  };
-}
+import { describe, it, expect } from 'vitest';
 
 // We test the normalization logic by extracting it into importable helpers.
 // Since the current EventWatcher couples filesystem I/O with normalization,
@@ -28,7 +15,6 @@ import {
 } from '../watchers/eventWatcher';
 
 describe('EventWatcher normalization', () => {
-
   // ── Event normalization ────────────────────────────────────────────
 
   describe('normalizeStatusEvent', () => {
@@ -392,11 +378,15 @@ describe('EventWatcher normalization', () => {
     });
 
     it('cursor_version + hook_event_name -> cursor', () => {
-      expect(detectSource({ hook_event_name: 'sessionStart', cursor_version: '1.0' })).toBe('cursor');
+      expect(detectSource({ hook_event_name: 'sessionStart', cursor_version: '1.0' })).toBe(
+        'cursor',
+      );
     });
 
     it('workspace_roots + hook_event_name -> cursor', () => {
-      expect(detectSource({ hook_event_name: 'PostToolUse', workspace_roots: ['/x'] })).toBe('cursor');
+      expect(detectSource({ hook_event_name: 'PostToolUse', workspace_roots: ['/x'] })).toBe(
+        'cursor',
+      );
     });
 
     it('unknown defaults to claude-code', () => {

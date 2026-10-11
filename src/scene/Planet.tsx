@@ -9,7 +9,7 @@ function hashString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const ch = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + ch;
+    hash = (hash << 5) - hash + ch;
     hash |= 0;
   }
   return Math.abs(hash);
@@ -36,9 +36,9 @@ function getPlanetType(seed: number): PlanetType {
 export type PlanetState = 'active' | 'idle' | 'waiting' | 'error';
 
 export function derivePlanetState(project: ProjectInfo): PlanetState {
-  if (project.agents.some(a => a.status === 'error')) return 'error';
-  if (project.agents.some(a => a.status === 'waiting')) return 'waiting';
-  if (project.agents.some(a => a.status === 'working')) return 'active';
+  if (project.agents.some((a) => a.status === 'error')) return 'error';
+  if (project.agents.some((a) => a.status === 'waiting')) return 'waiting';
+  if (project.agents.some((a) => a.status === 'working')) return 'active';
   return 'idle';
 }
 
@@ -253,22 +253,22 @@ function buildColors(type: PlanetType, rand: () => number): PlanetTypeConfig {
   switch (type) {
     case 'gasGiant':
       return {
-        color1: hsl(20 + rand() * 40, 0.5 + rand() * 0.3, 0.50 + rand() * 0.15),
-        color2: hsl(30 + rand() * 50, 0.4 + rand() * 0.3, 0.40 + rand() * 0.15),
+        color1: hsl(20 + rand() * 40, 0.5 + rand() * 0.3, 0.5 + rand() * 0.15),
+        color2: hsl(30 + rand() * 50, 0.4 + rand() * 0.3, 0.4 + rand() * 0.15),
         color3: hsl(rand() * 30, 0.6 + rand() * 0.2, 0.55 + rand() * 0.1),
         rimColor: hsl(25 + rand() * 20, 0.3, 0.5),
       };
     case 'rocky':
       return {
         color1: hsl(15 + rand() * 30, 0.3 + rand() * 0.25, 0.35 + rand() * 0.15),
-        color2: hsl(30 + rand() * 30, 0.2 + rand() * 0.2, 0.40 + rand() * 0.12),
-        color3: hsl(40 + rand() * 20, 0.15 + rand() * 0.15, 0.50 + rand() * 0.1),
+        color2: hsl(30 + rand() * 30, 0.2 + rand() * 0.2, 0.4 + rand() * 0.12),
+        color3: hsl(40 + rand() * 20, 0.15 + rand() * 0.15, 0.5 + rand() * 0.1),
         rimColor: hsl(25, 0.3, 0.5),
       };
     case 'oceanic':
       return {
         color1: hsl(180 + rand() * 40, 0.5 + rand() * 0.3, 0.38 + rand() * 0.12),
-        color2: hsl(35 + rand() * 25, 0.3 + rand() * 0.2, 0.50 + rand() * 0.1),
+        color2: hsl(35 + rand() * 25, 0.3 + rand() * 0.2, 0.5 + rand() * 0.1),
         color3: hsl(20 + rand() * 30, 0.25 + rand() * 0.2, 0.45 + rand() * 0.1),
         rimColor: hsl(190, 0.5, 0.6),
       };
@@ -305,16 +305,18 @@ function StatusRings({ radius, state }: { radius: number; state: PlanetState }) 
   const color = state === 'error' ? '#ff4444' : '#ffaa44';
 
   const materials = useMemo(() => {
-    const mats = Array.from({ length: RING_COUNT }, () =>
-      new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-      })
+    const mats = Array.from(
+      { length: RING_COUNT },
+      () =>
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          toneMapped: false,
+        }),
     );
     matsRef.current = mats;
     return mats;
@@ -330,7 +332,7 @@ function StatusRings({ radius, state }: { radius: number; state: PlanetState }) 
       const minR = radius * 1.2;
       const maxR = radius * 2.5;
       for (let i = 0; i < RING_COUNT; i++) {
-        const phase = ((t / cycleDuration) + i / RING_COUNT) % 1;
+        const phase = (t / cycleDuration + i / RING_COUNT) % 1;
         const r = minR + phase * (maxR - minR);
         const baseOpacity = 0.9 * (1 - phase);
         const flicker = (Math.sin(t * 37 + i * 13) * 0.5 + 0.5) * 0.15;
@@ -357,8 +359,7 @@ function StatusRings({ radius, state }: { radius: number; state: PlanetState }) 
   return (
     <group ref={ringsRef}>
       {materials.map((mat, i) => (
-        <mesh key={i} material={mat} geometry={ringGeo} rotation={[Math.PI / 2, 0, 0]}>
-        </mesh>
+        <mesh key={i} material={mat} geometry={ringGeo} rotation={[Math.PI / 2, 0, 0]}></mesh>
       ))}
     </group>
   );
@@ -433,8 +434,12 @@ export function Planet({ project, position }: PlanetProps) {
         ref={meshRef}
         material={material}
         onClick={handleClick}
-        onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-        onPointerOut={() => { document.body.style.cursor = 'default'; }}
+        onPointerOver={() => {
+          document.body.style.cursor = 'pointer';
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = 'default';
+        }}
       >
         <sphereGeometry args={[radius, 64, 64]} />
       </mesh>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveEncodedProjectPath, dirNameToPath } from '../utils/projectName';
+import { resolveEncodedProjectPath, dirNameToPath, extractProjectName } from '../utils/projectName';
 
 const encoded = '-Users-alice-work-my-app';
 
@@ -29,14 +29,32 @@ describe('resolveEncodedProjectPath', () => {
       '/Users/alice/Documents/my',
       '/Users/alice/Documents/my/app',
     ]);
-    expect(resolveEncodedProjectPath(name, (path) => existing.has(path))).toBe('/Users/alice/Documents/my-app');
+    expect(resolveEncodedProjectPath(name, (path) => existing.has(path))).toBe(
+      '/Users/alice/Documents/my-app',
+    );
   });
 
   it('falls back to known parent folders and keeps a hyphenated tail when nothing exists', () => {
     const missing = () => false;
-    expect(dirNameToPath('-Users-alice-Documents-GitHub-my-app', missing))
-      .toBe('/Users/alice/Documents/GitHub/my-app');
+    expect(dirNameToPath('-Users-alice-Documents-GitHub-my-app', missing)).toBe(
+      '/Users/alice/Documents/GitHub/my-app',
+    );
     expect(dirNameToPath(encoded, missing)).toBe('/Users/alice/work-my-app');
     expect(dirNameToPath(encoded, missing)).not.toContain('/my/app');
+  });
+});
+
+describe('extractProjectName', () => {
+  it('keeps the tail after known parent folders and a username', () => {
+    expect(extractProjectName('-Users-alice-Documents-GitHub-infinity-canvas')).toBe(
+      'infinity-canvas',
+    );
+    expect(extractProjectName('home-ada-CODE-widgets')).toBe('widgets');
+    expect(extractProjectName('just-a-name')).toBe('name');
+    expect(extractProjectName('-Downloads')).toBe('Downloads');
+  });
+
+  it('uses the real filesystem when no exists callback is passed', () => {
+    expect(resolveEncodedProjectPath('-Users-nobody-missing-project-xyz')).toMatch(/^\//);
   });
 });

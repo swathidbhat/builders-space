@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, chmodSync, unlinkSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  copyFileSync,
+  chmodSync,
+  unlinkSync,
+} from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { logCaught } from '../log';
@@ -82,7 +90,9 @@ exit 0
 export function ensureAppDirs(): void {
   for (const dir of [appDir(), hooksDir(), eventsDir(), backupsDir()]) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
-    try { chmodSync(dir, 0o700); } catch (err) {
+    try {
+      chmodSync(dir, 0o700);
+    } catch (err) {
       logCaught('hookSetup', err, `chmod ${dir}`);
     }
   }
@@ -102,14 +112,13 @@ function getToolStatus(tool: ToolName): ToolStatus {
   if (!existsSync(toolDir)) return 'not_installed';
   if (!existsSync(statusHookScript()) && !existsSync(fireHookScript())) return 'available';
 
-  const filesToCheck = tool === 'codex'
-    ? [getCodexHooksJsonPath()]
-    : [getConfigPath(tool)];
+  const filesToCheck = tool === 'codex' ? [getCodexHooksJsonPath()] : [getConfigPath(tool)];
 
   for (const filePath of filesToCheck) {
     try {
       const content = readFileSync(filePath, 'utf-8');
-      if (content.includes('status-hook.sh') || content.includes('fire-hook.sh')) return 'configured';
+      if (content.includes('status-hook.sh') || content.includes('fire-hook.sh'))
+        return 'configured';
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== 'ENOENT') logCaught('hookSetup', err, filePath);
@@ -121,17 +130,23 @@ function getToolStatus(tool: ToolName): ToolStatus {
 
 function getToolDir(tool: ToolName): string {
   switch (tool) {
-    case 'claude': return join(homedir(), '.claude');
-    case 'cursor': return join(homedir(), '.cursor');
-    case 'codex': return join(homedir(), '.codex');
+    case 'claude':
+      return join(homedir(), '.claude');
+    case 'cursor':
+      return join(homedir(), '.cursor');
+    case 'codex':
+      return join(homedir(), '.codex');
   }
 }
 
 function getConfigPath(tool: ToolName): string {
   switch (tool) {
-    case 'claude': return join(homedir(), '.claude', 'settings.json');
-    case 'cursor': return join(homedir(), '.cursor', 'hooks.json');
-    case 'codex': return join(homedir(), '.codex', 'config.toml');
+    case 'claude':
+      return join(homedir(), '.claude', 'settings.json');
+    case 'cursor':
+      return join(homedir(), '.cursor', 'hooks.json');
+    case 'codex':
+      return join(homedir(), '.codex', 'config.toml');
   }
 }
 
@@ -242,8 +257,8 @@ function mergeCursorHooksIntoConfig(config: {
   const hooks = config.hooks;
   for (const key of CURSOR_HOOK_KEYS) {
     if (!Array.isArray(hooks[key])) hooks[key] = [];
-    let arr = hooks[key].filter(h => !h.command?.includes('fire-hook.sh'));
-    const hasStatus = arr.some(h => h.command?.includes('status-hook.sh'));
+    let arr = hooks[key].filter((h) => !h.command?.includes('fire-hook.sh'));
+    const hasStatus = arr.some((h) => h.command?.includes('status-hook.sh'));
     if (!hasStatus) {
       arr = [...arr, { command: CURSOR_STATUS_HOOK }];
     }
@@ -259,9 +274,7 @@ function enableCursor(manifest: HookManifest): EnableResultMap['cursor'] {
   const configPath = getConfigPath('cursor');
   const freshConfig = {
     version: 1,
-    hooks: Object.fromEntries(
-      CURSOR_HOOK_KEYS.map(k => [k, [{ command: CURSOR_STATUS_HOOK }]]),
-    ),
+    hooks: Object.fromEntries(CURSOR_HOOK_KEYS.map((k) => [k, [{ command: CURSOR_STATUS_HOOK }]])),
   };
 
   try {
@@ -322,9 +335,11 @@ function ensureCodexFeatureFlag(manifest: HookManifest): void {
 
 const CODEX_HOOKS_DEFINITION = {
   hooks: {
-    SessionStart: [{
-      hooks: [{ type: 'command', command: '~/.builders-space/hooks/status-hook.sh' }],
-    }],
+    SessionStart: [
+      {
+        hooks: [{ type: 'command', command: '~/.builders-space/hooks/status-hook.sh' }],
+      },
+    ],
     Stop: [
       { hooks: [{ type: 'command', command: '~/.builders-space/hooks/status-hook.sh' }] },
       { hooks: [{ type: 'command', command: '~/.builders-space/hooks/fire-hook.sh' }] },
@@ -397,14 +412,15 @@ export function disableHooks(): { claude: string; cursor: string; codex: string 
             const before = hooksConfig.hooks[event].length;
             hooksConfig.hooks[event] = hooksConfig.hooks[event].filter(
               (g: { hooks?: Array<{ command?: string }> }) =>
-                !g.hooks?.some(h => isOurHook(h.command))
+                !g.hooks?.some((h) => isOurHook(h.command)),
             );
             if (hooksConfig.hooks[event].length !== before) modified = true;
             if (hooksConfig.hooks[event].length === 0) delete hooksConfig.hooks[event];
           }
 
           if (modified) {
-            if (hooksConfig.hooks && Object.keys(hooksConfig.hooks).length === 0) delete hooksConfig.hooks;
+            if (hooksConfig.hooks && Object.keys(hooksConfig.hooks).length === 0)
+              delete hooksConfig.hooks;
             if (Object.keys(hooksConfig).length === 0) {
               unlinkSync(hooksJsonPath);
             } else {
@@ -448,7 +464,7 @@ export function disableHooks(): { claude: string; cursor: string; codex: string 
           const before = config.hooks[event].length;
           config.hooks[event] = config.hooks[event].filter(
             (h: { hooks?: Array<{ command?: string }> }) =>
-              !h.hooks?.some(hh => isOurHook(hh.command))
+              !h.hooks?.some((hh) => isOurHook(hh.command)),
           );
           if (config.hooks[event].length !== before) modified = true;
           if (config.hooks[event].length === 0) delete config.hooks[event];
@@ -461,7 +477,9 @@ export function disableHooks(): { claude: string; cursor: string; codex: string 
         }
       } else if (tool === 'cursor') {
         const content = readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(content) as { hooks?: Record<string, Array<{ command?: string }>> };
+        const config = JSON.parse(content) as {
+          hooks?: Record<string, Array<{ command?: string }>>;
+        };
         let modified = false;
 
         if (config.hooks && typeof config.hooks === 'object') {

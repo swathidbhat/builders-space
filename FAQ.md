@@ -38,11 +38,11 @@ Each agent gets a space-themed name (like "Nova" or "Atlas") and a colored avata
 
 The three tools don't even agree on what an "agent" is:
 
-- **Cursor** calls it *"tools in a loop"* — describing the mechanism
-- **Claude Code** calls itself *"an agentic coding tool"* — describing the product
-- **Codex** calls itself *"a software engineering agent"* — describing a persona
+- **Cursor** calls it _"tools in a loop"_ — describing the mechanism
+- **Claude Code** calls itself _"an agentic coding tool"_ — describing the product
+- **Codex** calls itself _"a software engineering agent"_ — describing a persona
 
-Builders Space sidesteps this disagreement. It doesn't care what an agent *is* philosophically. It cares what an agent *does*: it works on a project, it has a current action, and it's in one of four states. All three tools are treated as equivalent workers.
+Builders Space sidesteps this disagreement. It doesn't care what an agent _is_ philosophically. It cares what an agent _does_: it works on a project, it has a current action, and it's in one of four states. All three tools are treated as equivalent workers.
 
 ## What can I see about each agent?
 
@@ -105,6 +105,7 @@ The sections below go one level deeper for the curious.
 Two complementary mechanisms:
 
 **File watchers (always active):** Each AI tool writes session files to specific folders as it works. Builders Space watches those folders for changes:
+
 - **Cursor** stores conversation transcripts in `~/.cursor/projects/`
 - **Claude Code** stores session logs in `~/.claude/projects/`
 - **Codex** stores session logs in `~/.codex/sessions/`

@@ -13,10 +13,10 @@ const PLANET_TYPES: PlanetType[] = ['gasGiant', 'rocky', 'oceanic', 'volcanic', 
 const STATUS_Z: Record<string, number> = { working: 0, waiting: 1, error: 2 };
 
 const TERRAIN_PAL: Record<PlanetType, { hi: string; mid: string; lo: string }> = {
-  rocky:    { hi: '#7a6a5a', mid: '#5a4a3a', lo: '#3a3228' },
-  oceanic:  { hi: '#3a7a8a', mid: '#2a5a6a', lo: '#1a3a4a' },
+  rocky: { hi: '#7a6a5a', mid: '#5a4a3a', lo: '#3a3228' },
+  oceanic: { hi: '#3a7a8a', mid: '#2a5a6a', lo: '#1a3a4a' },
   volcanic: { hi: '#7a3a2a', mid: '#4a2a2a', lo: '#2a1a1a' },
-  ice:      { hi: '#7a8a9a', mid: '#5a6a7a', lo: '#3a4a5a' },
+  ice: { hi: '#7a8a9a', mid: '#5a6a7a', lo: '#3a4a5a' },
   gasGiant: { hi: '#7a6a4a', mid: '#5a4a2a', lo: '#3a2a18' },
 };
 
@@ -46,16 +46,82 @@ const STAND = [
 ];
 
 const DIG = [
-  ['..hhh..p...', '.hhhhh.p...', '.seses.p...', '..sss......', '..ttt......', '.ttttt.....', '.ttttt.....', '..ttt......', '..l.l......', '..l.l......'],
-  ['..hhh......', '.hhhhh.....', '.seses.....', '..sss......', '..ttt......', '.tttttppp..', '.ttttt.....', '..ttt......', '..l.l......', '..l.l......'],
-  ['..hhh......', '.hhhhh.....', '.seses.....', '..sss......', '..ttt......', '.ttttt.....', '.ttttt.....', '..tttpp....', '..l.l.p....', '..l.l.d..d.'],
-  ['..hhh......', '.hhhhh.....', '.seses.....', '..sss......', '..ttt......', '.tttttppp..', '.ttttt.....', '..ttt......', '..l.l......', '..l.l......'],
+  [
+    '..hhh..p...',
+    '.hhhhh.p...',
+    '.seses.p...',
+    '..sss......',
+    '..ttt......',
+    '.ttttt.....',
+    '.ttttt.....',
+    '..ttt......',
+    '..l.l......',
+    '..l.l......',
+  ],
+  [
+    '..hhh......',
+    '.hhhhh.....',
+    '.seses.....',
+    '..sss......',
+    '..ttt......',
+    '.tttttppp..',
+    '.ttttt.....',
+    '..ttt......',
+    '..l.l......',
+    '..l.l......',
+  ],
+  [
+    '..hhh......',
+    '.hhhhh.....',
+    '.seses.....',
+    '..sss......',
+    '..ttt......',
+    '.ttttt.....',
+    '.ttttt.....',
+    '..tttpp....',
+    '..l.l.p....',
+    '..l.l.d..d.',
+  ],
+  [
+    '..hhh......',
+    '.hhhhh.....',
+    '.seses.....',
+    '..sss......',
+    '..ttt......',
+    '.tttttppp..',
+    '.ttttt.....',
+    '..ttt......',
+    '..l.l......',
+    '..l.l......',
+  ],
 ];
 
 const WALK = [
-  ['..hhh..', '.hhhhh.', '.seses.', '..sss..', '..ttt..', '.ttttt.', '.ttttt.', '..ttt..', '.l...l.', '.l...l.'],
+  [
+    '..hhh..',
+    '.hhhhh.',
+    '.seses.',
+    '..sss..',
+    '..ttt..',
+    '.ttttt.',
+    '.ttttt.',
+    '..ttt..',
+    '.l...l.',
+    '.l...l.',
+  ],
   STAND,
-  ['..hhh..', '.hhhhh.', '.seses.', '..sss..', '..ttt..', '.ttttt.', '.ttttt.', '..ttt..', '..ll...', '..ll...'],
+  [
+    '..hhh..',
+    '.hhhhh.',
+    '.seses.',
+    '..sss..',
+    '..ttt..',
+    '.ttttt.',
+    '.ttttt.',
+    '..ttt..',
+    '..ll...',
+    '..ll...',
+  ],
   STAND,
 ];
 
@@ -73,7 +139,7 @@ const SIT = [
 function hash(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h) + s.charCodeAt(i);
+    h = (h << 5) - h + s.charCodeAt(i);
     h |= 0;
   }
   return Math.abs(h);
@@ -125,7 +191,10 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
   );
 
   const visible = useMemo(
-    () => agents.filter(a => a.status === 'working' || a.status === 'error' || a.status === 'waiting'),
+    () =>
+      agents.filter(
+        (a) => a.status === 'working' || a.status === 'error' || a.status === 'waiting',
+      ),
     [agents],
   );
 
@@ -134,8 +203,7 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
     const h: number[] = [];
     for (let x = 0; x < PX_W; x++) h.push(GROUND_MIN + ((r() * 4) | 0));
     for (let p = 0; p < 3; p++)
-      for (let i = 1; i < h.length - 1; i++)
-        h[i] = ((h[i - 1] + h[i] + h[i + 1] + 1) / 3) | 0;
+      for (let i = 1; i < h.length - 1; i++) h[i] = ((h[i - 1] + h[i] + h[i + 1] + 1) / 3) | 0;
     return h;
   }, [projectName]);
 
@@ -152,7 +220,7 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
     const r = prng(hash(projectName + '_dm'));
     return Array.from({ length: 5 }, () => ({
       x: r() * PX_W,
-      y: (PX_H - GROUND_MIN - 16) + r() * 10,
+      y: PX_H - GROUND_MIN - 16 + r() * 10,
       speed: 0.04 + r() * 0.08,
       drift: r() * Math.PI * 2,
       brightness: 0.06 + r() * 0.1,
@@ -163,8 +231,11 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
     () =>
       visible.map((a, i) => {
         if (a.status === 'working') {
-          const maxR = Math.max(3, ((PX_W / (visible.length + 1)) / 2 - 5) | 0);
-          return { kind: (i % 3 === 0 ? 'walk' : 'dig') as 'walk' | 'dig', range: Math.min(10, maxR) };
+          const maxR = Math.max(3, (PX_W / (visible.length + 1) / 2 - 5) | 0);
+          return {
+            kind: (i % 3 === 0 ? 'walk' : 'dig') as 'walk' | 'dig',
+            range: Math.min(10, maxR),
+          };
         }
         if (a.status === 'error') return { kind: 'shake' as const, range: 0 };
         return { kind: 'rest' as const, range: 0 };
@@ -264,7 +335,7 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
           }
           case 'rest':
             sp = SIT;
-            flip = ((f + i * 73) % 300) > 260;
+            flip = (f + i * 73) % 300 > 260;
             break;
         }
 
@@ -333,9 +404,10 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
               const ey = gTop - t * 16;
               const ea = (1 - t * 1.2) * 0.6;
               if (ea > 0) {
-                ctx.fillStyle = p % 2 === 0
-                  ? `rgba(255,130,40,${ea.toFixed(2)})`
-                  : `rgba(255,55,35,${ea.toFixed(2)})`;
+                ctx.fillStyle =
+                  p % 2 === 0
+                    ? `rgba(255,130,40,${ea.toFixed(2)})`
+                    : `rgba(255,55,35,${ea.toFixed(2)})`;
                 ctx.fillRect(ex | 0, ey | 0, 1, 1);
               }
             }

@@ -1,5 +1,13 @@
 import { watch } from 'chokidar';
-import { readFileSync, unlinkSync, existsSync, readdirSync, statSync, mkdirSync, chmodSync } from 'fs';
+import {
+  readFileSync,
+  unlinkSync,
+  existsSync,
+  readdirSync,
+  statSync,
+  mkdirSync,
+  chmodSync,
+} from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import { StateManager } from '../stateManager';
@@ -28,9 +36,11 @@ export function acceptEventTime(fileMtimeMs: number, now = Date.now()): number |
 
 /** Cursor common-schema signals (see https://cursor.com/docs/hooks). */
 function isCursorPayload(event: Record<string, unknown>): boolean {
-  return event.cursor_version !== undefined
-    || Array.isArray(event.workspace_roots)
-    || event.transcript_path !== undefined;
+  return (
+    event.cursor_version !== undefined ||
+    Array.isArray(event.workspace_roots) ||
+    event.transcript_path !== undefined
+  );
 }
 
 export function detectSource(event: Record<string, unknown>): AgentSource {
@@ -56,14 +66,16 @@ export function extractCwd(event: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-function modeForSource(_source: AgentSource): 'realtime' {
-  return 'realtime';
-}
-
-export function normalizeFireEvent(event: Record<string, unknown>, at = Date.now()): HookRuntimeEntry {
+export function normalizeFireEvent(
+  event: Record<string, unknown>,
+  at = Date.now(),
+): HookRuntimeEntry {
   const source = detectSource(event);
   const sessionId = extractSessionId(event);
-  const reason = (event.error_message || event.reason || event.status || 'Session ended with error') as string;
+  const reason = (event.error_message ||
+    event.reason ||
+    event.status ||
+    'Session ended with error') as string;
   const cwd = extractCwd(event);
 
   return {
@@ -74,7 +86,7 @@ export function normalizeFireEvent(event: Record<string, unknown>, at = Date.now
     errorReason: reason,
     lastEventAt: at,
     terminal: true,
-    mode: modeForSource(source),
+    mode: 'realtime',
   };
 }
 
@@ -83,7 +95,7 @@ function isStopHookError(event: Record<string, unknown>): boolean {
   if (status === 'error') return true;
   if (typeof status === 'string' && status.toLowerCase() === 'error') return true;
   if (event.reason === 'error') return true;
-  if (Boolean(event.error_message)) return true;
+  if (event.error_message) return true;
   return false;
 }
 
@@ -93,19 +105,24 @@ function isCursorStopCompletedOrAborted(event: Record<string, unknown>): boolean
   return s === 'completed' || s === 'aborted';
 }
 
-export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.now()): HookRuntimeEntry | null {
+export function normalizeStatusEvent(
+  event: Record<string, unknown>,
+  at = Date.now(),
+): HookRuntimeEntry | null {
   const source = detectSource(event);
   const sessionId = extractSessionId(event);
   const cwd = extractCwd(event);
   const hookEvent = (event.hook_event_name || event.event || '') as string;
-  const mode = modeForSource(source);
+  const mode = 'realtime' as const;
 
   switch (hookEvent) {
     case 'SessionStart':
     case 'session_start':
     case 'sessionStart':
       return {
-        source, sessionId, cwd,
+        source,
+        sessionId,
+        cwd,
         status: 'working',
         lastEventAt: at,
         terminal: false,
@@ -118,7 +135,9 @@ export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.n
       const toolInput = event.tool_input as Record<string, unknown> | undefined;
       const action = toolName ? formatToolUse(toolName, toolInput) : undefined;
       return {
-        source, sessionId, cwd,
+        source,
+        sessionId,
+        cwd,
         status: 'working',
         lastAction: action,
         lastEventAt: at,
@@ -131,7 +150,9 @@ export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.n
     case 'stop': {
       if (isCursorStopCompletedOrAborted(event)) {
         return {
-          source, sessionId, cwd,
+          source,
+          sessionId,
+          cwd,
           status: 'waiting',
           lastEventAt: at,
           terminal: false,
@@ -140,9 +161,13 @@ export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.n
       }
 
       if (isStopHookError(event)) {
-        const reason = (event.error_message || event.reason || 'Agent stopped with error') as string;
+        const reason = (event.error_message ||
+          event.reason ||
+          'Agent stopped with error') as string;
         return {
-          source, sessionId, cwd,
+          source,
+          sessionId,
+          cwd,
           status: 'error',
           errorReason: reason,
           lastEventAt: at,
@@ -152,7 +177,9 @@ export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.n
       }
 
       return {
-        source, sessionId, cwd,
+        source,
+        sessionId,
+        cwd,
         status: 'waiting',
         lastEventAt: at,
         terminal: false,
@@ -165,9 +192,13 @@ export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.n
     case 'sessionEnd': {
       const reasonStr = typeof event.reason === 'string' ? event.reason : '';
       if (reasonStr === 'error') {
-        const errMsg = (event.error_message || event.final_status || 'Session ended with error') as string;
+        const errMsg = (event.error_message ||
+          event.final_status ||
+          'Session ended with error') as string;
         return {
-          source, sessionId, cwd,
+          source,
+          sessionId,
+          cwd,
           status: 'error',
           errorReason: errMsg,
           lastEventAt: at,
@@ -177,7 +208,9 @@ export function normalizeStatusEvent(event: Record<string, unknown>, at = Date.n
       }
 
       return {
-        source, sessionId, cwd,
+        source,
+        sessionId,
+        cwd,
         status: 'done',
         lastEventAt: at,
         terminal: true,
@@ -232,7 +265,7 @@ export class EventWatcher {
 
   private processExistingEvents(): void {
     try {
-      const files = readdirSync(this.eventsDir).filter(f => f.endsWith('.json'));
+      const files = readdirSync(this.eventsDir).filter((f) => f.endsWith('.json'));
       for (const file of files) {
         this.processEvent(join(this.eventsDir, file));
       }
@@ -251,7 +284,9 @@ export class EventWatcher {
       const fileName = basename(filePath);
 
       if (at === null) {
-        console.warn(`[EventWatcher] Dropping stale event ${fileName} (file mtime ${new Date(mtimeMs).toISOString()})`);
+        console.warn(
+          `[EventWatcher] Dropping stale event ${fileName} (file mtime ${new Date(mtimeMs).toISOString()})`,
+        );
         unlinkSync(filePath);
         return;
       }
@@ -271,7 +306,9 @@ export class EventWatcher {
       unlinkSync(filePath);
     } catch (err) {
       logCaught('EventWatcher', err, filePath);
-      try { unlinkSync(filePath); } catch (unlinkErr) {
+      try {
+        unlinkSync(filePath);
+      } catch (unlinkErr) {
         logCaught('EventWatcher', unlinkErr, `removing ${filePath}`);
       }
     }

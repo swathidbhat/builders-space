@@ -84,18 +84,8 @@ export function Starfield({ count = 5000 }) {
           array={positions}
           itemSize={3}
         />
-        <bufferAttribute
-          attach="attributes-color"
-          count={count}
-          array={colors}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-aSize"
-          count={count}
-          array={sizes}
-          itemSize={1}
-        />
+        <bufferAttribute attach="attributes-color" count={count} array={colors} itemSize={3} />
+        <bufferAttribute attach="attributes-aSize" count={count} array={sizes} itemSize={1} />
       </bufferGeometry>
       <shaderMaterial
         vertexShader={starVertexShader}

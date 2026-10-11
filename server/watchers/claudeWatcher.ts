@@ -100,7 +100,9 @@ export class ClaudeWatcher {
           const cwd = execSync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | head -1`, {
             encoding: 'utf-8',
             timeout: 3000,
-          }).trim().replace(/^n/, '');
+          })
+            .trim()
+            .replace(/^n/, '');
           if (cwd) cwds.add(stripSlash(cwd));
         } catch {
           // Process exited or lsof has no cwd. Not a scan failure.
@@ -118,8 +120,8 @@ export class ClaudeWatcher {
     let projectDirs: string[];
     try {
       projectDirs = readdirSync(this.claudeBase, { withFileTypes: true })
-        .filter(d => d.isDirectory())
-        .map(d => d.name);
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
     } catch (err) {
       logCaught('ClaudeWatcher', err, `reading ${this.claudeBase}`);
       this.onChange(new Map());
@@ -135,7 +137,7 @@ export class ClaudeWatcher {
 
       let sessionFiles: string[];
       try {
-        sessionFiles = readdirSync(dirPath).filter(f => f.endsWith('.jsonl'));
+        sessionFiles = readdirSync(dirPath).filter((f) => f.endsWith('.jsonl'));
       } catch (err) {
         logCaught('ClaudeWatcher', err, `reading ${dirPath}`);
         continue;
@@ -150,13 +152,12 @@ export class ClaudeWatcher {
 
         if (data.slug) bestSlug = data.slug;
 
-        const projectPath = data.cwd && isAbsolute(data.cwd)
-          ? stripSlash(data.cwd)
-          : resolveEncodedProjectPath(dirName);
+        const projectPath =
+          data.cwd && isAbsolute(data.cwd)
+            ? stripSlash(data.cwd)
+            : resolveEncodedProjectPath(dirName);
 
-        const isProcessRunning = data.cwd
-          ? runningCwds.has(stripSlash(data.cwd))
-          : false;
+        const isProcessRunning = data.cwd ? runningCwds.has(stripSlash(data.cwd)) : false;
 
         let status: AgentStatus;
         if (data.isActive) {
@@ -190,7 +191,9 @@ export class ClaudeWatcher {
 
       const groups = new Map<string, AgentInfo[]>();
       for (const agent of agents) {
-        const key = stripSlash(agent.sessionMeta?.projectPath || resolveEncodedProjectPath(dirName));
+        const key = stripSlash(
+          agent.sessionMeta?.projectPath || resolveEncodedProjectPath(dirName),
+        );
         const list = groups.get(key) ?? [];
         list.push(agent);
         groups.set(key, list);

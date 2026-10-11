@@ -12,7 +12,7 @@ export interface TranscriptData {
 
 export function parseTranscriptDir(dirPath: string): TranscriptData | null {
   try {
-    const files = readdirSync(dirPath).filter(f => f.endsWith('.jsonl'));
+    const files = readdirSync(dirPath).filter((f) => f.endsWith('.jsonl'));
     if (files.length === 0) return null;
     files.sort((a, b) => {
       try {
@@ -41,7 +41,9 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
 
     try {
       lastModifiedMs = statSync(filePath).mtimeMs;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     for (const line of lines) {
       try {
@@ -78,7 +80,10 @@ function parseTranscriptJsonl(filePath: string): TranscriptData | null {
   }
 }
 
-function extractCwdFromEntry(entry: { cwd?: unknown; workspace_roots?: unknown }): string | undefined {
+function extractCwdFromEntry(entry: {
+  cwd?: unknown;
+  workspace_roots?: unknown;
+}): string | undefined {
   if (typeof entry.cwd === 'string' && entry.cwd.startsWith('/')) return entry.cwd;
   const roots = entry.workspace_roots;
   if (Array.isArray(roots) && typeof roots[0] === 'string' && roots[0].startsWith('/')) {
@@ -103,7 +108,9 @@ export function parseTranscriptFile(filePath: string): TranscriptData | null {
     let lastModifiedMs = 0;
     try {
       lastModifiedMs = statSync(filePath).mtimeMs;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     const ageMs = Date.now() - lastModifiedMs;
     const isRecentlyActive = ageMs < 2 * 60 * 1000;
@@ -147,12 +154,13 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
         const ts = entry.timestamp ? new Date(entry.timestamp).getTime() : 0;
 
         if (entry.type === 'user' && entry.message?.content) {
-          const msgContent = typeof entry.message.content === 'string'
-            ? entry.message.content
-            : entry.message.content
-                .filter((c: { type: string }) => c.type === 'text')
-                .map((c: { text: string }) => c.text)
-                .join(' ');
+          const msgContent =
+            typeof entry.message.content === 'string'
+              ? entry.message.content
+              : entry.message.content
+                  .filter((c: { type: string }) => c.type === 'text')
+                  .map((c: { text: string }) => c.text)
+                  .join(' ');
 
           if (ts >= latestTimestamp && msgContent.length > 0) {
             latestTimestamp = ts;
@@ -161,14 +169,18 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
         }
 
         if (entry.type === 'assistant' && entry.message?.content) {
-          const contentBlocks: Array<{ type: string; name?: string; text?: string; input?: Record<string, unknown> }> =
-            Array.isArray(entry.message.content) ? entry.message.content : [];
+          const contentBlocks: Array<{
+            type: string;
+            name?: string;
+            text?: string;
+            input?: Record<string, unknown>;
+          }> = Array.isArray(entry.message.content) ? entry.message.content : [];
 
-          const toolUse = [...contentBlocks].reverse().find(c => c.type === 'tool_use');
+          const toolUse = [...contentBlocks].reverse().find((c) => c.type === 'tool_use');
           if (toolUse && toolUse.name) {
             lastAction = formatToolUse(toolUse.name, toolUse.input);
           } else {
-            const textBlock = [...contentBlocks].reverse().find(c => c.type === 'text' && c.text);
+            const textBlock = [...contentBlocks].reverse().find((c) => c.type === 'text' && c.text);
             if (textBlock?.text) {
               lastAction = extractFirstSentence(textBlock.text);
             }
@@ -183,9 +195,17 @@ export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | nu
 
     if (!sessionId) return null;
 
-    const isActive = (Date.now() - latestTimestamp) < 2 * 60 * 1000;
+    const isActive = Date.now() - latestTimestamp < 2 * 60 * 1000;
 
-    return { sessionId, cwd, latestTask, lastAction, slug, isActive, lastActivityMs: latestTimestamp };
+    return {
+      sessionId,
+      cwd,
+      latestTask,
+      lastAction,
+      slug,
+      isActive,
+      lastActivityMs: latestTimestamp,
+    };
   } catch (err) {
     logCaught('parseClaudeSessionFile', err, filePath);
     return null;
@@ -238,7 +258,7 @@ export function formatToolUse(toolName: string, input?: Record<string, unknown>)
       return shortPath ? `Edit:${shortPath}` : 'Edit';
     case 'Shell':
     case 'Bash': {
-      const cmd = shortenPaths(((input.command || '') as string)).slice(0, 60);
+      const cmd = shortenPaths((input.command || '') as string).slice(0, 60);
       return cmd ? `Shell:${cmd}` : 'Shell';
     }
     case 'Grep':

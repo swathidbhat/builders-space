@@ -98,7 +98,10 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
       methods: ['GET', 'POST'],
       allowedHeaders: ['Content-Type', 'Authorization'],
     },
-    allowRequest: (req: { headers: { origin?: string } }, callback: (err: string | null, ok: boolean) => void) => {
+    allowRequest: (
+      req: { headers: { origin?: string } },
+      callback: (err: string | null, ok: boolean) => void,
+    ) => {
       const origin = req.headers.origin;
       if (origin && !isLoopbackOrigin(origin)) {
         callback('Origin not allowed', false);
@@ -257,10 +260,17 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
     claudeWatcher.stop();
     codexWatcher.stop();
     eventWatcher.stop();
-    await Promise.all(socketServers.map((io) => new Promise<void>((resolve) => io.close(() => resolve()))));
-    await Promise.all(httpServers.map((server) => new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    })));
+    await Promise.all(
+      socketServers.map((io) => new Promise<void>((resolve) => io.close(() => resolve()))),
+    );
+    await Promise.all(
+      httpServers.map(
+        (server) =>
+          new Promise<void>((resolve) => {
+            server.close(() => resolve());
+          }),
+      ),
+    );
   }
 
   return { token, stateManager, httpServers, listen, close };

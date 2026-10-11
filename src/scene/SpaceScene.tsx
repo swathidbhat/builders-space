@@ -2,6 +2,7 @@ import { Suspense, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Starfield } from './Starfield';
 import { Planet } from './Planet';
 import { useSpaceStore } from '../store';
@@ -17,7 +18,7 @@ function CameraController() {
   const selectedId = useSpaceStore((s) => s.selectedPlanetId);
   const projects = useSpaceStore((s) => s.projects);
   const cameraMode = useSpaceStore((s) => s.cameraMode);
-  const controlsRef = useRef<any>(null);
+  const controlsRef = useRef<OrbitControlsImpl>(null);
 
   const targetPos = useRef(new THREE.Vector3(0, 20, 30));
   const targetLookAt = useRef(new THREE.Vector3(0, 0, 0));
@@ -31,8 +32,7 @@ function CameraController() {
 
   useEffect(() => {
     const selectionChanged =
-      cameraMode !== prevSelection.current.mode ||
-      selectedId !== prevSelection.current.id;
+      cameraMode !== prevSelection.current.mode || selectedId !== prevSelection.current.id;
 
     if (cameraMode === 'planet' && selectedId) {
       const idx = projects.findIndex((p) => p.id === selectedId);
@@ -42,8 +42,7 @@ function CameraController() {
         targetLookAt.current.set(x, y, z);
       }
     } else {
-      const maxR =
-        ringRadii.length > 0 ? Math.max(...ringRadii) : 10;
+      const maxR = ringRadii.length > 0 ? Math.max(...ringRadii) : 10;
       const fovRad = (60 / 2) * (Math.PI / 180);
       const fitDist = (maxR * 1.5) / Math.tan(fovRad);
       const dist = Math.max(14, fitDist);
@@ -136,11 +135,17 @@ function Nebula() {
 
       const t = Math.random();
       if (t < 0.33) {
-        col[i3] = 0.2; col[i3 + 1] = 0.06; col[i3 + 2] = 0.4;
+        col[i3] = 0.2;
+        col[i3 + 1] = 0.06;
+        col[i3 + 2] = 0.4;
       } else if (t < 0.66) {
-        col[i3] = 0.06; col[i3 + 1] = 0.12; col[i3 + 2] = 0.3;
+        col[i3] = 0.06;
+        col[i3 + 1] = 0.12;
+        col[i3 + 2] = 0.3;
       } else {
-        col[i3] = 0.3; col[i3 + 1] = 0.06; col[i3 + 2] = 0.12;
+        col[i3] = 0.3;
+        col[i3 + 1] = 0.06;
+        col[i3 + 2] = 0.12;
       }
 
       sz[i] = 40 + Math.random() * 80;
@@ -158,7 +163,12 @@ function Nebula() {
   return (
     <points ref={ref}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
+        <bufferAttribute
+          attach="attributes-position"
+          count={count}
+          array={positions}
+          itemSize={3}
+        />
         <bufferAttribute attach="attributes-color" count={count} array={colors} itemSize={3} />
         <bufferAttribute attach="attributes-aSize" count={count} array={sizes} itemSize={1} />
       </bufferGeometry>
@@ -181,11 +191,7 @@ function PlanetSystem() {
   return (
     <>
       {projects.map((project, i) => (
-        <Planet
-          key={project.id}
-          project={project}
-          position={positions[i]}
-        />
+        <Planet key={project.id} project={project} position={positions[i]} />
       ))}
     </>
   );
@@ -234,7 +240,6 @@ export function SpaceScene() {
       </Suspense>
 
       <CameraController />
-
     </Canvas>
   );
 }

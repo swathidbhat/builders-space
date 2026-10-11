@@ -87,8 +87,8 @@ export class CursorWatcher {
     let projectDirs: string[];
     try {
       projectDirs = readdirSync(this.cursorBase, { withFileTypes: true })
-        .filter(d => d.isDirectory())
-        .map(d => d.name);
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
     } catch (err) {
       logCaught('CursorWatcher', err, `reading ${this.cursorBase}`);
       this.onChange(new Map());
@@ -117,7 +117,7 @@ export class CursorWatcher {
               if (transcriptAgeMs > MAX_AGE_MS) continue;
 
               const agentId = `cursor-agent-${entry.name}`;
-              if (agents.some(a => a.id === agentId)) continue;
+              if (agents.some((a) => a.id === agentId)) continue;
 
               if (data.cwd && isAbsolute(data.cwd)) cwdFromSession = stripSlash(data.cwd);
 
@@ -150,7 +150,7 @@ export class CursorWatcher {
               if (txtAgeMs > MAX_AGE_MS) continue;
 
               const agentId = `cursor-agent-${basename(entry.name, '.txt')}`;
-              if (agents.some(a => a.id === agentId)) continue;
+              if (agents.some((a) => a.id === agentId)) continue;
 
               let status: AgentStatus;
               if (data.isRecentlyActive) {
@@ -183,7 +183,9 @@ export class CursorWatcher {
       if (agents.length === 0) continue;
 
       const path = cwdFromSession ?? resolveEncodedProjectPath(dirName);
-      const name = cwdFromSession ? (basename(path) || extractProjectName(dirName)) : extractProjectName(dirName);
+      const name = cwdFromSession
+        ? basename(path) || extractProjectName(dirName)
+        : extractProjectName(dirName);
 
       for (const agent of agents) {
         if (agent.sessionMeta) agent.sessionMeta.projectPath = path;

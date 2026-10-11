@@ -78,16 +78,20 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   }, [agent.source, agent.id, agent.sessionMeta]);
 
   const dotColor = STATUS_DOT_COLORS[agent.status] || '#666';
-  const dotGlow = agent.status === 'working' || agent.status === 'waiting' || agent.status === 'error'
-    ? `0 0 6px ${dotColor}` : 'none';
+  const dotGlow =
+    agent.status === 'working' || agent.status === 'waiting' || agent.status === 'error'
+      ? `0 0 6px ${dotColor}`
+      : 'none';
 
-  const badgeBg = agent.status === 'waiting' ? 'rgba(255,170,68,0.15)'
-    : agent.status === 'error' ? 'rgba(255,68,68,0.15)'
-    : 'rgba(255,255,255,0.06)';
+  const badgeBg =
+    agent.status === 'waiting'
+      ? 'rgba(255,170,68,0.15)'
+      : agent.status === 'error'
+        ? 'rgba(255,68,68,0.15)'
+        : 'rgba(255,255,255,0.06)';
 
-  const badgeColor = agent.status === 'waiting' ? '#ffaa44'
-    : agent.status === 'error' ? '#ff4444'
-    : '#aaa';
+  const badgeColor =
+    agent.status === 'waiting' ? '#ffaa44' : agent.status === 'error' ? '#ff4444' : '#aaa';
 
   return (
     <div
@@ -150,14 +154,18 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
               </span>
             </div>
             {agent.title && (
-              <span style={{ fontSize: '11px', color: '#888', fontStyle: 'italic', lineHeight: 1.2 }}>
+              <span
+                style={{ fontSize: '11px', color: '#888', fontStyle: 'italic', lineHeight: 1.2 }}
+              >
                 {agent.title}
               </span>
             )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+        <div
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}
+        >
           <div
             style={{
               width: '8px',
@@ -184,10 +192,12 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
 
       <div style={{ fontSize: '12px', color: '#c0c0c0', lineHeight: '1.4', paddingLeft: '42px' }}>
         {agent.status === 'error' && agent.errorReason
-          ? (humanLingo ? (humanizedError || agent.errorReason) : agent.errorReason)
+          ? humanLingo
+            ? humanizedError || agent.errorReason
+            : agent.errorReason
           : humanLingo
-            ? (humanized || agent.lastAction || '')
-            : (agent.lastAction || '')}
+            ? humanized || agent.lastAction || ''
+            : agent.lastAction || ''}
       </div>
 
       {toast && (

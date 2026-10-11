@@ -19,7 +19,11 @@ export function extractProjectName(dirName: string): string {
     if (knownParents.includes(segments[i])) {
       lastKnownIdx = i;
 
-      if (userRoots.includes(segments[i]) && i + 1 < segments.length && !knownParents.includes(segments[i + 1])) {
+      if (
+        userRoots.includes(segments[i]) &&
+        i + 1 < segments.length &&
+        !knownParents.includes(segments[i + 1])
+      ) {
         lastKnownIdx = i + 1;
         i++;
       }
@@ -56,7 +60,10 @@ function directoryExists(path: string): boolean {
  *
  * Callers that have a session `cwd` should use that and not this decoder.
  */
-export function resolveEncodedProjectPath(dirName: string, exists: PathExists = directoryExists): string {
+export function resolveEncodedProjectPath(
+  dirName: string,
+  exists: PathExists = directoryExists,
+): string {
   const probed = probeEncodedPath(dirName, exists);
   if (probed) return probed;
   return legacyDirNameToPath(dirName);
