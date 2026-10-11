@@ -1,7 +1,12 @@
 import { readdirSync, existsSync } from 'fs';
 import { join, basename, isAbsolute } from 'path';
 import { homedir } from 'os';
-import { parseTranscriptDir, parseTranscriptFile } from '../utils/parseTranscript';
+import {
+  beginCursorParseScan,
+  endCursorParseScan,
+  parseTranscriptDir,
+  parseTranscriptFile,
+} from '../utils/parseTranscript';
 import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
@@ -94,6 +99,15 @@ export class CursorWatcher {
       return;
     }
 
+    beginCursorParseScan();
+    try {
+      this.scanProjects(projectDirs);
+    } finally {
+      endCursorParseScan();
+    }
+  }
+
+  private scanProjects(projectDirs: string[]): void {
     for (const dirName of projectDirs) {
       if (/^\d+$/.test(dirName)) continue;
 

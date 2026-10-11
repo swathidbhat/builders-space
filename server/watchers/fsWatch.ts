@@ -9,10 +9,13 @@ export interface JsonlWatch {
   close: () => Promise<void>;
 }
 
+const SESSION_EXTENSIONS = ['.jsonl', '.txt'];
+
 /**
- * Watch a directory tree for .jsonl files.
+ * Watch a directory tree for session logs.
  * Chokidar does not expand globs, so the root is a real directory and
- * non-jsonl files are ignored. Directories are never ignored, or recursion stops.
+ * unrelated files are ignored. Directories are never ignored, or recursion stops.
+ * `.txt` is included because Cursor still parses those transcripts.
  */
 export function watchJsonlTree(root: string, onSignal: () => void, label: string): JsonlWatch {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -32,7 +35,8 @@ export function watchJsonlTree(root: string, onSignal: () => void, label: string
   const watcher: FSWatcher = watch(root, {
     ignoreInitial: true,
     awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
-    ignored: (filePath, stats) => Boolean(stats?.isFile() && !filePath.endsWith('.jsonl')),
+    ignored: (filePath, stats) =>
+      Boolean(stats?.isFile() && !SESSION_EXTENSIONS.some((ext) => filePath.endsWith(ext))),
   });
 
   watcher.on('add', schedule);

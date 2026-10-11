@@ -3,13 +3,25 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import {
+  beginClaudeParseScan,
+  beginCursorParseScan,
+  endClaudeParseScan,
+  endCursorParseScan,
   formatToolUse,
   parseClaudeSessionFile,
   parseTranscriptDir,
   parseTranscriptFile,
   shortenPaths,
+  transcriptCacheSize,
+  transcriptTxtTailLength,
 } from '../utils/parseTranscript';
-import { parseCodexSessionFile, parseCodexSessionMeta } from '../utils/parseCodexSession';
+import {
+  beginCodexParseScan,
+  codexCacheSize,
+  endCodexParseScan,
+  parseCodexSessionFile,
+  parseCodexSessionMeta,
+} from '../utils/parseCodexSession';
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), 'bs-parse-'));
@@ -311,5 +323,77 @@ describe('Codex session parser', () => {
     write(dir, 'nometa.jsonl', '{}\n');
     expect(parseCodexSessionMeta(join(dir, 'nometa.jsonl'))).toBeNull();
     expect(parseCodexSessionFile(join(dir, 'nometa.jsonl'))).toBeNull();
+  });
+
+  it('keeps a Codex header until mtime changes and drops headers the scan did not see', () => {
+    const dir = tempDir();
+    const file = write(
+      dir,
+      'rollout.jsonl',
+      JSON.stringify({
+        type: 'session_meta',
+        payload: { id: 'header-a', cwd: '/tmp/lumen-lab' },
+      }) + '\n',
+    );
+    const stamp = new Date('2020-01-01T00:00:00Z');
+    utimesSync(file, stamp, stamp);
+    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-a');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        type: 'session_meta',
+        payload: { id: 'header-b', cwd: '/tmp/lumen-lab' },
+      }) + '\n',
+    );
+    utimesSync(file, stamp, stamp);
+    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-a');
+    const changed = new Date('2020-01-01T00:00:02Z');
+    utimesSync(file, changed, changed);
+    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-b');
+
+    beginCodexParseScan();
+    endCodexParseScan();
+    expect(codexCacheSize()).toBe(0);
+    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-b');
+  });
+});
+
+describe('parse caches', () => {
+  it('does not keep the whole txt body and drops files the latest scan skipped', () => {
+    beginCursorParseScan();
+    endCursorParseScan();
+    beginClaudeParseScan();
+    endClaudeParseScan();
+
+    const dir = tempDir();
+    const txt = write(
+      dir,
+      'chat.txt',
+      `<user_query>rename the sidebar</user_query>\n${'x'.repeat(20_000)}`,
+    );
+    expect(parseTranscriptFile(txt)?.userQuery).toBe('rename the sidebar');
+    const tail = transcriptTxtTailLength(txt);
+    expect(tail).not.toBeNull();
+    expect(tail!).toBeLessThanOrEqual(8_192);
+
+    beginCursorParseScan();
+    endCursorParseScan();
+    expect(transcriptTxtTailLength(txt)).toBeNull();
+
+    const claude = write(
+      dir,
+      'sess.jsonl',
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'sess-cache',
+        cwd: '/tmp/lumen-lab',
+        timestamp: new Date().toISOString(),
+        message: { role: 'user', content: 'hello' },
+      }) + '\n',
+    );
+    expect(parseClaudeSessionFile(claude)?.sessionId).toBe('sess-cache');
+    beginClaudeParseScan();
+    endClaudeParseScan();
+    expect(transcriptCacheSize()).toBe(0);
   });
 });

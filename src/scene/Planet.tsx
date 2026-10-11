@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import * as THREE from 'three';
+import { MathUtils, ShaderMaterial, type Mesh } from 'three';
 import { derivePlanetState } from '../../shared/status';
 import { useSpaceStore } from '../store';
 import type { ProjectInfo } from '../types';
@@ -24,7 +24,7 @@ interface PlanetProps {
 }
 
 export function Planet({ project, position }: PlanetProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const meshRef = useRef<Mesh>(null);
   const selectPlanet = useSpaceStore((s) => s.selectPlanet);
 
   const seed = hashString(project.name);
@@ -38,7 +38,7 @@ export function Planet({ project, position }: PlanetProps) {
     const colors = buildColors(planetType, rand);
     const planetTypeIndex = PLANET_TYPES.indexOf(planetType);
 
-    return new THREE.ShaderMaterial({
+    return new ShaderMaterial({
       vertexShader,
       fragmentShader,
       toneMapped: false,
@@ -63,7 +63,7 @@ export function Planet({ project, position }: PlanetProps) {
 
   useFrame((state, delta) => {
     const targetDim = planetState === 'idle' ? 1 : -1;
-    material.uniforms.uDim.value = THREE.MathUtils.lerp(
+    material.uniforms.uDim.value = MathUtils.lerp(
       material.uniforms.uDim.value,
       targetDim,
       delta * 3,

@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Node.js 20.19 or newer (`.nvmrc` is `20.19`). Node 18 is not supported.
+- Node.js 22.22.2 or newer (`.nvmrc` is `22.22.2`, the current LTS line). Node 20 is not supported.
 - npm 9 or newer.
 
 ```bash
@@ -31,9 +31,9 @@ npm run dev
 
 Unit tests cover parsers, watchers, hook setup against a temp home directory, the open-session command builder, auth, and the dashboard components. `npm run test:coverage` fails the run when line coverage drops below:
 
-- 80% for `server/**/*.ts`
-- 80% for `shared/**/*.ts`
-- 60% for `src/**/*.{ts,tsx}`
+- 90% for `server/**/*.ts`
+- 90% for `shared/**/*.ts`
+- 70% for `src/**/*.{ts,tsx}`
 
 `server/index.ts` is excluded from coverage. It only binds the port and installs signal handlers. The Playwright boot covers that process.
 
@@ -43,7 +43,7 @@ Unit tests cover parsers, watchers, hook setup against a temp home directory, th
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and every pull request targeting `main`. The job uses Node 20.19 and runs, in order: `npm ci`, typecheck, lint, format check, coverage, build, `npm audit --audit-level=high`, Playwright Chromium install, and e2e.
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request targeting `main`. The job uses Node 22.22.2 and runs, in order: `npm ci`, typecheck, lint, format check, coverage, build, `npm audit --audit-level=high`, Playwright Chromium install, and e2e.
 
 Dependabot opens a weekly pull request for grouped npm updates and a weekly pull request for grouped GitHub Actions updates (`.github/dependabot.yml`).
 
@@ -53,15 +53,10 @@ Dependabot opens a weekly pull request for grouped npm updates and a weekly pull
 
 ## Dependency upgrades we did not take
 
-These majors are current upstream and are intentionally not installed. Each one drops the Node 20.19 floor this repo still supports, or it fails a peer range we still need.
+Node is 22.22.2 or newer, which is what Vitest 5, jsdom 30, lint-staged 17, and concurrently 10 require. ESLint 10 is installed. `eslint-plugin-react` still peers only through ESLint 9, so React lint rules come from `@eslint-react/eslint-plugin` instead.
 
-| Package                          | Latest | Why it stays back                                                                                                                                                  |
-| -------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `vitest` / `@vitest/coverage-v8` | 5.0.3  | Engines are `^22.12.0 \|\| ^24 \|\| >=26`. CI and `engines` still allow Node 20.19. Stay on 4.1.11.                                                                |
-| `typescript`                     | 7.0.2  | `typescript-eslint` 8.71 peers `typescript >=4.8.4 <6.1`. Stay on 5.9.3.                                                                                           |
-| `eslint`                         | 10.12  | `eslint-plugin-react` 7.37.5 peers ESLint through `^9.7` only, and ESLint 9.39.5 is marked deprecated upstream. Stay on 9.39.5 until that plugin allows ESLint 10. |
-| `jsdom`                          | 30.1.2 | Engines are `^22.22.2 \|\| ^24.15 \|\| >=26`. Stay on 29.1.1, which still allows Node 20.19.                                                                       |
-| `lint-staged`                    | 17.6.0 | Engines are `>=22.22.1`. Stay on 16.4.0.                                                                                                                           |
-| `concurrently`                   | 10.0.6 | Engines are `>=22`. `npm run dev` stays on 9.2.5.                                                                                                                  |
+| Package      | Latest | Why it stays back                                                                                                   |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `typescript` | 7.0.2  | `typescript-eslint` 8.71.1 peers `typescript >=4.8.4 <6.1.0`. No newer release accepts TypeScript 7. Stay on 5.9.3. |
 
-Revisit this table when the Node floor moves to 22.22 or the peer ranges above widen.
+Revisit TypeScript 7 when `typescript-eslint` widens that peer range.

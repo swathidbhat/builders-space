@@ -1,3 +1,5 @@
+import { execFile, execFileSync } from 'child_process';
+import { promisify } from 'util';
 import { mkdtempSync, mkdirSync, existsSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -95,6 +97,85 @@ describe('server access control', () => {
     const res = await fetch(`${base}/api/health`);
     expect(res.status).toBe(401);
   });
+
+  it('rejects a bad origin before parsing a broken body and returns JSON', async () => {
+    const res = await fetch(`${base}/api/open-session`, {
+      method: 'POST',
+      headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
+      body: '{',
+    });
+    expect(res.status).toBe(403);
+    const text = await res.text();
+    expect(res.headers.get('content-type')).toMatch(/json/);
+    expect(text).not.toMatch(/node_modules/);
+    expect(text).not.toMatch(/at /);
+    expect(JSON.parse(text)).toEqual({ ok: false, error: 'Origin not allowed' });
+  });
+
+  it('returns JSON and no stack when the token is valid but the body is not JSON', async () => {
+    const res = await fetch(`${base}/api/open-session`, {
+      method: 'POST',
+      headers: auth({ 'Content-Type': 'application/json' }),
+      body: '{',
+    });
+    expect(res.status).toBe(400);
+    const text = await res.text();
+    expect(res.headers.get('content-type')).toMatch(/json/);
+    expect(text).not.toMatch(/node_modules/);
+    expect(text).not.toMatch(/\n\s+at /);
+    expect(JSON.parse(text)).toEqual({ ok: false, error: 'Invalid JSON' });
+  });
+
+  it('rejects a different local user even when that user presents the token', async () => {
+    let canDrop = true;
+    try {
+      execFileSync('sudo', ['-n', '-u', 'nobody', 'true'], { stdio: 'ignore' });
+    } catch {
+      canDrop = false;
+    }
+    if (!canDrop) return;
+
+    runtime.stateManager.updateClaudeProjects(project('/tmp/lumen-lab'));
+    const authHeader = `Authorization: Bearer ${TOKEN}`;
+    const health = await nobodyCurl([
+      '-sS',
+      '-H',
+      authHeader,
+      '-w',
+      '\n%{http_code}',
+      `${base}/api/health`,
+    ]);
+    const enable = await nobodyCurl([
+      '-sS',
+      '-X',
+      'POST',
+      '-H',
+      authHeader,
+      '-w',
+      '\n%{http_code}',
+      `${base}/api/hooks/enable`,
+    ]);
+    expect(health.status).toBe(403);
+    expect(enable.status).toBe(403);
+    expect(health.body).not.toContain('lumen-lab');
+    expect(health.body).not.toContain(TOKEN);
+    expect(JSON.parse(health.body)).toEqual({ ok: false, error: 'Peer user not allowed' });
+    expect(existsSync(join(home, '.claude', 'settings.json'))).toBe(false);
+  });
+
+  const execFileAsync = promisify(execFile);
+
+  function nobodyCurl(args: string[]): Promise<{ status: number; body: string }> {
+    return execFileAsync('sudo', ['-n', '-u', 'nobody', 'curl', ...args], {
+      encoding: 'utf8',
+    }).then(({ stdout }) => {
+      const splitAt = stdout.lastIndexOf('\n');
+      return {
+        body: stdout.slice(0, splitAt),
+        status: Number(stdout.slice(splitAt + 1)),
+      };
+    });
+  }
 
   it('allows the dashboard origin and echoes that origin only', async () => {
     const origin = 'http://127.0.0.1:5174';

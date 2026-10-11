@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type ErrorRequestHandler } from 'express';
 import { createServer as createHttpServer, type Server as HttpServer } from 'http';
 import { Server } from 'socket.io';
 import { CursorWatcher } from './watchers/cursorWatcher';
@@ -17,6 +17,7 @@ import {
   tokensMatch,
 } from './security';
 import { logCaught } from './log';
+import { peerRejection, type ProcEndpoints } from './peerUser';
 import type { ServerToClientEvents, ClientToServerEvents } from './types';
 import { SERVER_PORT } from '../shared/config';
 
@@ -51,9 +52,14 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
 
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '32kb' }));
 
   app.use((req, res, next) => {
+    const rejection = peerRejection(req.socket);
+    if (rejection) {
+      res.status(403).json({ ok: false, error: rejection });
+      return;
+    }
+
     const originHeader = req.headers.origin;
     const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
 
@@ -85,6 +91,8 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
     next();
   });
 
+  app.use(express.json({ limit: '32kb' }));
+
   const socketServers: Server<ClientToServerEvents, ServerToClientEvents>[] = [];
 
   const socketOptions = {
@@ -100,9 +108,13 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
       allowedHeaders: ['Content-Type', 'Authorization'],
     },
     allowRequest: (
-      req: { headers: { origin?: string } },
+      req: { headers: { origin?: string }; socket?: ProcEndpoints },
       callback: (err: string | null, ok: boolean) => void,
     ) => {
+      if (!req.socket || peerRejection(req.socket)) {
+        callback('Peer user not allowed', false);
+        return;
+      }
       const origin = req.headers.origin;
       if (origin && !isLoopbackOrigin(origin)) {
         callback('Origin not allowed', false);
@@ -218,6 +230,8 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
     );
   });
 
+  app.use(jsonErrorHandler);
+
   const httpServers: HttpServer[] = [];
   let watchersStarted = false;
 
@@ -275,6 +289,27 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
   }
 
   return { token, stateManager, httpServers, listen, close };
+}
+
+const jsonErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+  const status = errorStatus(err);
+  const error =
+    status === 400 ? 'Invalid JSON' : status === 413 ? 'Payload too large' : 'Internal error';
+  if (status >= 500) logCaught('server', err, 'request failed');
+  res.status(status).json({ ok: false, error });
+};
+
+function errorStatus(err: unknown): number {
+  if (typeof err === 'object' && err !== null) {
+    const record = err as { status?: unknown; statusCode?: unknown };
+    if (typeof record.status === 'number') return record.status;
+    if (typeof record.statusCode === 'number') return record.statusCode;
+  }
+  return 500;
 }
 
 function listenOn(server: HttpServer, port: number, host: string): Promise<number> {

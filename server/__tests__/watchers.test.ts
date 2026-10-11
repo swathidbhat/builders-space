@@ -114,6 +114,35 @@ describe('live session file updates', () => {
     });
   });
 
+  it('Cursor sees a new .txt transcript without waiting for the fallback scan', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'bs-cursor-txt-'));
+    const transcripts = join(base, '-tmp-lumen-lab', 'agent-transcripts');
+    mkdirSync(transcripts, { recursive: true });
+
+    const seen: Map<string, ProjectInfo>[] = [];
+    const watcher = new CursorWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      { base, fallbackScanMs: 60_000 },
+    );
+    watchers.push(watcher);
+    watcher.start();
+    await watcher.whenWatching();
+
+    writeFileSync(
+      join(transcripts, 'agent-txt.txt'),
+      '<user_query>paint the labels</user_query>\n',
+    );
+    await waitFor(() =>
+      seen.some((projects) =>
+        [...projects.values()].some((project) =>
+          project.agents.some((agent) => agent.sessionId === 'agent-txt'),
+        ),
+      ),
+    );
+  });
+
   it('Codex sees a nested rollout and does not write .codex/hooks.json into the repo', async () => {
     const home = mkdtempSync(join(tmpdir(), 'bs-codex-home-'));
     vi.stubEnv('HOME', home);

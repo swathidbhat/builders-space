@@ -594,6 +594,136 @@ describe('StateManager', () => {
       expect(agent.errorReason).toBeUndefined();
     });
 
+    it('applies the newest overlay when the same session is stored under two cwd spellings', () => {
+      const now = Date.now();
+      const projects = new Map<string, ProjectInfo>();
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
+      sm.updateClaudeProjects(projects);
+
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/proj/',
+        status: 'error',
+        errorReason: 'old',
+        lastEventAt: now,
+        terminal: true,
+        mode: 'realtime',
+      });
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/proj',
+        status: 'working',
+        lastEventAt: now + 1000,
+        terminal: false,
+        mode: 'realtime',
+      });
+
+      const agent = sm.getState().projects[0].agents[0];
+      expect(agent.status).toBe('working');
+      expect(agent.errorReason).toBeUndefined();
+    });
+
+    it('does not let an older cwd spelling replace a newer overlay', () => {
+      const now = Date.now();
+      const projects = new Map<string, ProjectInfo>();
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
+      sm.updateClaudeProjects(projects);
+
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/proj',
+        status: 'working',
+        lastEventAt: now + 1000,
+        terminal: false,
+        mode: 'realtime',
+      });
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/proj/',
+        status: 'error',
+        errorReason: 'old',
+        lastEventAt: now,
+        terminal: true,
+        mode: 'realtime',
+      });
+
+      const agent = sm.getState().projects[0].agents[0];
+      expect(agent.status).toBe('working');
+      expect(agent.errorReason).toBeUndefined();
+    });
+
+    it('picks the latest event when one session has overlays on different paths', () => {
+      const now = Date.now();
+      const projects = new Map<string, ProjectInfo>();
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
+      sm.updateClaudeProjects(projects);
+
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/other',
+        status: 'error',
+        errorReason: 'old',
+        lastEventAt: now,
+        terminal: true,
+        mode: 'realtime',
+      });
+      sm.applyHookOverlay({
+        source: 'claude-code',
+        sessionId: 'sess1',
+        cwd: '/proj',
+        status: 'working',
+        lastEventAt: now + 50,
+        terminal: false,
+        mode: 'realtime',
+      });
+
+      expect(sm.getState().projects[0].agents[0].status).toBe('working');
+    });
+
     it('event with empty sessionId and valid cwd falls through to cwd-based matching', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();

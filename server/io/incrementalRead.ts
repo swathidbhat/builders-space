@@ -1,12 +1,19 @@
+import { createHash } from 'crypto';
 import { closeSync, fstatSync, openSync, readSync, statSync } from 'fs';
 import { logCaught } from '../log';
 
 const TAIL_BYTES = 64;
+const HEAD_BYTES = 4096;
 
 /** Byte offset remembered between scans of an append-only session log. */
 export interface ByteCursor {
   size: number;
-  /** Last bytes at `size`, so a same-length rewrite is not treated as unchanged. */
+  mtimeMs: number;
+  /** SHA-256 of the whole file. A same-length rewrite that keeps the tail still changes this. */
+  digest: string;
+  /** SHA-256 of the first 4KB, so a same-mtime rewrite of the head is not missed. */
+  head: string;
+  /** Last bytes at `size`, so an append can resume without rereading the prefix. */
   tail: Buffer;
   /** Trailing partial line, kept until a newline arrives. */
   remainder: string;
@@ -42,9 +49,39 @@ function readAt(filePath: string, start: number, length: number): Buffer | null 
   }
 }
 
+function hashFile(filePath: string): string | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(filePath, 'r');
+    const hash = createHash('sha256');
+    const buf = Buffer.alloc(64 * 1024);
+    let position = 0;
+    for (;;) {
+      const n = readSync(fd, buf, 0, buf.length, position);
+      if (n <= 0) break;
+      hash.update(buf.subarray(0, n));
+      position += n;
+    }
+    return hash.digest('hex');
+  } catch (err) {
+    logCaught('incrementalRead', err, filePath);
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
 function tailOf(filePath: string, size: number): Buffer | null {
   const start = Math.max(0, size - TAIL_BYTES);
   return readAt(filePath, start, size - start);
+}
+
+/** Hash of the first bytes. When `size` is at most HEAD_BYTES this is the whole file. */
+function headDigest(filePath: string, size: number): string | null {
+  const length = Math.min(size, HEAD_BYTES);
+  const buf = readAt(filePath, 0, length);
+  if (!buf || buf.length !== length) return null;
+  return createHash('sha256').update(buf).digest('hex');
 }
 
 function splitLines(text: string): { lines: string[]; remainder: string } {
@@ -59,20 +96,37 @@ function splitLines(text: string): { lines: string[]; remainder: string } {
  * Read a session log from the previous offset.
  * Unchanged files return no lines. Growth past a matching tail returns only
  * new lines. A rewrite or shrink reads the file again from the start.
+ * Same size and the same tail is unchanged only when the content hash agrees.
+ * Files up to 4KB compare a head hash at the same mtime, so a same-millisecond
+ * rewrite of the first line is still a reset. Larger files compare the full SHA-256.
  */
 export function readIncremental(filePath: string, previous?: ByteCursor): IncrementalRead | null {
   let size: number;
+  let mtimeMs: number;
   try {
-    size = statSync(filePath).size;
+    const stat = statSync(filePath);
+    size = stat.size;
+    mtimeMs = stat.mtimeMs;
   } catch (err) {
     logCaught('incrementalRead', err, filePath);
     return null;
   }
 
+  if (previous && previous.size === size && previous.mtimeMs === mtimeMs && size <= HEAD_BYTES) {
+    const tail = tailOf(filePath, size);
+    const head = tail && tail.equals(previous.tail) ? headDigest(filePath, size) : null;
+    if (tail && head && head === previous.head) {
+      return { mode: 'unchanged', cursor: previous };
+    }
+  }
+
   if (previous && previous.size === size) {
     const tail = tailOf(filePath, size);
     if (tail && tail.equals(previous.tail)) {
-      return { mode: 'unchanged', cursor: previous };
+      const digest = hashFile(filePath);
+      if (digest && digest === previous.digest) {
+        return { mode: 'unchanged', cursor: { ...previous, mtimeMs } };
+      }
     }
   }
 
@@ -94,13 +148,15 @@ export function readIncremental(filePath: string, previous?: ByteCursor): Increm
   const chunk = chunkBuf.toString('utf8');
   const { lines, remainder } = splitLines(prefix + chunk);
   const tail = tailOf(filePath, size);
-  if (!tail) return null;
+  const digest = hashFile(filePath);
+  const head = headDigest(filePath, size);
+  if (!tail || !digest || !head) return null;
 
   return {
     mode,
     lines,
     chunk,
-    cursor: { size, tail: Buffer.from(tail), remainder },
+    cursor: { size, mtimeMs, digest, head, tail: Buffer.from(tail), remainder },
   };
 }
 
@@ -146,7 +202,12 @@ export function foldAppendOnly<T>(
     cache.delete(filePath);
     return null;
   }
-  if (read.mode === 'unchanged') return cached ? cached.value : null;
+  if (read.mode === 'unchanged') {
+    if (cached && cached.cursor !== read.cursor) {
+      cache.set(filePath, { cursor: read.cursor, value: cached.value });
+    }
+    return cached ? cached.value : null;
+  }
 
   const value = read.mode === 'append' && cached ? cached.value : create();
   for (const line of read.lines) {

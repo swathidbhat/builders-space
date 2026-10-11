@@ -11,6 +11,7 @@ export { HUMANIZE_MAX_ITEMS, HUMANIZE_MAX_TEXT_CHARS };
 interface CacheEntry {
   humanized: string;
   cachedAt: number;
+  fromLLM: boolean;
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -63,12 +64,14 @@ export async function humanizeTexts(rawTexts: unknown): Promise<HumanizeResult> 
     }
   }
 
-  if (uncached.length === 0) return { texts, usedLLM: true };
+  if (uncached.length === 0) {
+    return { texts, usedLLM: inputs.length > 0 && inputs.every((raw) => cacheFromLLM(raw)) };
+  }
 
   if (!process.env.ANTHROPIC_API_KEY) {
     for (const raw of uncached) {
       const fb = simpleFallback(raw);
-      setInCache(raw, fb);
+      setInCache(raw, fb, false);
       texts[raw] = fb;
     }
     return { texts, usedLLM: false };
@@ -80,7 +83,7 @@ export async function humanizeTexts(rawTexts: unknown): Promise<HumanizeResult> 
     const batchResults = await callLLM(batch);
     for (let i = 0; i < batch.length; i++) {
       const label = batchResults[i] || simpleFallback(batch[i]);
-      setInCache(batch[i], label);
+      setInCache(batch[i], label, true);
       texts[batch[i]] = label;
     }
   }
@@ -182,16 +185,25 @@ function simpleFallback(raw: string): string {
 }
 
 function getFromCache(raw: string): string | undefined {
+  const entry = freshCacheEntry(raw);
+  return entry?.humanized;
+}
+
+function cacheFromLLM(raw: string): boolean {
+  return freshCacheEntry(raw)?.fromLLM === true;
+}
+
+function freshCacheEntry(raw: string): CacheEntry | undefined {
   const entry = cache.get(raw);
   if (!entry) return undefined;
   if (Date.now() - entry.cachedAt > HUMANIZE_CACHE_TTL_MS) {
     cache.delete(raw);
     return undefined;
   }
-  return entry.humanized;
+  return entry;
 }
 
-function setInCache(raw: string, humanized: string): void {
+function setInCache(raw: string, humanized: string, fromLLM: boolean): void {
   if (cache.size >= HUMANIZE_CACHE_MAX) {
     let oldest: string | undefined;
     let oldestTime = Infinity;
@@ -203,5 +215,5 @@ function setInCache(raw: string, humanized: string): void {
     }
     if (oldest) cache.delete(oldest);
   }
-  cache.set(raw, { humanized, cachedAt: Date.now() });
+  cache.set(raw, { humanized, cachedAt: Date.now(), fromLLM });
 }

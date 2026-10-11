@@ -38,6 +38,21 @@ describe('humanize input limits', () => {
     expect(() => normalizeHumanizeInput(['Read:a.ts', 12])).toThrow(/must be a string/);
   });
 
+  it('does not report usedLLM when a later request is served from the no-key cache', async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const first = await humanizeTexts(['Read:cache-flag-only.ts']);
+      expect(first.usedLLM).toBe(false);
+      const second = await humanizeTexts(['Read:cache-flag-only.ts']);
+      expect(second.usedLLM).toBe(false);
+      expect(second.texts['Read:cache-flag-only.ts']).toMatch(/Reading/);
+    } finally {
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
   it('accepts a normal batch and uses the local fallback when no API key is set', async () => {
     const previous = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;

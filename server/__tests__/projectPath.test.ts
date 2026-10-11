@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'fs';
+import { join } from 'path';
 import { describe, it, expect } from 'vitest';
 import { resolveEncodedProjectPath, dirNameToPath, extractProjectName } from '../utils/projectName';
 
@@ -5,13 +7,16 @@ const encoded = '-Users-alice-work-my-app';
 
 describe('resolveEncodedProjectPath', () => {
   it('keeps a hyphenated folder name when that directory exists', () => {
-    const exists = (path: string) => path === '/Users/alice/work-my-app';
+    const exists = (path: string) =>
+      path === '/Users' || path === '/Users/alice' || path === '/Users/alice/work-my-app';
     expect(resolveEncodedProjectPath(encoded, exists)).toBe('/Users/alice/work-my-app');
     expect(resolveEncodedProjectPath(encoded, exists)).not.toBe('/Users/alice/work/my/app');
   });
 
   it('finds work/my-app without splitting my-app into my/app', () => {
     const existing = new Set([
+      '/Users',
+      '/Users/alice',
       '/Users/alice/work',
       '/Users/alice/work/my-app',
       '/Users/alice/work/my',
@@ -24,6 +29,8 @@ describe('resolveEncodedProjectPath', () => {
   it('does not turn Documents/my-app into Documents/my/app when both exist', () => {
     const name = '-Users-alice-Documents-my-app';
     const existing = new Set([
+      '/Users',
+      '/Users/alice',
       '/Users/alice/Documents',
       '/Users/alice/Documents/my-app',
       '/Users/alice/Documents/my',
@@ -41,6 +48,39 @@ describe('resolveEncodedProjectPath', () => {
     );
     expect(dirNameToPath(encoded, missing)).toBe('/Users/alice/work-my-app');
     expect(dirNameToPath(encoded, missing)).not.toContain('/my/app');
+  });
+
+  it('resolves /opt, /tmp, and /Volumes when those directories exist', () => {
+    const opt = new Set(['/opt', '/opt/work', '/opt/work/my-app']);
+    expect(resolveEncodedProjectPath('-opt-work-my-app', (path) => opt.has(path))).toBe(
+      '/opt/work/my-app',
+    );
+
+    const tmp = new Set(['/tmp', '/tmp/lumen-lab']);
+    expect(resolveEncodedProjectPath('-tmp-lumen-lab', (path) => tmp.has(path))).toBe(
+      '/tmp/lumen-lab',
+    );
+
+    const volumes = new Set(['/Volumes', '/Volumes/DevDisk', '/Volumes/DevDisk/my-app']);
+    expect(resolveEncodedProjectPath('-Volumes-DevDisk-my-app', (path) => volumes.has(path))).toBe(
+      '/Volumes/DevDisk/my-app',
+    );
+  });
+
+  it('keeps the hyphenated fallback when the search finds no directory', () => {
+    const missing = () => false;
+    expect(resolveEncodedProjectPath('-opt-work-my-app', missing)).toBe('/opt-work-my-app');
+    expect(resolveEncodedProjectPath('-tmp-lumen-lab', missing)).toBe('/tmp-lumen-lab');
+  });
+
+  it('resolves a real directory created under /tmp', () => {
+    const dir = mkdtempSync(join('/tmp', 'bs-path-'));
+    try {
+      const encoded = `-${dir.slice(1).replaceAll('/', '-')}`;
+      expect(resolveEncodedProjectPath(encoded)).toBe(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

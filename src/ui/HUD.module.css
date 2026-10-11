@@ -1,0 +1,82 @@
+.hud {
+  position: fixed;
+  top: 0;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 50;
+  font-family: 'Space Grotesk', sans-serif;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 5, 15, 0.85) 0%,
+    rgba(5, 5, 15, 0.4) 70%,
+    transparent 100%
+  );
+  left: 0;
+  right: 0;
+}
+
+.withSidebar {
+  left: 200px;
+}
+
+.withPanel {
+  right: 420px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: 0 0 20px rgba(100, 150, 255, 0.3);
+}
+
+.subtitle {
+  font-size: 11px;
+  color: #556;
+  margin-top: 2px;
+  letter-spacing: 0.05em;
+}
+
+.counters {
+  display: flex;
+  gap: 20px;
+}
+
+.counter {
+  text-align: right;
+}
+
+.value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--counter, #e0e0e0);
+  text-shadow: var(--counter-glow, none);
+}
+
+.pulse {
+  animation: hudPulse 2s ease infinite;
+}
+
+@keyframes hudPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.label {
+  font-size: 9px;
+  color: #556;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

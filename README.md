@@ -97,7 +97,7 @@ Alphabetically by project name on concentric rings in a flat plane. Agent status
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20.19 or newer (see `.nvmrc`; Node 18 is not supported)
+- [Node.js](https://nodejs.org/) 22.22.2 or newer (see `.nvmrc`; Node 20 is not supported)
 - npm 9+
 - macOS for live agent detection (`open` / `osascript` and the tool log paths). CI runs the automated suite on Linux.
 
@@ -134,7 +134,7 @@ The dashboard reads session logs that already exist on this machine. It does not
 While the server is running it reads:
 
 - Claude Code session logs under `~/.claude/projects/` (`*.jsonl`)
-- Cursor agent transcripts under `~/.cursor/projects/*/agent-transcripts/` (`*.jsonl`)
+- Cursor agent transcripts under `~/.cursor/projects/*/agent-transcripts/` (`*.jsonl` and `*.txt`)
 - Codex session logs under `~/.codex/sessions/` (`*.jsonl`) and `~/.codex/session_index.jsonl`
 - Hook event files under `~/.builders-space/events/`, only after you enable hooks and a tool writes one
 - The working directory of running `claude` and `codex` processes, via `ps` and `lsof`
@@ -153,7 +153,9 @@ To keep every label on this machine, turn Human Lingo off, or leave `ANTHROPIC_A
 
 The server listens on `127.0.0.1` and, when that address is available, `::1`. It does not listen on other interfaces. A browser request is rejected unless its `Origin` is `http://localhost`, `http://127.0.0.1`, or `http://[::1]`, with an optional port.
 
-Each launch writes a random token to `~/.builders-space/auth-token` (mode `0600`). The Vite dev server injects that token into the page. HTTP routes send it as `Authorization: Bearer`, and the Socket.IO connection sends it as well. Another site, or another user on the machine, cannot read the token from that file's mode or call the API without it.
+Each launch writes a random token to `~/.builders-space/auth-token` (mode `0600`). The Vite dev server injects that token into the page only after the connection is accepted. HTTP routes send it as `Authorization: Bearer`, and the Socket.IO connection sends it as well.
+
+The API and the Vite dev server also check the operating-system user on the other end of the TCP connection. On Linux that uid comes from `/proc/net/tcp` (and `/proc/net/tcp6`). When those tables are not there, the server uses `lsof`. The peer uid has to be the user who started the process. Another account on the machine is rejected even with the token, and a connection whose uid cannot be shown is rejected too. A page on another origin still cannot read the dashboard: the server is loopback-only, foreign origins get 403, and Vite does not send `Access-Control-Allow-Origin`. Request bodies are parsed only after the peer, origin, and token checks. Failures are JSON and do not include a stack trace.
 
 Opening an agent sends the agent id only. The server looks the session up in its own state and runs a fixed program with an argument array (`open` or `osascript`). The request does not supply a shell command or a path.
 
@@ -217,7 +219,7 @@ flowchart LR
 - **CodexWatcher**: Rollout JSONL files in `~/.codex/sessions/`, with `ps aux` process detection
 - **EventWatcher**: Hook events written to `~/.builders-space/events/` — normalizes events into `HookRuntimeEntry` overlays for the StateManager
 
-Each watcher discovers projects agent-first: a project only exists if it has at least one agent session. Project paths come from the session's real `cwd` when the log has one, so a folder named `my-app` is not decoded by splitting on hyphens. The **StateManager** merges project maps from all watchers, then applies hook overlays using an explicit authority model: any agent with a trusted, non-expired hook overlay becomes `statusSource: 'realtime'`; otherwise the watcher-derived heuristic is `statusSource: 'inferred'`. **Matching** overlays to agents uses that agent's own `session_id`. An event for one session does not change other agents in the same project. An event with no session id is applied only when the project has a single agent from that tool. Overlay trust windows: 10 minutes for active states (`working`, `waiting`), 1 hour for terminal states (`done`, `error`). State is emitted to clients via Socket.IO.
+Each watcher discovers projects agent-first: a project only exists if it has at least one agent session. Project paths come from the session's real `cwd` when the log has one. When it does not, the encoded directory name is resolved from `/` by probing the filesystem, longest directory first, so a folder named `my-app` stays intact and a root such as `/opt`, `/tmp`, or `/Volumes` works when that directory exists. If nothing on disk matches, the name falls back to splitting well-known parent folders and keeping the rest hyphenated. The **StateManager** merges project maps from all watchers, then applies hook overlays using an explicit authority model: any agent with a trusted, non-expired hook overlay becomes `statusSource: 'realtime'`; otherwise the watcher-derived heuristic is `statusSource: 'inferred'`. **Matching** overlays to agents uses that agent's own `session_id` and, when several events share it, the newest `lastEventAt`. Working directories are stored without a trailing slash, so `/proj/` and `/proj` are the same overlay. An event for one session does not change other agents in the same project. An event with no session id is applied only when the project has a single agent from that tool. Overlay trust windows: 10 minutes for active states (`working`, `waiting`), 1 hour for terminal states (`done`, `error`). State is emitted to clients via Socket.IO.
 
 **Humanization** is client-initiated: when a user opens a project panel with "Human Lingo" mode on, the client sends raw action strings to the server, which translates them via LLM (with a regex fallback) and returns short labels.
 
@@ -269,7 +271,8 @@ Unit tests sit next to the code in `server/__tests__/`, `src/**/__tests__/`, and
 
 - **Frontend**: React 19, Three.js, React Three Fiber 9, Drei 10, Zustand, Vite 8
 - **Backend**: Node.js, Express 5, Socket.IO, chokidar 5
-- **Language**: TypeScript 5.9 throughout
+- **Language**: TypeScript 5.9 throughout (TypeScript 7 is blocked by `typescript-eslint`)
+- **Checks**: ESLint 10 with `@eslint-react`, Vitest 5, jsdom 30
 - **Rendering**: Custom GLSL shaders for planets, stars, and nebula (Three.js `ShaderMaterial`, `RingGeometry`, additive blending)
 
 ## Checks
@@ -284,9 +287,9 @@ npm audit --audit-level=high
 npm run test:e2e
 ```
 
-`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 80% on `server/` and `shared/`, and 60% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`, on Node 20.19.
+`npm test` runs the unit and component suite. `npm run test:coverage` enforces line coverage of at least 90% on `server/` and `shared/`, and 70% on `src/`. `npm run test:e2e` boots the server and the Vite app against fixture sessions. GitHub Actions runs the same steps on every push and pull request to `main`, on Node 22.22.2.
 
-`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 20.19 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
+`npm install` installs a pre-commit hook (lint-staged) that lints and formats staged files. Node 22.22.2 or newer is required. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

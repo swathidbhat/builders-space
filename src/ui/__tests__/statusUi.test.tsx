@@ -42,10 +42,10 @@ describe('status display', () => {
 
     const names = screen.getAllByRole('button').map((button) => button.textContent);
     expect(names.join(' ')).toMatch(/Alpha[\s\S]*Mid[\s\S]*Quiet[\s\S]*Zeta/);
-    expect(dot('Zeta').style.background).toMatch(/ff4444|255, 68, 68/i);
-    expect(dot('Alpha').style.background).toMatch(/ffaa44|255, 170, 68/i);
-    expect(dot('Mid').style.background).toMatch(/44ffaa|68, 255, 170/i);
-    expect(dot('Quiet').style.background).toMatch(/6688aa|102, 136, 170/i);
+    expect(dot('Zeta').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
+    expect(dot('Alpha').style.getPropertyValue('--dot')).toMatch(/ffaa44/i);
+    expect(dot('Mid').style.getPropertyValue('--dot')).toMatch(/44ffaa/i);
+    expect(dot('Quiet').style.getPropertyValue('--dot')).toMatch(/6688aa/i);
 
     fireEvent.click(screen.getByRole('button', { name: /Zeta/ }));
     expect(useSpaceStore.getState().selectedPlanetId).toBe('zeta');
@@ -74,7 +74,7 @@ describe('status display', () => {
     render(<Sidebar />);
     fireEvent.click(screen.getByRole('button', { name: '☰' }));
     expect(useSpaceStore.getState().sidebarOpen).toBe(true);
-    expect(dot('Bare').style.background).toMatch(/#444|68, 68, 68/);
+    expect(dot('Bare').style.getPropertyValue('--dot')).toBe('#444');
   });
 
   it('counts agents in the HUD and pulses only the urgent counters', () => {
@@ -99,8 +99,8 @@ describe('status display', () => {
     expect(screen.getByText('Awaiting you')).toBeTruthy();
     expect(screen.getByText('Errors')).toBeTruthy();
     expect(screen.getByText('2 planets discovered')).toBeTruthy();
-    const pulses = screen.getAllByText('1').map((node) => node.style.animation);
-    expect(pulses.every((animation) => animation.includes('hudPulse'))).toBe(true);
+    const pulses = screen.getAllByText('1').map((node) => node.className);
+    expect(pulses.every((className) => className.includes('pulse'))).toBe(true);
 
     useSpaceStore.setState({
       projects: [testProject('solo', [{ id: 'a', status: 'working' }])],

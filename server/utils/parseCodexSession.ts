@@ -3,6 +3,7 @@ import { basename } from 'path';
 import { RECENT_ACTIVITY_MS } from '../../shared/config';
 import { logCaught } from '../log';
 import { foldAppendOnly, readFirstLine, type FoldCache } from '../io/incrementalRead';
+import { retainCache } from './retainCache';
 import {
   codexArgsSchema,
   parseCodexCallPayload,
@@ -32,7 +33,30 @@ interface CodexFold {
   latestTimestamp: number;
 }
 
+interface CodexMeta {
+  sessionId: string;
+  cwd: string;
+  lastActivityMs: number;
+}
+
 const codexFolds = new Map<string, FoldCache<CodexFold>>();
+const codexMetaCache = new Map<string, { mtimeMs: number; value: CodexMeta | null }>();
+let codexScan: Set<string> | null = null;
+
+export function beginCodexParseScan(): void {
+  codexScan = new Set();
+}
+
+export function endCodexParseScan(): void {
+  if (!codexScan) return;
+  retainCache(codexFolds, codexScan);
+  retainCache(codexMetaCache, codexScan);
+  codexScan = null;
+}
+
+export function codexCacheSize(): number {
+  return codexFolds.size + codexMetaCache.size;
+}
 
 function safeStatMtime(filePath: string): number {
   try {
@@ -76,6 +100,7 @@ function applyCodexLine(fold: CodexFold, line: string): void {
 }
 
 export function parseCodexSessionFile(filePath: string): CodexSessionData | null {
+  codexScan?.add(filePath);
   try {
     const fold = foldAppendOnly(
       filePath,
@@ -101,26 +126,36 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
   }
 }
 
-export function parseCodexSessionMeta(filePath: string): {
-  sessionId: string;
-  cwd: string;
-  lastActivityMs: number;
-} | null {
-  try {
-    const firstLine = readFirstLine(filePath);
-    if (!firstLine) return null;
-    const entry = parseCodexLine(JSON.parse(firstLine));
-    const meta = entry?.type === 'session_meta' ? parseCodexMetaPayload(entry.payload) : null;
-    if (!meta?.id) return null;
-    return {
-      sessionId: meta.id,
-      cwd: meta.cwd || '',
-      lastActivityMs: safeStatMtime(filePath),
-    };
-  } catch (err) {
-    logCaught('parseCodexSessionMeta', err, filePath);
+export function parseCodexSessionMeta(filePath: string): CodexMeta | null {
+  codexScan?.add(filePath);
+  const mtimeMs = safeStatMtime(filePath);
+  if (mtimeMs === 0) {
+    codexMetaCache.delete(filePath);
     return null;
   }
+  const cached = codexMetaCache.get(filePath);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.value;
+
+  let value: CodexMeta | null = null;
+  try {
+    const firstLine = readFirstLine(filePath);
+    if (firstLine) {
+      const entry = parseCodexLine(JSON.parse(firstLine));
+      const meta = entry?.type === 'session_meta' ? parseCodexMetaPayload(entry.payload) : null;
+      if (meta?.id) {
+        value = {
+          sessionId: meta.id,
+          cwd: meta.cwd || '',
+          lastActivityMs: mtimeMs,
+        };
+      }
+    }
+  } catch (err) {
+    logCaught('parseCodexSessionMeta', err, filePath);
+    value = null;
+  }
+  codexMetaCache.set(filePath, { mtimeMs, value });
+  return value;
 }
 
 function extractThreadName(filePath: string): string | undefined {

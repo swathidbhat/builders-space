@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { cssVars } from './cssVars';
+import styles from './PlanetSurface.module.css';
 import type { AgentInfo } from '../types';
 import type { AgentIdentity } from './agentIdentity';
 import { drawSurfaceFrame, type SurfaceAnim } from './surface/drawSurface';
@@ -110,13 +112,8 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
       ref={canvasRef}
       width={PX_W * SCALE}
       height={PX_H * SCALE}
-      style={{
-        width: '100%',
-        aspectRatio: `${PX_W} / ${PX_H}`,
-        borderRadius: '8px',
-        imageRendering: 'pixelated',
-        background: '#050510',
-      }}
+      className={styles.surface}
+      style={cssVars({ '--aspect': `${PX_W} / ${PX_H}` })}
     />
   );
 }

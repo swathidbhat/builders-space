@@ -1,0 +1,7 @@
+.surface {
+  width: 100%;
+  aspect-ratio: var(--aspect);
+  border-radius: 8px;
+  image-rendering: pixelated;
+  background: #050510;
+}

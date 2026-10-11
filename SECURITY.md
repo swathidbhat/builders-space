@@ -1,6 +1,6 @@
 # Security
 
-Builders Space is a local dashboard. The server binds to loopback, checks the page origin, and requires a per-launch token. Please still report anything that lets another page, user, or machine read session logs, change hook config, or start a process.
+Builders Space is a local dashboard. The server binds to loopback, checks the page origin, requires a per-launch token, and accepts a connection only when the peer process uid is the user who started the server (from `/proc/net/tcp` on Linux, otherwise `lsof`). Please still report anything that lets another page, user, or machine read session logs, change hook config, or start a process.
 
 ## Reporting
 

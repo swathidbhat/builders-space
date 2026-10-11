@@ -3,6 +3,8 @@ import type { AgentInfo } from '../types';
 import type { AgentIdentity } from './agentIdentity';
 import { useSpaceStore } from '../store';
 import { API_ORIGIN, authHeaders } from '../api';
+import { cssVars } from './cssVars';
+import styles from './AgentCard.module.css';
 
 const SOURCE_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
@@ -48,7 +50,6 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const sourceLabel = SOURCE_LABELS[agent.source] || agent.source;
   const accentColor = identity.gradient[0];
   const [toast, setToast] = useState<string | null>(null);
-  const [hovered, setHovered] = useState(false);
   const humanizedTexts = useSpaceStore((s) => s.humanizedTexts);
   const humanized = agent.lastAction ? humanizedTexts[agent.lastAction] : undefined;
   const humanizedError = agent.errorReason ? humanizedTexts[agent.errorReason] : undefined;
@@ -93,133 +94,59 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const badgeColor =
     agent.status === 'waiting' ? '#ffaa44' : agent.status === 'error' ? '#ff4444' : '#aaa';
 
+  const action =
+    agent.status === 'error' && agent.errorReason
+      ? humanLingo
+        ? humanizedError || agent.errorReason
+        : agent.errorReason
+      : humanLingo
+        ? humanized || agent.lastAction || ''
+        : agent.lastAction || '';
+
   return (
     <div
+      className={styles.card}
       onClick={openSession}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       title={agent.sessionMeta ? 'Click to open session' : undefined}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        padding: '12px 14px',
-        background: hovered
-          ? `linear-gradient(135deg, ${accentColor}14, ${identity.gradient[1]}10)`
-          : `linear-gradient(135deg, ${accentColor}08, ${identity.gradient[1]}06)`,
-        borderRadius: '8px',
-        borderLeft: `3px solid ${accentColor}`,
-        cursor: agent.sessionMeta ? 'pointer' : 'default',
-        transition: 'background 0.15s ease',
-        position: 'relative',
-      }}
+      style={cssVars({
+        '--accent': accentColor,
+        '--accent-2': identity.gradient[1],
+        '--soft': `${accentColor}08`,
+        '--soft-2': `${identity.gradient[1]}06`,
+        '--soft-hover': `${accentColor}14`,
+        '--soft-2-hover': `${identity.gradient[1]}10`,
+        '--glow': `${accentColor}44`,
+        '--radius': identity.avatarBorderRadius,
+        '--cursor': agent.sessionMeta ? 'pointer' : 'default',
+        '--source': sourceColor,
+        '--source-bg': `${sourceColor}18`,
+        '--dot': dotColor,
+        '--dot-glow': dotGlow,
+        '--badge-bg': badgeBg,
+        '--badge-color': badgeColor,
+      })}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: identity.avatarBorderRadius,
-              background: `linear-gradient(135deg, ${identity.gradient[0]}, ${identity.gradient[1]})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#fff',
-              textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-              flexShrink: 0,
-              boxShadow: `0 0 10px ${accentColor}44`,
-            }}
-          >
-            {identity.initial}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#e0e0e0' }}>
-                {identity.name}
-              </span>
-              <span
-                style={{
-                  fontSize: '10px',
-                  color: sourceColor,
-                  fontWeight: 500,
-                  padding: '1px 6px',
-                  borderRadius: '4px',
-                  background: `${sourceColor}18`,
-                }}
-              >
-                {sourceLabel}
-              </span>
+      <div className={styles.top}>
+        <div className={styles.identity}>
+          <div className={styles.avatar}>{identity.initial}</div>
+          <div className={styles.who}>
+            <div className={styles.nameRow}>
+              <span className={styles.name}>{identity.name}</span>
+              <span className={styles.source}>{sourceLabel}</span>
             </div>
-            {agent.title && (
-              <span
-                style={{ fontSize: '11px', color: '#888', fontStyle: 'italic', lineHeight: 1.2 }}
-              >
-                {agent.title}
-              </span>
-            )}
+            {agent.title && <span className={styles.title}>{agent.title}</span>}
           </div>
         </div>
 
-        <div
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}
-        >
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: dotColor,
-              boxShadow: dotGlow,
-            }}
-          />
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 500,
-              padding: '2px 8px',
-              borderRadius: '10px',
-              background: badgeBg,
-              color: badgeColor,
-            }}
-          >
-            {statusLabel}
-          </span>
+        <div className={styles.meta}>
+          <div className={styles.dot} />
+          <span className={styles.badge}>{statusLabel}</span>
         </div>
       </div>
 
-      <div style={{ fontSize: '12px', color: '#c0c0c0', lineHeight: '1.4', paddingLeft: '42px' }}>
-        {agent.status === 'error' && agent.errorReason
-          ? humanLingo
-            ? humanizedError || agent.errorReason
-            : agent.errorReason
-          : humanLingo
-            ? humanized || agent.lastAction || ''
-            : agent.lastAction || ''}
-      </div>
+      <div className={styles.action}>{action}</div>
 
-      {toast && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '-32px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0,0,0,0.85)',
-            color: '#e0e0e0',
-            fontSize: '11px',
-            padding: '5px 12px',
-            borderRadius: '6px',
-            whiteSpace: 'nowrap',
-            zIndex: 200,
-            border: '1px solid rgba(255,255,255,0.1)',
-          }}
-        >
-          {toast}
-        </div>
-      )}
+      {toast && <div className={styles.toast}>{toast}</div>}
     </div>
   );
 }

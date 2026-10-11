@@ -3,6 +3,7 @@ import { join, basename } from 'path';
 import { RECENT_ACTIVITY_MS } from '../../shared/config';
 import { logCaught } from '../log';
 import { foldAppendOnly, readIncremental, type FoldCache } from '../io/incrementalRead';
+import { retainCache } from './retainCache';
 import {
   claudeBlocks,
   cursorCwd,
@@ -37,9 +38,50 @@ interface ClaudeFold {
   slug?: string;
 }
 
+interface TxtFold {
+  userQuery: string;
+  /** Suffix only, so a tag split across an append can still match. Not the whole file. */
+  tail: string;
+}
+
+const TXT_TAIL_MAX = 8_192;
+
 const cursorFolds = new Map<string, FoldCache<CursorFold>>();
 const claudeFolds = new Map<string, FoldCache<ClaudeFold>>();
-const txtFolds = new Map<string, FoldCache<{ userQuery: string; text: string }>>();
+const txtFolds = new Map<string, FoldCache<TxtFold>>();
+
+let cursorScan: Set<string> | null = null;
+let claudeScan: Set<string> | null = null;
+
+export function beginCursorParseScan(): void {
+  cursorScan = new Set();
+}
+
+export function endCursorParseScan(): void {
+  if (!cursorScan) return;
+  retainCache(cursorFolds, cursorScan);
+  retainCache(txtFolds, cursorScan);
+  cursorScan = null;
+}
+
+export function beginClaudeParseScan(): void {
+  claudeScan = new Set();
+}
+
+export function endClaudeParseScan(): void {
+  if (!claudeScan) return;
+  retainCache(claudeFolds, claudeScan);
+  claudeScan = null;
+}
+
+export function transcriptCacheSize(): number {
+  return cursorFolds.size + claudeFolds.size + txtFolds.size;
+}
+
+export function transcriptTxtTailLength(filePath: string): number | null {
+  const cached = txtFolds.get(filePath);
+  return cached ? cached.value.tail.length : null;
+}
 
 function safeMtime(filePath: string): number {
   try {
@@ -102,6 +144,7 @@ function applyCursorLine(fold: CursorFold, line: string): void {
 }
 
 function parseTranscriptJsonl(filePath: string): TranscriptData | null {
+  cursorScan?.add(filePath);
   const fold = foldAppendOnly(
     filePath,
     cursorFolds,
@@ -124,6 +167,7 @@ function cwdFromText(text: string): string | undefined {
 }
 
 export function parseTranscriptFile(filePath: string): TranscriptData | null {
+  cursorScan?.add(filePath);
   const cached = txtFolds.get(filePath);
   const read = readIncremental(filePath, cached?.cursor);
   if (!read) {
@@ -131,19 +175,28 @@ export function parseTranscriptFile(filePath: string): TranscriptData | null {
     return null;
   }
 
-  let userQuery = cached?.value.userQuery;
-  if (read.mode !== 'unchanged') {
-    const text = read.mode === 'append' && cached ? cached.value.text + read.chunk : read.chunk;
-    const queryMatch = text.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
-    if (!queryMatch) {
-      txtFolds.delete(filePath);
-      return null;
+  if (read.mode === 'unchanged') {
+    if (cached && cached.cursor !== read.cursor) {
+      txtFolds.set(filePath, { cursor: read.cursor, value: cached.value });
     }
-    userQuery = queryMatch[1].trim().slice(0, 200);
-    txtFolds.set(filePath, { cursor: read.cursor, value: { userQuery, text } });
+    if (!cached?.value.userQuery) return null;
+    return { userQuery: cached.value.userQuery, ...activity(safeMtime(filePath)) };
   }
 
-  if (!userQuery) return null;
+  const priorTail = read.mode === 'append' && cached ? cached.value.tail : '';
+  const text = priorTail + read.chunk;
+  const queryMatch = text.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/);
+  const userQuery = queryMatch
+    ? queryMatch[1].trim().slice(0, 200)
+    : read.mode === 'append'
+      ? cached?.value.userQuery
+      : undefined;
+  if (!userQuery) {
+    txtFolds.delete(filePath);
+    return null;
+  }
+  const tail = text.length > TXT_TAIL_MAX ? text.slice(-TXT_TAIL_MAX) : text;
+  txtFolds.set(filePath, { cursor: read.cursor, value: { userQuery, tail } });
   return { userQuery, ...activity(safeMtime(filePath)) };
 }
 
@@ -210,6 +263,7 @@ function claudeAssistantAction(content: string | unknown[]): string | undefined 
 }
 
 export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | null {
+  claudeScan?.add(filePath);
   const fold = foldAppendOnly(
     filePath,
     claudeFolds,

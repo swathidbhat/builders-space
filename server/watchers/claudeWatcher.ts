@@ -1,7 +1,11 @@
 import { readdirSync, existsSync } from 'fs';
 import { join, basename, isAbsolute } from 'path';
 import { homedir } from 'os';
-import { parseClaudeSessionFile } from '../utils/parseTranscript';
+import {
+  beginClaudeParseScan,
+  endClaudeParseScan,
+  parseClaudeSessionFile,
+} from '../utils/parseTranscript';
 import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
@@ -101,6 +105,15 @@ export class ClaudeWatcher {
       return;
     }
 
+    beginClaudeParseScan();
+    try {
+      this.scanProjects(projectDirs);
+    } finally {
+      endClaudeParseScan();
+    }
+  }
+
+  private scanProjects(projectDirs: string[]): void {
     const runningCwds = this.processes.current();
 
     for (const dirName of projectDirs) {

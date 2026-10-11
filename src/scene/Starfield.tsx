@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import {
+  AdditiveBlending,
+  BufferAttribute,
+  BufferGeometry,
+  ShaderMaterial,
+  type Points,
+} from 'three';
 
 const starVertexShader = `
   attribute float aSize;
@@ -29,7 +35,7 @@ const starFragmentShader = `
 `;
 
 export function Starfield({ count = 5000 }) {
-  const ref = useRef<THREE.Points>(null);
+  const ref = useRef<Points>(null);
 
   const geometry = useMemo(() => {
     const positions = new Float32Array(count * 3);
@@ -65,21 +71,21 @@ export function Starfield({ count = 5000 }) {
       sizes[i] = 0.3 + Math.random() * 0.8;
     }
 
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new BufferAttribute(positions, 3));
+    geo.setAttribute('color', new BufferAttribute(colors, 3));
+    geo.setAttribute('aSize', new BufferAttribute(sizes, 1));
     return geo;
   }, [count]);
 
   const material = useMemo(
     () =>
-      new THREE.ShaderMaterial({
+      new ShaderMaterial({
         vertexShader: starVertexShader,
         fragmentShader: starFragmentShader,
         transparent: true,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: AdditiveBlending,
         vertexColors: true,
       }),
     [],
