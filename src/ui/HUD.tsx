@@ -8,6 +8,7 @@ import {
   SEARCHING_SKY,
   skyPhase,
 } from './skyCopy';
+import { useCompactLayout } from './useCompactLayout';
 import { useSkyClock } from './useSkyClock';
 import styles from './HUD.module.css';
 
@@ -15,6 +16,7 @@ export function HUD() {
   const projects = useSpaceStore((s) => s.projects);
   const selectedId = useSpaceStore((s) => s.selectedPlanetId);
   const sidebarOpen = useSpaceStore((s) => s.sidebarOpen);
+  const compact = useCompactLayout();
   const connection = useSpaceStore((s) => s.connection);
   const dataStale = useSpaceStore((s) => s.dataStale);
   const snapshotSeen = useSpaceStore((s) => s.snapshotSeen);
@@ -54,14 +56,15 @@ export function HUD() {
 
   const hudClass = [
     styles.hud,
-    sidebarOpen ? styles.withSidebar : '',
-    selectedId ? styles.withPanel : '',
+    compact ? styles.compact : '',
+    !compact && sidebarOpen ? styles.withSidebar : '',
+    !compact && selectedId ? styles.withPanel : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <div className={hudClass}>
+    <header className={hudClass}>
       <div>
         <h1 className={styles.title}>Builders Space</h1>
         <div className={styles.subtitle}>{subtitle}</div>
@@ -72,7 +75,7 @@ export function HUD() {
         </div>
       )}
 
-      <div className={styles.counters}>
+      <div className={styles.counters} data-counters="">
         <HUDCounter label="Agents" value={totalAgents} />
         <HUDCounter label="Working" value={workingAgents} color="#44ffaa" />
         {waitingAgents > 0 && (
@@ -80,7 +83,7 @@ export function HUD() {
         )}
         {errorAgents > 0 && <HUDCounter label="Errors" value={errorAgents} color="#ff4444" pulse />}
       </div>
-    </div>
+    </header>
   );
 }
 

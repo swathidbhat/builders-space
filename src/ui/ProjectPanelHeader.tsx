@@ -16,7 +16,12 @@ export function ProjectPanelHeader({
         <h2 className={styles.name}>{prettifyName(name)}</h2>
         <div className={styles.path}>{path}</div>
       </div>
-      <button className={styles.esc} onClick={onClose}>
+      <button
+        type="button"
+        className={styles.esc}
+        aria-label="Close project details"
+        onClick={onClose}
+      >
         ESC
       </button>
     </div>

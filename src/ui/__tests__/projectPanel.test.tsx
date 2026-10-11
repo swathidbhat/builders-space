@@ -67,9 +67,9 @@ describe('project panel', () => {
     expect(useSpaceStore.getState().humanLingo).toBe(false);
     expect(screen.getByText('done action')).toBeTruthy();
 
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'ESC' }));
-    fireEvent.mouseLeave(screen.getByRole('button', { name: 'ESC' }));
-    fireEvent.click(screen.getByRole('button', { name: 'ESC' }));
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Close project details' }));
+    fireEvent.mouseLeave(screen.getByRole('button', { name: 'Close project details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close project details' }));
     expect(useSpaceStore.getState().selectedPlanetId).toBeNull();
   });
 

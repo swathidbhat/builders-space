@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -37,7 +37,7 @@ test('dashboard renders live fixture sessions', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Builders Space' })).toBeVisible();
   await expect(lumenLab(page)).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText('1 planet discovered')).toBeVisible();
+  await expect(page.getByText('10 planets discovered')).toBeVisible();
 
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
@@ -52,7 +52,7 @@ test('dashboard renders live fixture sessions', async ({ page }) => {
   await expect(needsYou).toContainText('TypeError: Cannot read properties of undefined');
   await expect(needsYou).toContainText('verify the stripe webhook signature');
 
-  const label = page.locator('[data-planet-label]').first();
+  const label = page.locator('[data-planet-label]:visible').first();
   await expect(label).toBeVisible();
   const readable = await label.evaluate((el) => {
     const name = el.querySelector('[data-planet-name]');
@@ -123,9 +123,14 @@ test('shows a disconnected sky and recovers after the API restarts', async ({ pa
       page.getByRole('status').filter({ hasText: 'Disconnected — retrying' }),
     ).toHaveCount(0, { timeout: 30_000 });
     await expect(lumenLab(page)).toBeVisible();
-    await expect(page.getByText('1 planet discovered', { exact: true })).toBeVisible();
+    await expect(page.getByText('10 planets discovered', { exact: true })).toBeVisible();
   } finally {
-    restarted.kill('SIGTERM');
+    if (restarted.pid) {
+      writeFileSync(
+        'e2e/.runtime.json',
+        JSON.stringify({ home: runtime.home, pid: restarted.pid }),
+      );
+    }
   }
 
   const unexpected = errors.filter((message) => !transportNoise(message));

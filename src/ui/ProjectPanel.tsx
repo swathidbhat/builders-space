@@ -35,7 +35,7 @@ export function ProjectPanel() {
   if (!project) return null;
 
   return (
-    <div className={styles.panel}>
+    <aside className={styles.panel} aria-label="Project details">
       <ProjectPanelHeader name={project.name} path={project.path} onClose={deselectPlanet} />
       <ProjectStats agents={project.agents} />
       <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
@@ -61,6 +61,6 @@ export function ProjectPanel() {
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }

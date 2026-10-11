@@ -16,6 +16,9 @@
   letter-spacing: 0.04em;
   line-height: 1.25;
   display: inline-block;
+  max-width: min(220px, 34vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 2px 8px;
   border-radius: 8px;
   background: rgba(5, 8, 20, 0.78);

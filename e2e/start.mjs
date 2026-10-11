@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -73,6 +73,122 @@ writeFileSync(
     source: 'claude',
   }),
 );
+
+function ago(minutes) {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+function claudeProject(cwd, sessionId, task, iso, finished) {
+  const dirName = `-${cwd.replace(/^\//, '').replace(/\//g, '-')}`;
+  const dir = join(home, '.claude', 'projects', dirName);
+  mkdirSync(dir, { recursive: true });
+  const assistant = finished
+    ? { type: 'text', text: 'Finished the pass.' }
+    : { type: 'tool_use', name: 'Read', input: { file_path: `${cwd}/README.md` } };
+  writeFileSync(
+    join(dir, `${sessionId}.jsonl`),
+    [
+      JSON.stringify({
+        type: 'user',
+        sessionId,
+        cwd,
+        timestamp: iso,
+        message: { role: 'user', content: task },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        sessionId,
+        cwd,
+        timestamp: iso,
+        message: { role: 'assistant', content: [assistant] },
+      }),
+    ].join('\n') + '\n',
+  );
+}
+
+const extraProjects = [
+  {
+    cwd: '/tmp/stripe-webhook-gateway-for-checkout-retries',
+    sessionId: 'sess-stripe-gateway',
+    task: 'retry checkout webhooks with a long project name',
+    iso: ago(30),
+    finished: true,
+    error: 'Error: webhook secret missing',
+  },
+  {
+    cwd: '/tmp/billing-question-backfill',
+    sessionId: 'sess-billing',
+    task: 'Should the backfill include refunded orders?',
+    iso: ago(12),
+    finished: true,
+  },
+  {
+    cwd: '/tmp/live-ingest-worker',
+    sessionId: 'sess-ingest',
+    task: 'tail the ingest worker logs',
+    iso: now,
+    finished: false,
+  },
+  {
+    cwd: '/tmp/design-system-v2',
+    sessionId: 'sess-design',
+    task: 'publish the token update',
+    iso: ago(180),
+    finished: true,
+  },
+  {
+    cwd: '/tmp/api-gateway',
+    sessionId: 'sess-gateway',
+    task: 'trace the gateway timeout',
+    iso: now,
+    finished: false,
+  },
+  {
+    cwd: '/tmp/ml-pipeline-training-run',
+    sessionId: 'sess-ml',
+    task: 'check the training metrics',
+    iso: ago(200),
+    finished: true,
+  },
+  {
+    cwd: '/tmp/old-blog',
+    sessionId: 'sess-blog',
+    task: 'archive the old posts',
+    iso: ago(240),
+    finished: true,
+  },
+  {
+    cwd: '/tmp/projects-side-quest-tracker-with-an-unreasonably-long-name',
+    sessionId: 'sess-sidequest',
+    task: 'Is the side quest list ready to ship?',
+    iso: ago(20),
+    finished: true,
+  },
+  {
+    cwd: '/tmp/checkout-notifications',
+    sessionId: 'sess-notify',
+    task: 'send the receipt email',
+    iso: now,
+    finished: false,
+  },
+];
+
+for (const extra of extraProjects) {
+  claudeProject(extra.cwd, extra.sessionId, extra.task, extra.iso, extra.finished);
+  if (extra.error) {
+    writeFileSync(
+      join(eventsDir, `status-${extra.sessionId}.json`),
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        status: 'error',
+        error_message: extra.error,
+        session_id: extra.sessionId,
+        cwd: extra.cwd,
+        source: 'claude',
+      }),
+    );
+  }
+}
 
 const cursorDir = join(
   home,
@@ -155,6 +271,12 @@ const client = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', '5174', '-
 });
 
 function shutdown() {
+  try {
+    const current = JSON.parse(readFileSync(runtimePath, 'utf8'));
+    if (current.pid) process.kill(current.pid, 'SIGTERM');
+  } catch {
+    // The API is already gone.
+  }
   server.kill('SIGTERM');
   client.kill('SIGTERM');
 }
@@ -164,7 +286,12 @@ process.on('SIGINT', shutdown);
 // The restart test kills the API on purpose. Vite has to stay up so the page can
 // re-read the new launch token without a manual reload.
 server.on('exit', () => {
-  writeRuntime(null);
+  try {
+    const current = JSON.parse(readFileSync(runtimePath, 'utf8'));
+    if (current.pid === server.pid) writeRuntime(null);
+  } catch {
+    writeRuntime(null);
+  }
 });
 client.on('exit', (code) => {
   if (code) process.exit(code ?? 1);

@@ -24,3 +24,9 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: layout-screenshots
+          path: test-results/**/*.png
+          if-no-files-found: ignore

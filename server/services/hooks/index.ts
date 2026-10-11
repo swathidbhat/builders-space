@@ -7,7 +7,7 @@ import { ensureAppDirs } from './dirs';
 import { installHookScripts } from './installScripts';
 import { readManifest, writeManifest } from './manifest';
 import { fireHookScript, manifestPath, statusHookScript } from './paths';
-import type { EnableResultMap, HookStatus, ToolHookAdapter } from './types';
+import type { EnableResultMap, EnableToolResult, HookStatus, ToolHookAdapter } from './types';
 
 export const hookAdapters: ToolHookAdapter[] = [claudeHooks, cursorHooks, codexHooks];
 
@@ -22,10 +22,21 @@ export function enableHooks(): EnableResultMap {
   const manifest = readManifest();
   installHookScripts();
 
-  const result = {} as EnableResultMap;
-  for (const adapter of hookAdapters) result[adapter.name] = adapter.enable(manifest);
+  const tools = {} as Record<'claude' | 'cursor' | 'codex', EnableToolResult>;
+  const changed = new Set<string>([fireHookScript(), statusHookScript()]);
+  let restartRequired = false;
+  for (const adapter of hookAdapters) {
+    const tool = adapter.enable(manifest);
+    tools[adapter.name] = tool;
+    for (const file of tool.changedFiles ?? []) changed.add(file);
+    if (tool.restartRequired) restartRequired = true;
+  }
   writeManifest(manifest);
-  return result;
+  return {
+    ...tools,
+    changedFiles: [...changed],
+    restartRequired,
+  };
 }
 
 export function disableHooks(): { claude: string; cursor: string; codex: string } {

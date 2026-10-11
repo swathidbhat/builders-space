@@ -16,6 +16,17 @@ interface EnableResponse {
   claude: EnableToolResult;
   cursor: EnableToolResult;
   codex: EnableToolResult;
+  changedFiles?: string[];
+  restartRequired?: boolean;
+}
+
+function startMinimized(): boolean {
+  if (typeof window === 'undefined') return false;
+  const compact =
+    typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 999px)').matches;
+  if (compact) return true;
+  if (localStorage.getItem('space:hooks-seen') === '1') return true;
+  return localStorage.getItem('space:hooks-minimized') === '1';
 }
 
 const API_BASE = API_ORIGIN;
@@ -39,10 +50,10 @@ const WRENCH_SVG = (
 export function HookSetupCard() {
   const [status, setStatus] = useState<HookStatusResponse | null>(null);
   const [enableResult, setEnableResult] = useState<EnableResponse | null>(null);
+  const [disableMessage, setDisableMessage] = useState<string | null>(null);
+  const [confirmDisable, setConfirmDisable] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [minimized, setMinimized] = useState(
-    () => localStorage.getItem('space:hooks-minimized') === '1',
-  );
+  const [minimized, setMinimized] = useState(startMinimized);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -57,6 +68,10 @@ export function HookSetupCard() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (!minimized) localStorage.setItem('space:hooks-seen', '1');
+  }, [minimized]);
 
   if (!status) return null;
 
@@ -75,6 +90,8 @@ export function HookSetupCard() {
       });
       const data: EnableResponse = await res.json();
       setEnableResult(data);
+      setDisableMessage(null);
+      setConfirmDisable(false);
       await fetchStatus();
     } catch {
       /* failed */
@@ -85,17 +102,24 @@ export function HookSetupCard() {
   const handleDisable = async () => {
     setLoading(true);
     try {
-      await fetch(`${API_BASE}/api/hooks/disable`, { method: 'POST', headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/hooks/disable`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('disable failed');
       setEnableResult(null);
+      setConfirmDisable(false);
+      setDisableMessage('Hooks removed. Restart Claude Code, Cursor, and Codex if they are open.');
       await fetchStatus();
     } catch {
-      /* failed */
+      setDisableMessage('Could not remove hooks.');
     }
     setLoading(false);
   };
 
   const handleMinimize = () => {
     localStorage.setItem('space:hooks-minimized', '1');
+    localStorage.setItem('space:hooks-seen', '1');
     setMinimized(true);
   };
 
@@ -108,22 +132,32 @@ export function HookSetupCard() {
     const iconColor = anyConfigured ? '#4ade80' : 'rgba(255,255,255,0.4)';
     return (
       <button
+        type="button"
         className={styles.fab}
         style={cssVars({ '--icon': iconColor })}
         onClick={handleExpand}
         title="Hook settings"
+        aria-label="Hook settings"
       >
         {WRENCH_SVG}
       </button>
     );
   }
 
+  const changedFiles = enableResult?.changedFiles ?? [];
+  const restartRequired = Boolean(enableResult?.restartRequired);
+
   return (
-    <div className={styles.card}>
+    <aside className={styles.card} aria-label="Hooks">
       <div className={styles.header}>
         <span className={styles.title}>Hooks</span>
-        <button className={styles.minimize} onClick={handleMinimize} title="Minimize">
-          &#8722;
+        <button
+          type="button"
+          className={styles.minimize}
+          onClick={handleMinimize}
+          aria-label="Minimize hooks"
+        >
+          <span aria-hidden="true">&#8722;</span>
         </button>
       </div>
 
@@ -157,19 +191,80 @@ export function HookSetupCard() {
           </div>
         )}
 
+        {enableResult && (
+          <div className={styles.feedback} role="status">
+            <p className={styles.feedbackTitle}>
+              {changedFiles.length > 0 ? 'Files changed' : 'No files changed'}
+            </p>
+            {changedFiles.length > 0 && (
+              <ul className={styles.files}>
+                {changedFiles.map((file) => (
+                  <li key={file}>{file}</li>
+                ))}
+              </ul>
+            )}
+            <p>
+              {restartRequired
+                ? 'Restart Claude Code, Cursor, and Codex so they load the new hooks.'
+                : 'No restart needed.'}
+            </p>
+          </div>
+        )}
+
+        {disableMessage && (
+          <p className={styles.feedback} role="status">
+            {disableMessage}
+          </p>
+        )}
+
         <div className={styles.actions}>
-          {anyAvailable && !allConfigured && (
-            <button className={styles.enable} onClick={handleEnable} disabled={loading}>
-              {loading ? 'Setting up...' : 'Enable Hooks'}
-            </button>
-          )}
-          {anyConfigured && (
-            <button className={styles.disable} onClick={handleDisable} disabled={loading}>
-              Disable
-            </button>
+          {confirmDisable ? (
+            <div className={styles.confirm} role="group" aria-label="Confirm disable hooks">
+              <p>Remove Builders Space hooks from Claude Code, Cursor, and Codex?</p>
+              <div className={styles.confirmActions}>
+                <button
+                  type="button"
+                  className={styles.disable}
+                  onClick={() => setConfirmDisable(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={styles.enable}
+                  onClick={handleDisable}
+                  disabled={loading}
+                >
+                  {loading ? 'Removing...' : 'Remove hooks'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {anyAvailable && !allConfigured && (
+                <button
+                  type="button"
+                  className={styles.enable}
+                  onClick={handleEnable}
+                  disabled={loading}
+                >
+                  {loading ? 'Setting up...' : 'Enable Hooks'}
+                </button>
+              )}
+              {anyConfigured && (
+                <button
+                  type="button"
+                  className={styles.disable}
+                  onClick={() => setConfirmDisable(true)}
+                  disabled={loading}
+                >
+                  Disable
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

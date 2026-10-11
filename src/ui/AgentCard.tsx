@@ -107,10 +107,11 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const quiet = activityPhrase(agent);
 
   return (
-    <div
+    <button
+      type="button"
       className={styles.card}
       onClick={openSession}
-      title={agent.sessionMeta ? 'Click to open session' : undefined}
+      title={agent.sessionMeta ? 'Open session' : undefined}
       style={cssVars({
         '--accent': accentColor,
         '--accent-2': identity.gradient[1],
@@ -147,7 +148,7 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
         </div>
 
         <div className={styles.meta}>
-          <div className={styles.dot} />
+          <div className={styles.dot} aria-hidden="true" />
           <span className={styles.badge}>{statusLabel}</span>
         </div>
       </div>
@@ -155,6 +156,6 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
       <div className={styles.action}>{action}</div>
 
       {toast && <div className={styles.toast}>{toast}</div>}
-    </div>
+    </button>
   );
 }

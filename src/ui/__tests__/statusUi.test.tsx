@@ -83,8 +83,43 @@ describe('status display', () => {
     fireEvent.click(projectButton('Zeta'));
     expect(useSpaceStore.getState().selectedPlanetId).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '×' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close projects' }));
     expect(useSpaceStore.getState().sidebarOpen).toBe(false);
+  });
+
+  it('keeps a narrow sidebar collapsed until its toggle is used', () => {
+    const listeners = new Set<() => void>();
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: (_type: string, listener: EventListener) => {
+        listeners.add(listener as () => void);
+      },
+      removeEventListener: (_type: string, listener: EventListener) => {
+        listeners.delete(listener as () => void);
+      },
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      useSpaceStore.setState({
+        sidebarOpen: true,
+        projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
+      });
+      render(<Sidebar />);
+      expect(screen.queryByRole('region', { name: 'All projects' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
+      expect(screen.getByRole('region', { name: 'All projects' })).toBeTruthy();
+      expect(useSpaceStore.getState().sidebarOpen).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Close projects' }));
+      expect(screen.queryByRole('region', { name: 'All projects' })).toBeNull();
+    } finally {
+      if (original) window.matchMedia = original;
+      else delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
+    }
   });
 
   it('shows a collapsed sidebar and an empty-project dot', () => {
@@ -101,7 +136,7 @@ describe('status display', () => {
       ],
     });
     render(<Sidebar />);
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
     expect(useSpaceStore.getState().sidebarOpen).toBe(true);
     expect(dot('Bare').style.getPropertyValue('--dot')).toBe('#444');
   });

@@ -7,7 +7,12 @@ import { claudeDir, claudeSettingsPath } from './paths';
 import { claudeSettingsSchema, readJsonConfig } from './jsonConfig';
 import { FIRE_HOOK_COMMAND, STATUS_HOOK_COMMAND } from './scripts';
 import { statusFromToolDir } from './status';
-import type { EnableToolResult, HookManifest, ToolHookAdapter } from './types';
+import {
+  enabledResult,
+  type EnableToolResult,
+  type HookManifest,
+  type ToolHookAdapter,
+} from './types';
 
 const CLAUDE_EVENTS = ['SessionStart', 'PostToolUse', 'Stop', 'SessionEnd'] as const;
 
@@ -34,11 +39,11 @@ function enable(manifest: HookManifest): EnableToolResult {
     if (!existsSync(configPath)) {
       writeFileSync(configPath, JSON.stringify({ hooks }, null, 2) + '\n');
       noteCreated(manifest, configPath);
-      return { status: 'ok' };
+      return enabledResult([configPath]);
     }
 
     const content = readFileSync(configPath, 'utf-8');
-    if (content.includes('status-hook.sh')) return { status: 'ok' };
+    if (content.includes('status-hook.sh')) return enabledResult([]);
 
     backupFile(configPath, 'claude-settings.json');
     const config = readJsonConfig(content, claudeSettingsSchema);
@@ -50,7 +55,7 @@ function enable(manifest: HookManifest): EnableToolResult {
     }
 
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-    return { status: 'ok' };
+    return enabledResult([configPath]);
   } catch (err) {
     logCaught('hookSetup', err, 'enable claude');
     return { status: 'error', error: String(err) };

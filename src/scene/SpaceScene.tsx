@@ -1,6 +1,8 @@
 import { Suspense, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { layoutLiveLabels } from './labelRegistry';
+import { COMPACT_MAX_PX } from './labelPlacement';
+import { prefersReducedMotion } from '../reducedMotion';
 import { OrbitControls } from '@react-three/drei/core/OrbitControls';
 import { AdditiveBlending, NoToneMapping, Vector3, type Points } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -57,8 +59,18 @@ function CameraController() {
   }, [cameraMode, selectedId, projects, positions, ringRadii]);
 
   useFrame((_state, delta) => {
+    const reduced = prefersReducedMotion();
     const controls = controlsRef.current;
     if (!controls) return;
+
+    if (reduced) {
+      camera.position.copy(targetPosRef.current);
+      controls.target.copy(targetLookAtRef.current);
+      transitioningRef.current = false;
+      controls.enabled = true;
+      controls.update();
+      return;
+    }
 
     const factor = 1 - Math.exp(-5 * delta);
 
@@ -185,11 +197,12 @@ function LabelLayoutDriver() {
     const height = state.size?.height ?? 0;
     if (width <= 0 || height <= 0) return;
     const { sidebarOpen, selectedPlanetId } = useSpaceStore.getState();
+    const compact = width <= COMPACT_MAX_PX;
     layoutLiveLabels({
       width,
       height,
-      sidebarOpen,
-      panelOpen: selectedPlanetId !== null,
+      sidebarOpen: sidebarOpen && !compact,
+      panelOpen: selectedPlanetId !== null && !compact,
     });
   });
   return null;

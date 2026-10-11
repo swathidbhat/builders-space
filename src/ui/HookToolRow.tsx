@@ -9,6 +9,8 @@ export interface EnableToolResult {
   status: EnableResult;
   snippet?: string;
   error?: string;
+  changedFiles?: string[];
+  restartRequired?: boolean;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -19,9 +21,9 @@ const TOOL_LABELS: Record<string, string> = {
 
 const INDICATOR_COLORS: Record<string, string> = {
   configured: '#4ade80',
-  available: '#facc15',
-  not_installed: 'rgba(255,255,255,0.2)',
-  manual: '#fb923c',
+  available: '#7dd3fc',
+  not_installed: 'rgba(255,255,255,0.55)',
+  manual: '#fdba74',
 };
 
 export function HookToolRow({
@@ -53,7 +55,11 @@ export function HookToolRow({
     <div>
       <div className={styles.row}>
         <div className={styles.nameWrap}>
-          <span className={styles.dot} style={cssVars({ '--dot': indicatorColor })} />
+          <span
+            className={status === 'available' ? `${styles.dot} ${styles.available}` : styles.dot}
+            style={cssVars({ '--dot': indicatorColor })}
+            aria-hidden="true"
+          />
           <span className={styles.name}>{label}</span>
         </div>
         <span className={styles.status}>{statusText}</span>

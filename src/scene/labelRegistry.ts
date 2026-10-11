@@ -1,4 +1,10 @@
-import { chromeForbidden, resolveLabelCollisions, type ScreenBox } from './labelPlacement';
+import {
+  chromeForbidden,
+  HUD_BAND_PX,
+  resolveLabelCollisions,
+  type ScreenBox,
+  type ScreenRect,
+} from './labelPlacement';
 
 interface LiveLabel {
   id: string;
@@ -34,6 +40,33 @@ function readBox(label: LiveLabel): ScreenBox | null {
   };
 }
 
+function readHudBand(): number {
+  if (typeof document === 'undefined') return HUD_BAND_PX;
+  const header = document.querySelector('header');
+  if (!(header instanceof HTMLElement)) return HUD_BAND_PX;
+  const height = header.getBoundingClientRect().height;
+  if (!Number.isFinite(height) || height <= 0) return HUD_BAND_PX;
+  return Math.max(HUD_BAND_PX, Math.ceil(height) + 4);
+}
+
+/** Overlays that actually cover the sky: the project list, the detail sheet, the hooks card. */
+function measuredChrome(): ScreenRect[] {
+  if (typeof document === 'undefined') return [];
+  const rects: ScreenRect[] = [];
+  for (const selector of [
+    'nav[aria-label="Projects"]',
+    'aside[aria-label="Project details"]',
+    'aside[aria-label="Hooks"]',
+  ]) {
+    const el = document.querySelector(selector);
+    if (!(el instanceof HTMLElement)) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 100 || rect.height < 80) continue;
+    rects.push({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
+  }
+  return rects;
+}
+
 /** Move labels that the latest projection dropped on the HUD or on each other. */
 export function layoutLiveLabels(options: {
   width: number;
@@ -47,9 +80,16 @@ export function layoutLiveLabels(options: {
     if (box) boxes.push(box);
   }
   if (boxes.length === 0) return;
+  const hud = readHudBand();
   const placed = resolveLabelCollisions(
     boxes,
-    chromeForbidden(options.width, options.height, options),
+    [
+      ...chromeForbidden(options.width, options.height, {
+        ...options,
+        hudBand: hud,
+      }),
+      ...measuredChrome(),
+    ],
     { width: options.width, height: options.height },
   );
   for (const spot of placed) {
@@ -58,5 +98,8 @@ export function layoutLiveLabels(options: {
     const scale = label.el.dataset.ls;
     if (!scale) continue;
     label.el.style.transform = `translate3d(${spot.x}px,${spot.y}px,0) scale(${scale})`;
+    label.el.style.visibility = spot.hidden ? 'hidden' : 'visible';
+    label.el.style.opacity = spot.hidden ? '0' : '1';
+    label.el.dataset.labelHidden = spot.hidden ? '1' : '0';
   }
 }

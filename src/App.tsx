@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useSocket } from './hooks/useSocket';
+import { useSpaceStore } from './store';
 import { HUD } from './ui/HUD';
 import { ProjectPanel } from './ui/ProjectPanel';
 import { Sidebar } from './ui/Sidebar';
@@ -16,14 +17,25 @@ const SpaceScene = lazy(() =>
 export function App() {
   useSocket();
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') useSpaceStore.getState().deselectPlanet();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <>
-      <Suspense fallback={<SkyLoading />}>
-        <SpaceScene />
-      </Suspense>
-      <SkyStatus />
-      <Sidebar />
       <HUD />
+      <Sidebar />
+      <main className="project-sky" aria-label="Project sky" aria-describedby="projects-nav">
+        <p className="sr-only">Each planet is listed by name and status in Projects.</p>
+        <Suspense fallback={<SkyLoading />}>
+          <SpaceScene />
+        </Suspense>
+        <SkyStatus />
+      </main>
       <ProjectPanel />
       <HookSetupCard />
       <AssistantNotice />
