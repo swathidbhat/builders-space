@@ -1,5 +1,5 @@
-import { Html } from '@react-three/drei/web/Html';
 import type { PlanetState } from './Planet';
+import { DomLabel } from './DomLabel';
 import { prettifyName } from '../prettifyName';
 import { cssVars } from '../ui/cssVars';
 import styles from './PlanetLabel.module.css';
@@ -22,7 +22,7 @@ export function PlanetLabel({ name, agentCount, planetState, yOffset }: PlanetLa
   const style = stateStyles[planetState];
 
   return (
-    <Html position={[0, yOffset + 0.3, 0]} center distanceFactor={10} pointerEvents="none">
+    <DomLabel position={[0, yOffset + 0.3, 0]} distanceFactor={10}>
       <div className={styles.label}>
         <div className={styles.name}>{prettifyName(name)}</div>
         {agentCount > 0 && (
@@ -35,6 +35,6 @@ export function PlanetLabel({ name, agentCount, planetState, yOffset }: PlanetLa
           </div>
         )}
       </div>
-    </Html>
+    </DomLabel>
   );
 }

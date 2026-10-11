@@ -4,16 +4,17 @@ import { backupFile } from './backup';
 import { isOurHook } from './match';
 import { noteCreated } from './manifest';
 import { cursorDir, cursorHooksPath } from './paths';
+import { cursorConfigSchema, readJsonConfig } from './jsonConfig';
 import { STATUS_HOOK_COMMAND } from './scripts';
 import { statusFromToolDir } from './status';
 import type { EnableToolResult, HookManifest, ToolHookAdapter } from './types';
 
 const CURSOR_HOOK_KEYS = ['sessionStart', 'postToolUse', 'stop', 'sessionEnd'] as const;
 
-interface CursorConfig {
+type CursorConfig = {
   version?: number;
   hooks?: Record<string, Array<{ command?: string }>>;
-}
+};
 
 function mergeCursorHooksIntoConfig(config: CursorConfig): void {
   if (!config.hooks) config.hooks = {};
@@ -52,7 +53,7 @@ function enable(manifest: HookManifest): EnableToolResult {
     if (content.includes('status-hook.sh')) return { status: 'ok' };
 
     backupFile(configPath, 'cursor-hooks.json');
-    const config = JSON.parse(content) as CursorConfig;
+    const config = readJsonConfig(content, cursorConfigSchema);
     mergeCursorHooksIntoConfig(config);
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
     return { status: 'ok' };
@@ -70,7 +71,7 @@ function disable(manifest: HookManifest): string {
   }
   if (!existsSync(configPath)) return 'no_config';
 
-  const config = JSON.parse(readFileSync(configPath, 'utf-8')) as CursorConfig;
+  const config = readJsonConfig(readFileSync(configPath, 'utf-8'), cursorConfigSchema);
   let modified = false;
 
   if (config.hooks && typeof config.hooks === 'object') {

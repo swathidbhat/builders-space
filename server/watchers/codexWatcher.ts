@@ -1,7 +1,12 @@
 import { readdirSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import { parseCodexSessionFile, parseCodexSessionMeta } from '../utils/parseCodexSession';
+import {
+  beginCodexParseScan,
+  endCodexParseScan,
+  parseCodexSessionFile,
+  parseCodexSessionMeta,
+} from '../utils/parseCodexSession';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
 import { CwdCache } from '../process/cwdCache';
@@ -141,11 +146,19 @@ export class CodexWatcher {
     this.projects.clear();
 
     const sessionFiles = this.collectSessionFiles();
-    if (sessionFiles.length === 0) {
-      this.onChange(new Map());
-      return;
+    beginCodexParseScan();
+    try {
+      if (sessionFiles.length === 0) {
+        this.onChange(new Map());
+        return;
+      }
+      this.scanSessions(sessionFiles);
+    } finally {
+      endCodexParseScan();
     }
+  }
 
+  private scanSessions(sessionFiles: string[]): void {
     const threadNames = this.getThreadNames();
     const runningCwds = this.processes.current();
 

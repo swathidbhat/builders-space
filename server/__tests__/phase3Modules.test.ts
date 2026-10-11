@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'fs';
+import { mkdtempSync, utimesSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawn } from 'child_process';
@@ -99,6 +99,51 @@ describe('incremental session reads', () => {
     expect(replaced?.mode).toBe('reset');
     if (replaced?.mode === 'unchanged') return;
     expect(replaced?.lines).toEqual(['replaced']);
+  });
+
+  it('rereads a same-length rewrite that keeps the last 64 bytes', () => {
+    const dir = tempDir();
+    const file = join(dir, 'same-length.jsonl');
+    const tail = `${'T'.repeat(63)}\n`;
+    const stamp = new Date('2020-01-01T00:00:00.000Z');
+    writeFileSync(file, `${'A'.repeat(50)}${tail}`);
+    utimesSync(file, stamp, stamp);
+
+    const first = readIncremental(file);
+    expect(first?.mode).toBe('reset');
+    if (!first || first.mode === 'unchanged') return;
+    expect(first.cursor.mtimeMs).toBe(stamp.getTime());
+    expect(first.lines).toEqual([`${'A'.repeat(50)}${'T'.repeat(63)}`]);
+
+    writeFileSync(file, `${'B'.repeat(50)}${tail}`);
+    utimesSync(file, stamp, stamp);
+    const rewritten = readIncremental(file, first.cursor);
+    expect(rewritten?.mode).toBe('reset');
+    if (!rewritten || rewritten.mode === 'unchanged') return;
+    expect(rewritten.lines).toEqual([`${'B'.repeat(50)}${'T'.repeat(63)}`]);
+  });
+
+  it('rereads a same-length rewrite past the first 4KB that keeps the tail', () => {
+    const dir = tempDir();
+    const file = join(dir, 'middle.jsonl');
+    const head = `${'H'.repeat(4096)}\n`;
+    const middle = `${'A'.repeat(40)}\n`;
+    const tail = `${'T'.repeat(63)}\n`;
+    const stamp = new Date('2020-01-01T00:00:00.000Z');
+    writeFileSync(file, `${head}${middle}${tail}`);
+    utimesSync(file, stamp, stamp);
+
+    const first = readIncremental(file);
+    expect(first?.mode).toBe('reset');
+    if (!first || first.mode === 'unchanged') return;
+    expect(first.cursor.mtimeMs).toBe(stamp.getTime());
+
+    writeFileSync(file, `${head}${'B'.repeat(40)}\n${tail}`);
+    utimesSync(file, stamp, stamp);
+    const rewritten = readIncremental(file, first.cursor);
+    expect(rewritten?.mode).toBe('reset');
+    if (!rewritten || rewritten.mode === 'unchanged') return;
+    expect(rewritten.lines.some((line) => line.startsWith('B'))).toBe(true);
   });
 
   it('keeps a partial line until the newline arrives', () => {

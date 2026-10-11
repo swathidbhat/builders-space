@@ -52,11 +52,11 @@ function directoryExists(path: string): boolean {
  * Decode a Claude/Cursor project directory name.
  *
  * Those tools replace `/` with `-`, so `my-app` and a real slash are ambiguous.
- * When a candidate exists on disk, prefer the longest directory name at each
- * step. That keeps `my-app` intact instead of turning it into `my/app`, and
- * still finds `/Users/alice/work/my-app` when `work-my-app` is not a directory.
- * If nothing exists, fall back to splitting only well-known parent folder names
- * and leaving the rest hyphenated.
+ * The walk starts at `/` and prefers the longest directory name at each step,
+ * for any root that exists (`/Users`, `/home`, `/opt`, `/tmp`, `/Volumes`, …).
+ * That keeps `my-app` intact instead of turning it into `my/app`.
+ * If no directory consumes the whole name, fall back to splitting only
+ * well-known parent folder names and leaving the rest hyphenated.
  *
  * Callers that have a session `cwd` should use that and not this decoder.
  */
@@ -78,14 +78,7 @@ function probeEncodedPath(dirName: string, exists: PathExists): string | null {
   const cleaned = dirName.startsWith('-') ? dirName.slice(1) : dirName;
   const segments = cleaned.split('-').filter((segment) => segment.length > 0);
   if (segments.length === 0) return null;
-
-  if (!((segments[0] === 'Users' || segments[0] === 'home') && segments.length >= 2)) return null;
-  const parent = `/${segments[0]}/${segments[1]}`;
-  const index = 2;
-
-  const resolved = resolveRemainder(parent, segments.slice(index), exists);
-  if (resolved && exists(resolved)) return resolved;
-  return null;
+  return resolveRemainder('', segments, exists);
 }
 
 function resolveRemainder(parent: string, segments: string[], exists: PathExists): string | null {

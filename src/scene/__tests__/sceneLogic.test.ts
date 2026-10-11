@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { Object3D, PerspectiveCamera } from 'three';
 import { planetCameraTarget, spaceCameraTarget } from '../cameraTarget';
+import { labelStyle } from '../labelPlacement';
 import { FiberClock } from '../fiberClock';
 import { buildColors, getPlanetType, hashString, seededRandom } from '../planetLook';
 import { prettifyName } from '../../prettifyName';
@@ -82,6 +84,27 @@ describe('prettifyName', () => {
   it('turns separators into title case', () => {
     expect(prettifyName('lumen-lab')).toBe('Lumen Lab');
     expect(prettifyName('foo_bar')).toBe('Foo Bar');
+  });
+});
+
+describe('label placement', () => {
+  it('places a label in front of the camera and hides one behind it', () => {
+    const camera = new PerspectiveCamera(60, 1, 0.1, 500);
+    camera.position.set(0, 0, 10);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+
+    const front = new Object3D();
+    front.position.set(0, 0, 0);
+    const shown = labelStyle(front, camera, 200, 200, 10);
+    expect(shown.visible).toBe(true);
+    expect(shown.transform).toContain('translate3d(');
+    expect(shown.transform).toContain('scale(');
+    expect(Number(shown.zIndex)).not.toBeNaN();
+
+    const behind = new Object3D();
+    behind.position.set(0, 0, 20);
+    expect(labelStyle(behind, camera, 200, 200, 10).visible).toBe(false);
   });
 });
 

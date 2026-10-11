@@ -43,6 +43,11 @@ export default defineConfig({
         'src/**/*.{ts,tsx}': {
           lines: 70,
         },
+        // Per-file floors so a scene component cannot sit at 0% behind the src average.
+        'src/scene/Planet.tsx': { lines: 70 },
+        'src/scene/SpaceScene.tsx': { lines: 75 },
+        'src/scene/StatusRings.tsx': { lines: 70 },
+        'src/scene/Starfield.tsx': { lines: 80 },
         'shared/**/*.ts': {
           lines: 90,
         },

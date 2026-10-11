@@ -4,6 +4,7 @@ import { backupFile } from './backup';
 import { isOurHook } from './match';
 import { noteCreated } from './manifest';
 import { claudeDir, claudeSettingsPath } from './paths';
+import { claudeSettingsSchema, readJsonConfig } from './jsonConfig';
 import { FIRE_HOOK_COMMAND, STATUS_HOOK_COMMAND } from './scripts';
 import { statusFromToolDir } from './status';
 import type { EnableToolResult, HookManifest, ToolHookAdapter } from './types';
@@ -40,7 +41,7 @@ function enable(manifest: HookManifest): EnableToolResult {
     if (content.includes('status-hook.sh')) return { status: 'ok' };
 
     backupFile(configPath, 'claude-settings.json');
-    const config = JSON.parse(content) as { hooks?: Record<string, unknown[]> };
+    const config = readJsonConfig(content, claudeSettingsSchema);
     if (!config.hooks) config.hooks = {};
 
     for (const [event, groups] of Object.entries(hooks)) {
@@ -65,9 +66,7 @@ function disable(manifest: HookManifest): string {
   if (!existsSync(configPath)) return 'no_config';
 
   const content = readFileSync(configPath, 'utf-8');
-  const config = JSON.parse(content) as {
-    hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
-  };
+  const config = readJsonConfig(content, claudeSettingsSchema);
   let modified = false;
 
   for (const event of CLAUDE_EVENTS) {

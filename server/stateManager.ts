@@ -17,8 +17,14 @@ export interface HookRuntimeEntry {
   mode: 'realtime';
 }
 
+export function normalizeCwd(cwd: string | undefined): string | undefined {
+  if (!cwd) return cwd;
+  const stripped = cwd.replace(/\/+$/, '');
+  return stripped.length > 0 ? stripped : '/';
+}
+
 export function makeAgentKey(source: AgentSource, sessionId: string, cwd?: string): string {
-  return `${source}::${sessionId}::${cwd ?? ''}`;
+  return `${source}::${sessionId}::${normalizeCwd(cwd) ?? ''}`;
 }
 
 export class StateManager extends EventEmitter {
@@ -57,8 +63,12 @@ export class StateManager extends EventEmitter {
   }
 
   applyHookOverlay(entry: HookRuntimeEntry): void {
-    const key = makeAgentKey(entry.source, entry.sessionId, entry.cwd);
-    this.hookRuntimeByKey.set(key, entry);
+    const cwd = normalizeCwd(entry.cwd);
+    const stored = cwd === entry.cwd ? entry : { ...entry, cwd };
+    const key = makeAgentKey(stored.source, stored.sessionId, stored.cwd);
+    const existing = this.hookRuntimeByKey.get(key);
+    if (existing && existing.lastEventAt > stored.lastEventAt) return;
+    this.hookRuntimeByKey.set(key, stored);
     this.rebuild();
   }
 
@@ -156,11 +166,12 @@ export class StateManager extends EventEmitter {
     // Match a session's own events only. Another session in the same project
     // must not inherit this status.
     if (agent.sessionId) {
+      let best: HookRuntimeEntry | undefined;
       for (const entry of this.hookRuntimeByKey.values()) {
-        if (entry.source === agent.source && entry.sessionId === agent.sessionId) {
-          return entry;
-        }
+        if (entry.source !== agent.source || entry.sessionId !== agent.sessionId) continue;
+        if (!best || entry.lastEventAt >= best.lastEventAt) best = entry;
       }
+      if (best) return best;
     }
 
     // Events with no session id can apply only when this project has a single

@@ -4,6 +4,7 @@ import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { CLIENT_PORT } from './shared/config.ts';
+import { peerRejection } from './server/peerUser.ts';
 import { slimThreePlugin } from './vite/slimThreePlugin.ts';
 
 function readLaunchToken(): string {
@@ -17,6 +18,18 @@ function buildersAuthPlugin(): Plugin {
   return {
     name: 'builders-space-auth',
     apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const rejection = peerRejection(req.socket);
+        if (!rejection) {
+          next();
+          return;
+        }
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: rejection }));
+      });
+    },
     async transformIndexHtml(html) {
       const started = Date.now();
       let token = readLaunchToken();

@@ -345,4 +345,27 @@ describe('hook status and per-tool install', () => {
     expect(disableHooks().cursor).toBe('skipped');
     expect(readFileSync(join(home, '.cursor', 'hooks.json'), 'utf-8')).toContain('echo keep');
   });
+
+  it('does not rewrite hook JSON that is not the expected shape', () => {
+    const home = homeWith('.claude', '.cursor', '.codex');
+    const claude = join(home, '.claude', 'settings.json');
+    const cursor = join(home, '.cursor', 'hooks.json');
+    const codex = join(home, '.codex', 'hooks.json');
+    writeFileSync(claude, JSON.stringify({ hooks: 'nope' }) + '\n');
+    writeFileSync(cursor, JSON.stringify({ hooks: { sessionStart: 'nope' } }) + '\n');
+    writeFileSync(codex, JSON.stringify({ hooks: [] }) + '\n');
+
+    const enabled = enableHooks();
+    expect(enabled.claude.status).toBe('error');
+    expect(enabled.cursor.status).toBe('error');
+    expect(enabled.codex.status).toBe('error');
+    expect(readFileSync(claude, 'utf-8')).toBe(JSON.stringify({ hooks: 'nope' }) + '\n');
+    expect(readFileSync(cursor, 'utf-8')).toContain('"sessionStart":"nope"');
+    expect(readFileSync(codex, 'utf-8')).toBe(JSON.stringify({ hooks: [] }) + '\n');
+
+    expect(disableHooks().claude).toBe('error');
+    expect(disableHooks().cursor).toBe('error');
+    expect(readFileSync(claude, 'utf-8')).toContain('"nope"');
+    expect(readFileSync(cursor, 'utf-8')).toContain('nope');
+  });
 });

@@ -4,6 +4,7 @@ import { backupFile } from './backup';
 import { isOurHook } from './match';
 import { noteCreated } from './manifest';
 import { codexConfigPath, codexDir, codexHooksPath } from './paths';
+import { codexHooksSchema, readJsonConfig } from './jsonConfig';
 import { FIRE_HOOK_COMMAND, STATUS_HOOK_COMMAND } from './scripts';
 import { statusFromToolDir } from './status';
 import type { EnableToolResult, HookManifest, ToolHookAdapter } from './types';
@@ -24,7 +25,7 @@ export function writeCodexHooksJson(hooksJsonPath: string, manifest?: HookManife
     if (content.includes('status-hook.sh')) return;
 
     backupFile(hooksJsonPath, 'codex-hooks.json');
-    const existing = JSON.parse(content) as { hooks?: Record<string, unknown[]> };
+    const existing = readJsonConfig(content, codexHooksSchema);
     if (!existing.hooks) existing.hooks = {};
 
     for (const [event, groups] of Object.entries(CODEX_HOOKS_DEFINITION.hooks)) {
@@ -92,9 +93,7 @@ function disable(manifest: HookManifest): string {
     unlinkSync(hooksJsonPath);
     outcome = 'removed';
   } else if (existsSync(hooksJsonPath)) {
-    const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf-8')) as {
-      hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
-    };
+    const hooksConfig = readJsonConfig(readFileSync(hooksJsonPath, 'utf-8'), codexHooksSchema);
     let modified = false;
 
     for (const event of Object.keys(hooksConfig.hooks || {})) {
