@@ -4,14 +4,7 @@ import { AgentCard } from './AgentCard';
 import { getProjectAgentIdentities } from './agentIdentity';
 import { PlanetSurface } from './PlanetSurface';
 import { requestHumanize } from '../hooks/useSocket';
-import type { AgentStatus } from '../types';
-
-const STATUS_PRIORITY: Record<AgentStatus, number> = {
-  error: 0,
-  waiting: 1,
-  working: 2,
-  done: 3,
-};
+import { compareAgentStatus } from '../../shared/status';
 
 export function ProjectPanel() {
   const selectedId = useSpaceStore((s) => s.selectedPlanetId);
@@ -32,9 +25,7 @@ export function ProjectPanel() {
 
   const sortedAgents = useMemo(
     () =>
-      project
-        ? [...project.agents].sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
-        : [],
+      project ? [...project.agents].sort((a, b) => compareAgentStatus(a.status, b.status)) : [],
     [project],
   );
 
@@ -44,7 +35,8 @@ export function ProjectPanel() {
     if (!project || !humanLingo) return;
 
     const rawTexts = project.agents
-      .flatMap((a) => [a.lastAction, a.errorReason].filter(Boolean) as string[])
+      .flatMap((a) => [a.lastAction, a.errorReason])
+      .filter((text): text is string => Boolean(text))
       .filter((t) => !humanizedTexts[t])
       .filter((t, i, arr) => arr.indexOf(t) === i);
 

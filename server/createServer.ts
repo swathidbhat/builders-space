@@ -18,8 +18,9 @@ import {
 } from './security';
 import { logCaught } from './log';
 import type { ServerToClientEvents, ClientToServerEvents } from './types';
+import { SERVER_PORT } from '../shared/config';
 
-export const PORT = 3002;
+export const PORT = SERVER_PORT;
 
 export type CommandRunner = (file: string, args: string[]) => Promise<void>;
 

@@ -40,17 +40,16 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@react-three/drei": "^9.117.0",
     "@react-three/fiber": "^8.17.0",
-    "@react-three/postprocessing": "^2.16.0",
     "chokidar": "^4.0.0",
     "concurrently": "^9.2.5",
     "dotenv": "^17.3.1",
     "express": "^4.22.3",
-    "postprocessing": "^6.36.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",
     "three": "^0.170.0",
+    "zod": "^4.6.5",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

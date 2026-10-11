@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CLIENT_TRANSLATION_CACHE_MAX } from '../shared/config';
 import { useSpaceStore } from './store';
 import type { SpaceData } from './types';
 
@@ -62,5 +63,19 @@ describe('space store', () => {
       'Read:App.tsx': 'Reading the app',
       'Shell:npm test': 'Running tests',
     });
+  });
+
+  it('drops the oldest translations once the cache is full', () => {
+    const texts: Record<string, string> = {};
+    for (let i = 0; i < CLIENT_TRANSLATION_CACHE_MAX + 1; i++) {
+      texts[`Read:${i}.ts`] = `Reading ${i}`;
+    }
+    useSpaceStore.getState().setHumanizedTexts(texts);
+    const cached = useSpaceStore.getState().humanizedTexts;
+    expect(Object.keys(cached)).toHaveLength(CLIENT_TRANSLATION_CACHE_MAX);
+    expect(cached['Read:0.ts']).toBeUndefined();
+    expect(cached[`Read:${CLIENT_TRANSLATION_CACHE_MAX}.ts`]).toBe(
+      `Reading ${CLIENT_TRANSLATION_CACHE_MAX}`,
+    );
   });
 });

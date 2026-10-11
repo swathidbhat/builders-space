@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
+import { CLIENT_PORT } from './shared/config';
 
 function readLaunchToken(): string {
   const tokenPath = path.join(homedir(), '.builders-space', 'auth-token');
@@ -37,13 +38,7 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 5174,
+    port: CLIENT_PORT,
     cors: false,
-    proxy: {
-      '/ws': {
-        target: 'ws://127.0.0.1:3002',
-        ws: true,
-      },
-    },
   },
 });

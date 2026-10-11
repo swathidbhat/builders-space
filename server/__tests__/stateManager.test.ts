@@ -838,4 +838,25 @@ describe('StateManager', () => {
       expect(names).toEqual(['/Users/alice/my-app', '/Users/alice/my_app']);
     });
   });
+
+  describe('unchanged state', () => {
+    it('does not emit or bump lastUpdated when the project list is the same', () => {
+      const listener = vi.fn();
+      sm.on('change', listener);
+      const projects = new Map<string, ProjectInfo>();
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [makeAgent({ source: 'cursor', sessionId: 'c1' })],
+        }),
+      );
+      sm.updateCursorProjects(projects);
+      const first = sm.getState().lastUpdated;
+      expect(listener).toHaveBeenCalledTimes(1);
+      sm.updateCursorProjects(projects);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(sm.getState().lastUpdated).toBe(first);
+    });
+  });
 });

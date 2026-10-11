@@ -1,18 +1,17 @@
 import { readdirSync, existsSync } from 'fs';
 import { join, basename, isAbsolute } from 'path';
 import { homedir } from 'os';
-import { execSync } from 'child_process';
 import { parseClaudeSessionFile } from '../utils/parseTranscript';
 import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
-import type { AgentInfo, AgentStatus, ProjectInfo } from '../types';
+import { CwdCache } from '../process/cwdCache';
+import { MAX_SESSION_AGE_MS } from '../../shared/config';
+import { inferSessionStatus } from '../../shared/status';
+import type { AgentInfo, ProjectInfo } from '../types';
 
 export type ClaudeWatcherCallback = (projects: Map<string, ProjectInfo>) => void;
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
-const MAX_AGE_MS = 48 * 60 * 60 * 1000;
-const STALE_THRESHOLD_MS = 10 * 60 * 1000;
 const GENERIC_DIRS = ['Documents', 'Desktop', 'Downloads', 'home', 'Users'];
 
 export interface ClaudeWatcherOptions {
@@ -34,12 +33,14 @@ export class ClaudeWatcher {
   private retryInterval: ReturnType<typeof setInterval> | null = null;
   private fallbackScanMs: number;
   private missingDirRetryMs: number;
+  private processes: CwdCache;
 
   constructor(onChange: ClaudeWatcherCallback, options: ClaudeWatcherOptions = {}) {
     this.claudeBase = options.base ?? join(homedir(), '.claude', 'projects');
     this.onChange = onChange;
     this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
     this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
+    this.processes = new CwdCache('claude', () => this.scan());
   }
 
   start(): void {
@@ -64,6 +65,7 @@ export class ClaudeWatcher {
   }
 
   stop(): void {
+    this.processes.stop();
     void this.jsonlWatch?.close();
     this.jsonlWatch = null;
     if (this.scanInterval) clearInterval(this.scanInterval);
@@ -74,6 +76,7 @@ export class ClaudeWatcher {
 
   private arm(): void {
     this.scan();
+    this.processes.start();
     try {
       this.jsonlWatch = watchJsonlTree(this.claudeBase, () => this.scan(), 'ClaudeWatcher');
     } catch (err) {
@@ -82,36 +85,6 @@ export class ClaudeWatcher {
     this.scanInterval = setInterval(() => this.scan(), this.fallbackScanMs);
     this.scanInterval.unref?.();
     console.log(`[ClaudeWatcher] Watching ${this.claudeBase}`);
-  }
-
-  private getRunningClaudeCwds(): Set<string> {
-    const cwds = new Set<string>();
-    try {
-      const output = execSync('ps aux', { encoding: 'utf-8', timeout: 5000 });
-      const lines = output.split('\n');
-      for (const line of lines) {
-        if (!line.includes('claude') || line.includes('grep')) continue;
-        const parts = line.trim().split(/\s+/);
-        if (parts.length < 2) continue;
-        const pid = parseInt(parts[1], 10);
-        if (isNaN(pid)) continue;
-
-        try {
-          const cwd = execSync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | head -1`, {
-            encoding: 'utf-8',
-            timeout: 3000,
-          })
-            .trim()
-            .replace(/^n/, '');
-          if (cwd) cwds.add(stripSlash(cwd));
-        } catch {
-          // Process exited or lsof has no cwd. Not a scan failure.
-        }
-      }
-    } catch (err) {
-      logCaught('ClaudeWatcher', err, 'ps aux');
-    }
-    return cwds;
   }
 
   private scan(): void {
@@ -128,7 +101,7 @@ export class ClaudeWatcher {
       return;
     }
 
-    const runningCwds = this.getRunningClaudeCwds();
+    const runningCwds = this.processes.current();
 
     for (const dirName of projectDirs) {
       const dirPath = join(this.claudeBase, dirName);
@@ -148,7 +121,7 @@ export class ClaudeWatcher {
         if (!data) continue;
 
         const claudeAgeMs = Date.now() - data.lastActivityMs;
-        if (claudeAgeMs > MAX_AGE_MS) continue;
+        if (claudeAgeMs > MAX_SESSION_AGE_MS) continue;
 
         if (data.slug) bestSlug = data.slug;
 
@@ -158,17 +131,10 @@ export class ClaudeWatcher {
             : resolveEncodedProjectPath(dirName);
 
         const isProcessRunning = data.cwd ? runningCwds.has(stripSlash(data.cwd)) : false;
-
-        let status: AgentStatus;
-        if (data.isActive) {
-          status = 'working';
-        } else if (isProcessRunning) {
-          const ageMs = Date.now() - data.lastActivityMs;
-          status = ageMs > STALE_THRESHOLD_MS ? 'waiting' : 'working';
-        } else {
-          const ageMs = Date.now() - data.lastActivityMs;
-          status = ageMs < ONE_HOUR_MS ? 'waiting' : 'done';
-        }
+        const status = inferSessionStatus({
+          lastActivityMs: data.lastActivityMs,
+          processRunning: isProcessRunning,
+        });
 
         agents.push({
           id: `claude-${data.sessionId}`,

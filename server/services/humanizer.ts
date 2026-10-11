@@ -1,4 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  HUMANIZE_CACHE_MAX,
+  HUMANIZE_CACHE_TTL_MS,
+  HUMANIZE_MAX_ITEMS,
+  HUMANIZE_MAX_TEXT_CHARS,
+} from '../../shared/config';
+
+export { HUMANIZE_MAX_ITEMS, HUMANIZE_MAX_TEXT_CHARS };
 
 interface CacheEntry {
   humanized: string;
@@ -6,8 +14,6 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const MAX_CACHE = 500;
-const CACHE_TTL_MS = 60 * 60 * 1000;
 
 /** Rule-based path (no API key or LLM failure): only known `Tool:detail` lines are paraphrased. */
 const UNCLEAR_ACTIVITY = 'Unclear activity';
@@ -17,10 +23,6 @@ export interface HumanizeResult {
   usedLLM: boolean;
   error?: string;
 }
-
-/** One panel's worth of labels. Larger requests are rejected before any API call. */
-export const HUMANIZE_MAX_ITEMS = 20;
-export const HUMANIZE_MAX_TEXT_CHARS = 500;
 
 export class HumanizeInputError extends Error {
   constructor(message: string) {
@@ -135,7 +137,8 @@ Rules:
     }
     return parsed;
   } catch (err) {
-    console.error('[Humanizer] LLM call failed:', (err as Error).message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Humanizer] LLM call failed:', message);
     return inputs.map(simpleFallback);
   }
 }
@@ -181,7 +184,7 @@ function simpleFallback(raw: string): string {
 function getFromCache(raw: string): string | undefined {
   const entry = cache.get(raw);
   if (!entry) return undefined;
-  if (Date.now() - entry.cachedAt > CACHE_TTL_MS) {
+  if (Date.now() - entry.cachedAt > HUMANIZE_CACHE_TTL_MS) {
     cache.delete(raw);
     return undefined;
   }
@@ -189,7 +192,7 @@ function getFromCache(raw: string): string | undefined {
 }
 
 function setInCache(raw: string, humanized: string): void {
-  if (cache.size >= MAX_CACHE) {
+  if (cache.size >= HUMANIZE_CACHE_MAX) {
     let oldest: string | undefined;
     let oldestTime = Infinity;
     for (const [key, entry] of cache) {

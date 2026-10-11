@@ -1,7 +1,18 @@
-import { readFileSync, statSync } from 'fs';
+import { statSync } from 'fs';
 import { basename } from 'path';
-import { shortenPaths } from './parseTranscript';
+import { RECENT_ACTIVITY_MS } from '../../shared/config';
 import { logCaught } from '../log';
+import { foldAppendOnly, readFirstLine, type FoldCache } from '../io/incrementalRead';
+import {
+  codexArgsSchema,
+  parseCodexCallPayload,
+  parseCodexLine,
+  parseCodexMetaPayload,
+  parseCodexUserPayload,
+  stringField,
+  timestampMs,
+} from '../schema/sessionLog';
+import { shortenPaths } from './parseTranscript';
 
 export interface CodexSessionData {
   sessionId: string;
@@ -13,61 +24,75 @@ export interface CodexSessionData {
   lastActivityMs: number;
 }
 
+interface CodexFold {
+  sessionId: string;
+  cwd: string;
+  latestTask?: string;
+  lastAction?: string;
+  latestTimestamp: number;
+}
+
+const codexFolds = new Map<string, FoldCache<CodexFold>>();
+
+function safeStatMtime(filePath: string): number {
+  try {
+    return statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function applyCodexLine(fold: CodexFold, line: string): void {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const entry = parseCodexLine(raw);
+  if (!entry) return;
+
+  const ts = timestampMs(entry.timestamp);
+  if (ts > fold.latestTimestamp) fold.latestTimestamp = ts;
+
+  if (entry.type === 'session_meta') {
+    const meta = parseCodexMetaPayload(entry.payload);
+    if (!meta) return;
+    if (meta.id) fold.sessionId = meta.id;
+    if (meta.cwd) fold.cwd = meta.cwd;
+    return;
+  }
+
+  if (entry.type === 'event_msg') {
+    const user = parseCodexUserPayload(entry.payload);
+    if (user && user.message.length > 0) fold.latestTask = user.message.slice(0, 200);
+    return;
+  }
+
+  if (entry.type === 'response_item') {
+    const call = parseCodexCallPayload(entry.payload);
+    if (call) fold.lastAction = formatCodexToolUse(call.name, call.arguments);
+  }
+}
+
 export function parseCodexSessionFile(filePath: string): CodexSessionData | null {
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean);
+    const fold = foldAppendOnly(
+      filePath,
+      codexFolds,
+      (): CodexFold => ({ sessionId: '', cwd: '', latestTimestamp: 0 }),
+      applyCodexLine,
+    );
+    if (!fold?.sessionId) return null;
 
-    let sessionId = '';
-    let cwd = '';
-    let latestTask: string | undefined;
-    let lastAction: string | undefined;
-    let latestTimestamp = 0;
-
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line);
-        const ts = entry.timestamp ? new Date(entry.timestamp).getTime() : 0;
-        if (ts > latestTimestamp) latestTimestamp = ts;
-
-        if (entry.type === 'session_meta') {
-          const p = entry.payload;
-          if (p?.id) sessionId = p.id;
-          if (p?.cwd) cwd = p.cwd;
-          continue;
-        }
-
-        if (entry.type === 'event_msg' && entry.payload?.type === 'user_message') {
-          const msg = entry.payload.message;
-          if (typeof msg === 'string' && msg.length > 0) {
-            latestTask = msg.slice(0, 200);
-          }
-        }
-
-        if (entry.type === 'response_item') {
-          const p = entry.payload;
-          if (p?.type === 'function_call' && p.name) {
-            lastAction = formatCodexToolUse(p.name, p.arguments);
-          }
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    if (!sessionId) return null;
-
-    const fileMtime = safeStatMtime(filePath);
-    const effectiveTimestamp = Math.max(latestTimestamp, fileMtime);
-    const isActive = Date.now() - effectiveTimestamp < 2 * 60 * 1000;
-
+    const effectiveTimestamp = Math.max(fold.latestTimestamp, safeStatMtime(filePath));
     return {
-      sessionId,
-      cwd,
+      sessionId: fold.sessionId,
+      cwd: fold.cwd,
       threadName: extractThreadName(filePath),
-      latestTask,
-      lastAction,
-      isActive,
+      latestTask: fold.latestTask,
+      lastAction: fold.lastAction,
+      isActive: Date.now() - effectiveTimestamp < RECENT_ACTIVITY_MS,
       lastActivityMs: effectiveTimestamp,
     };
   } catch (err) {
@@ -82,29 +107,19 @@ export function parseCodexSessionMeta(filePath: string): {
   lastActivityMs: number;
 } | null {
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const firstNewline = content.indexOf('\n');
-    const firstLine = firstNewline === -1 ? content : content.slice(0, firstNewline);
-
-    const entry = JSON.parse(firstLine);
-    if (entry.type !== 'session_meta' || !entry.payload?.id) return null;
-
+    const firstLine = readFirstLine(filePath);
+    if (!firstLine) return null;
+    const entry = parseCodexLine(JSON.parse(firstLine));
+    const meta = entry?.type === 'session_meta' ? parseCodexMetaPayload(entry.payload) : null;
+    if (!meta?.id) return null;
     return {
-      sessionId: entry.payload.id,
-      cwd: entry.payload.cwd || '',
+      sessionId: meta.id,
+      cwd: meta.cwd || '',
       lastActivityMs: safeStatMtime(filePath),
     };
   } catch (err) {
     logCaught('parseCodexSessionMeta', err, filePath);
     return null;
-  }
-}
-
-function safeStatMtime(filePath: string): number {
-  try {
-    return statSync(filePath).mtimeMs;
-  } catch {
-    return 0;
   }
 }
 
@@ -118,19 +133,21 @@ function formatCodexToolUse(name: string, argsJson?: string): string {
   if (!argsJson) return name;
 
   try {
-    const args = JSON.parse(argsJson);
+    const parsed = codexArgsSchema.safeParse(JSON.parse(argsJson));
+    if (!parsed.success) return name;
+    const args = parsed.data;
 
     if (name === 'exec_command' || name === 'shell') {
-      const cmd = shortenPaths((args.cmd || args.command || '') as string).slice(0, 60);
+      const cmd = shortenPaths(stringField(args, 'cmd', 'command')).slice(0, 60);
       return cmd ? `Shell:${cmd}` : 'Shell';
     }
 
     if (name === 'apply_patch') {
-      const path = (args.path || args.file_path || '') as string;
+      const path = stringField(args, 'path', 'file_path');
       return path ? `Edit:${basename(path)}` : 'Edit';
     }
 
-    const path = (args.file_path || args.path || args.file || '') as string;
+    const path = stringField(args, 'file_path', 'path', 'file');
     const shortPath = path ? basename(path) : '';
 
     if (name === 'read_file') return shortPath ? `Read:${shortPath}` : 'Read';

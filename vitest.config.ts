@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary'],
-      include: ['server/**/*.ts', 'src/**/*.{ts,tsx}'],
+      include: ['server/**/*.ts', 'src/**/*.{ts,tsx}', 'shared/**/*.ts'],
       exclude: [
         '**/*.test.ts',
         '**/*.test.tsx',
@@ -22,6 +22,9 @@ export default defineConfig({
         },
         'src/**/*.{ts,tsx}': {
           lines: 60,
+        },
+        'shared/**/*.ts': {
+          lines: 80,
         },
       },
     },
