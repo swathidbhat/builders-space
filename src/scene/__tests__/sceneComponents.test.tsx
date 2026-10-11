@@ -34,8 +34,13 @@ vi.mock('@react-three/fiber', () => ({
       {children}
     </div>
   ),
-  useFrame: (cb: (state: { clock: { elapsedTime: number } }, delta: number) => void) => {
-    cb({ clock: { elapsedTime: 1.5 } }, 0.016);
+  useFrame: (
+    cb: (
+      state: { clock: { elapsedTime: number }; size?: { width: number; height: number } },
+      delta: number,
+    ) => void,
+  ) => {
+    cb({ clock: { elapsedTime: 1.5 }, size: { width: 800, height: 600 } }, 0.016);
   },
   useThree: () => ({
     camera,
@@ -71,8 +76,19 @@ describe('scene components', () => {
       render(<SpaceScene />);
       expect(screen.getByTestId('scene-canvas')).toBeTruthy();
       expect(document.body.textContent).toContain('Lumen Lab');
-      expect(document.querySelector('mesh')).toBeTruthy();
+      const mesh = document.querySelector('mesh');
+      expect(mesh).toBeTruthy();
       expect(document.querySelectorAll('mesh').length).toBeGreaterThan(1);
+      if (!mesh) return;
+
+      fireEvent.pointerOut(mesh);
+      expect(document.body.style.cursor).toBe('default');
+      expect(useSpaceStore.getState().hoveredPlanetId).toBeNull();
+      fireEvent.pointerOver(mesh);
+      expect(document.body.style.cursor).toBe('pointer');
+      expect(useSpaceStore.getState().hoveredPlanetId).toBe('lumen-lab');
+      fireEvent.click(mesh);
+      expect(useSpaceStore.getState().selectedPlanetId).toBe('lumen-lab');
 
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(useSpaceStore.getState().cameraMode).toBe('space');

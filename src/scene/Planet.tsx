@@ -18,6 +18,17 @@ import {
 
 export { derivePlanetState, type PlanetState } from '../../shared/status';
 
+export function advancePlanetMesh(
+  mesh: { rotation: { y: number }; scale: { x: number; setScalar: (value: number) => void } },
+  delta: number,
+  idle: boolean,
+  hovered: boolean,
+): void {
+  mesh.rotation.y += delta * (idle ? 0.006 : 0.06);
+  const next = MathUtils.lerp(mesh.scale.x, hovered ? 1.04 : 1, delta * 8);
+  mesh.scale.setScalar(next);
+}
+
 interface PlanetProps {
   project: ProjectInfo;
   position: [number, number, number];
@@ -48,6 +59,7 @@ export function Planet({ project, position }: PlanetProps) {
         uColor3: { value: colors.color3 },
         uRimColor: { value: colors.rimColor },
         uDim: { value: 0 },
+        uHover: { value: 0 },
         uTime: { value: 0 },
         uSeed: { value: (seed % 1000) / 1000 },
         uPlanetType: { value: planetTypeIndex },
@@ -68,10 +80,15 @@ export function Planet({ project, position }: PlanetProps) {
       targetDim,
       delta * 3,
     );
+    const hovered = useSpaceStore.getState().hoveredPlanetId === project.id;
+    material.uniforms.uHover.value = MathUtils.lerp(
+      material.uniforms.uHover.value,
+      hovered ? 1 : 0,
+      delta * 8,
+    );
 
     if (meshRef.current) {
-      const rotSpeed = planetState === 'idle' ? 0.006 : 0.06;
-      meshRef.current.rotation.y += delta * rotSpeed;
+      advancePlanetMesh(meshRef.current, delta, planetState === 'idle', hovered);
     }
 
     material.uniforms.uTime.value = state.clock.elapsedTime;
@@ -91,11 +108,16 @@ export function Planet({ project, position }: PlanetProps) {
         ref={meshRef}
         material={material}
         onClick={handleClick}
-        onPointerOver={() => {
+        onPointerOver={(e) => {
+          e.stopPropagation();
           document.body.style.cursor = 'pointer';
+          useSpaceStore.getState().setHoveredPlanet(project.id);
         }}
         onPointerOut={() => {
           document.body.style.cursor = 'default';
+          if (useSpaceStore.getState().hoveredPlanetId === project.id) {
+            useSpaceStore.getState().setHoveredPlanet(null);
+          }
         }}
       >
         <sphereGeometry args={[radius, 64, 64]} />
@@ -104,6 +126,7 @@ export function Planet({ project, position }: PlanetProps) {
       <StatusRings radius={radius} state={planetState} />
 
       <PlanetLabel
+        projectId={project.id}
         name={project.name}
         agentCount={project.agents.length}
         planetState={planetState}

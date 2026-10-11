@@ -45,6 +45,7 @@ export const fragmentShader = `
   uniform vec3 uColor3;
   uniform vec3 uRimColor;
   uniform float uDim;
+  uniform float uHover;
   uniform float uTime;
   uniform float uSeed;
   uniform int uPlanetType;
@@ -206,11 +207,13 @@ export const fragmentShader = `
     // uDim: 1.0 = idle (desaturate + darken), -1.0 = active/attention (boost brightness)
     if (uDim > 0.0) {
       float gray = dot(lit, vec3(0.299, 0.587, 0.114));
-      lit = mix(lit, vec3(gray), uDim * 0.4);
-      lit *= 1.0 - uDim * 0.2;
+      lit = mix(lit, vec3(gray), uDim * 0.72);
+      lit *= 1.0 - uDim * 0.5;
     } else {
       lit *= 1.0 - uDim * 0.35;
     }
+
+    lit *= 1.0 + uHover * 0.35;
 
     gl_FragColor = vec4(lit, 1.0);
   }

@@ -9,7 +9,7 @@ export interface StatusRingLook {
 
 export function statusRingLook(state: PlanetState): StatusRingLook | null {
   if (state === 'error') return { thickness: 0.06, color: '#ff4444' };
-  if (state === 'waiting') return { thickness: 0.05, color: '#ffaa44' };
+  if (state === 'waiting') return { thickness: 0.09, color: '#ffc14d' };
   return null;
 }
 
@@ -35,15 +35,15 @@ export function sampleStatusRing(
     return { opacity: Math.max(0, baseOpacity + flicker - 0.1), scale };
   }
 
-  if (index > 0) return { opacity: 0, scale: null };
+  if (index > 1) return { opacity: 0, scale: null };
 
   const cycleDuration = 1.4;
   const minR = radius * 1.2;
   const maxR = radius * 2.2;
-  const phase = (elapsed / cycleDuration) % 1;
-  const fadeOut = 1 - phase;
+  const phase = (elapsed / cycleDuration + index * 0.5) % 1;
+  const fade = 1 - phase;
   return {
-    opacity: 0.9 * fadeOut * fadeOut,
+    opacity: 0.55 + 0.4 * fade,
     scale: minR + phase * (maxR - minR),
   };
 }

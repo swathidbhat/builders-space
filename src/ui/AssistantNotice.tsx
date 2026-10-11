@@ -9,9 +9,9 @@ type NoticeKind = 'missing' | 'rejected';
 
 const COPY: Record<NoticeKind, string> = {
   missing:
-    'Human Lingo is using built-in wording. No Anthropic API key is set. The example value in .env.example is not a key — add a real one to .env if you want shorter labels.',
+    'Human Lingo stays on Raw. No Anthropic API key is set. The example value in .env.example is not a key — add a real one to .env if you want shorter labels.',
   rejected:
-    'Anthropic rejected the API key (401). Human Lingo is using built-in wording until the key in .env is updated.',
+    'Anthropic rejected the API key (401). Human Lingo stays on Raw until the key in .env is updated.',
 };
 
 function readDismissed(): NoticeKind | null {
@@ -36,6 +36,13 @@ export function AssistantNotice() {
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('health failed'))))
       .then((data: { assistant?: string }) => {
         if (controller.signal.aborted) return;
+        if (
+          data.assistant === 'missing' ||
+          data.assistant === 'ready' ||
+          data.assistant === 'rejected'
+        ) {
+          useSpaceStore.getState().applyAssistantKey(data.assistant);
+        }
         if (data.assistant === 'missing' || data.assistant === 'rejected') {
           setServerKind(data.assistant);
         } else {

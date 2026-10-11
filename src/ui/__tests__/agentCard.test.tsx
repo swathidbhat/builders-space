@@ -170,6 +170,52 @@ describe('agent cards', () => {
     await vi.waitFor(() => expect(screen.getByText('Could not connect to server')).toBeTruthy());
   });
 
+  it('shows the task, quiet time, and the real error instead of Unclear activity', () => {
+    const reason = 'TypeError: Cannot read properties of undefined (reading "signature")';
+    const question = 'Should I also backfill existing orders?';
+    useSpaceStore.setState({
+      humanizedTexts: {
+        [reason]: 'Unclear activity',
+        [question]: 'Unclear activity',
+      },
+    });
+    const { rerender } = render(
+      <AgentCard
+        agent={testAgent({
+          id: 'stripe',
+          status: 'error',
+          currentTask: 'verify the stripe webhook signature',
+          errorReason: reason,
+          lastActivityMs: Date.now() - 5 * 60_000,
+        })}
+        identity={testIdentity('Ion')}
+        humanLingo
+      />,
+    );
+    const task = screen.getByText('verify the stripe webhook signature');
+    expect(task.getAttribute('title')).toBe('verify the stripe webhook signature');
+    expect(screen.getByText('Ion')).toBeTruthy();
+    expect(screen.getByText(reason)).toBeTruthy();
+    expect(screen.queryByText('Unclear activity')).toBeNull();
+    expect(screen.getByText('quiet for 5 min')).toBeTruthy();
+
+    rerender(
+      <AgentCard
+        agent={testAgent({
+          id: 'ask',
+          status: 'waiting',
+          lastAction: question,
+          lastActivityMs: Date.now(),
+        })}
+        identity={testIdentity('Prism')}
+        humanLingo
+      />,
+    );
+    expect(screen.getByText(question)).toBeTruthy();
+    expect(screen.queryByText('Unclear activity')).toBeNull();
+    expect(screen.getByText('last activity just now')).toBeTruthy();
+  });
+
   it('does not call the server when the agent has no session', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

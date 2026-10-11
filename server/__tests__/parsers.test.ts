@@ -145,6 +145,9 @@ describe('Claude and Cursor transcript parsers', () => {
   it('formats Claude tool uses and shortens deep paths', () => {
     expect(shortenPaths('cd /Users/ada/work/app && cat /tmp')).toBe('cd app && cat /tmp');
     expect(shortenPaths('no paths here')).toBe('no paths here');
+    expect(shortenPaths('go test ./internal/ratelimit/...')).toBe(
+      'go test ./internal/ratelimit/...',
+    );
 
     const dir = tempDir();
     const now = new Date().toISOString();
@@ -154,6 +157,11 @@ describe('Claude and Cursor transcript parsers', () => {
       ['Edit', { file: 'notes.md' }, 'Edit:notes.md'],
       ['StrReplace', undefined, 'StrReplace'],
       ['Shell', { command: 'cd /Users/ada/work/app && npm test' }, 'Shell:cd app && npm test'],
+      [
+        'Shell',
+        { command: 'go test ./internal/ratelimit/...' },
+        'Shell:go test ./internal/ratelimit/...',
+      ],
       ['Bash', { command: '' }, 'Shell'],
       ['Grep', { pattern: 'authToken' }, 'Search:authToken'],
       ['Search', { query: '' }, 'Search'],

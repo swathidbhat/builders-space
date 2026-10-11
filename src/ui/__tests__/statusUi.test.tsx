@@ -1,14 +1,20 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HUD } from '../HUD';
 import { Sidebar } from '../Sidebar';
+import { StatusLegend } from '../StatusLegend';
 import { useSpaceStore } from '../../store';
 import { testProject } from '../../test/fixtures';
 
+function projectButton(name: string): HTMLElement {
+  return within(screen.getByRole('region', { name: 'All projects' })).getByRole('button', {
+    name: new RegExp(name),
+  });
+}
+
 function dot(name: string): HTMLElement {
-  const button = screen.getByRole('button', { name: new RegExp(name) });
-  const mark = button.querySelector('span');
+  const mark = projectButton(name).querySelector('span');
   if (!mark) throw new Error(`missing status dot for ${name}`);
   return mark;
 }
@@ -33,32 +39,48 @@ describe('status display', () => {
     });
   });
 
-  it('colors the sidebar by the highest-priority agent and toggles selection', () => {
+  it('leads with needs-you, then projects by urgency', () => {
+    const zeta = testProject('zeta', [
+      { id: 'w', status: 'working' },
+      { id: 'e', status: 'error' },
+    ]);
+    zeta.agents[1].errorReason =
+      'TypeError: Cannot read properties of undefined (reading "signature")';
+    zeta.agents[1].currentTask = 'verify the stripe webhook signature';
+    zeta.agents[1].quietForMs = 8 * 60_000;
+    const alpha = testProject('alpha', [{ id: 'wait', status: 'waiting' }]);
+    alpha.agents[0].currentTask = 'Should I also backfill existing orders?';
+    alpha.agents[0].lastAction = 'Should I also backfill existing orders?';
+    alpha.agents[0].quietForMs = 3 * 60_000;
+    const newerError = testProject('mid', [{ id: 'fresh', status: 'error' }]);
+    newerError.agents[0].errorReason = 'disk full';
+    newerError.agents[0].quietForMs = 60_000;
     useSpaceStore.setState({
-      projects: [
-        testProject('zeta', [
-          { id: 'w', status: 'working' },
-          { id: 'e', status: 'error' },
-        ]),
-        testProject('alpha', [{ id: 'wait', status: 'waiting' }]),
-        testProject('mid', [{ id: 'work', status: 'working' }]),
-        testProject('quiet', [{ id: 'done', status: 'done' }]),
-      ],
+      projects: [zeta, alpha, newerError, testProject('quiet', [{ id: 'done', status: 'done' }])],
     });
     render(<Sidebar />);
 
-    const names = screen.getAllByRole('button').map((button) => button.textContent);
-    expect(names.join(' ')).toMatch(/Alpha[\s\S]*Mid[\s\S]*Quiet[\s\S]*Zeta/);
+    const needs = within(screen.getByRole('region', { name: 'Needs you' })).getAllByRole('button');
+    expect(needs.map((button) => button.textContent).join('\n')).toMatch(
+      /Zeta[\s\S]*quiet for 8 min[\s\S]*signature[\s\S]*Mid[\s\S]*disk full[\s\S]*Alpha[\s\S]*backfill/,
+    );
+
+    const projects = within(screen.getByRole('region', { name: 'All projects' })).getAllByRole(
+      'button',
+    );
+    expect(projects.map((button) => button.textContent).join(' ')).toMatch(
+      /Mid[\s\S]*Zeta[\s\S]*Alpha[\s\S]*Quiet/,
+    );
     expect(dot('Zeta').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
     expect(dot('Alpha').style.getPropertyValue('--dot')).toMatch(/ffaa44/i);
-    expect(dot('Mid').style.getPropertyValue('--dot')).toMatch(/44ffaa/i);
+    expect(dot('Mid').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
     expect(dot('Quiet').style.getPropertyValue('--dot')).toMatch(/6688aa/i);
 
-    fireEvent.click(screen.getByRole('button', { name: /Zeta/ }));
+    fireEvent.click(projectButton('Zeta'));
     expect(useSpaceStore.getState().selectedPlanetId).toBe('zeta');
-    fireEvent.mouseEnter(screen.getByRole('button', { name: /Alpha/ }));
-    fireEvent.mouseLeave(screen.getByRole('button', { name: /Alpha/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Zeta/ }));
+    fireEvent.mouseEnter(projectButton('Alpha'));
+    fireEvent.mouseLeave(projectButton('Alpha'));
+    fireEvent.click(projectButton('Zeta'));
     expect(useSpaceStore.getState().selectedPlanetId).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '×' }));
@@ -118,6 +140,13 @@ describe('status display', () => {
     expect(screen.getByText('1 planet discovered')).toBeTruthy();
     expect(screen.queryByText('Errors')).toBeNull();
     expect(screen.queryByText('Awaiting you')).toBeNull();
+  });
+
+  it('explains ring and dot colors', () => {
+    render(<StatusLegend />);
+    expect(screen.getByRole('complementary', { name: 'Status legend' }).textContent).toMatch(
+      /Error[\s\S]*Needs you[\s\S]*Working[\s\S]*Done[\s\S]*Rings pulse/,
+    );
   });
 
   it('shows a loading line until the first snapshot arrives', () => {

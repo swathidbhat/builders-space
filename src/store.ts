@@ -21,6 +21,8 @@ function rememberTranslations(
 }
 
 export type ConnectionState = 'connecting' | 'live' | 'stale';
+export type LingoPreference = 'auto' | 'on' | 'off';
+export type AssistantKeyState = 'missing' | 'ready' | 'rejected';
 
 /** How long a reconnect may keep the previous sky before an empty snapshot replaces it. */
 export const STALE_HOLD_MS = 12_000;
@@ -32,6 +34,8 @@ interface SpaceStore {
   cameraMode: 'space' | 'planet';
   sidebarOpen: boolean;
   humanLingo: boolean;
+  lingoPreference: LingoPreference;
+  hoveredPlanetId: string | null;
   humanizedTexts: Record<string, string>;
   connection: ConnectionState;
   dataStale: boolean;
@@ -50,6 +54,8 @@ interface SpaceStore {
   deselectPlanet: () => void;
   toggleSidebar: () => void;
   toggleHumanLingo: () => void;
+  applyAssistantKey: (state: AssistantKeyState) => void;
+  setHoveredPlanet: (id: string | null) => void;
   setHumanizedTexts: (texts: Record<string, string>) => void;
 }
 
@@ -59,7 +65,9 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
   selectedPlanetId: null,
   cameraMode: 'space',
   sidebarOpen: true,
-  humanLingo: true,
+  humanLingo: false,
+  lingoPreference: 'auto',
+  hoveredPlanetId: null,
   humanizedTexts: {},
   connection: 'connecting',
   dataStale: false,
@@ -114,7 +122,11 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
       };
     }),
 
-  markAssistantRejected: () => set({ assistantRejected: true }),
+  markAssistantRejected: () =>
+    set((state) => ({
+      assistantRejected: true,
+      humanLingo: state.lingoPreference === 'auto' ? false : state.humanLingo,
+    })),
 
   selectPlanet: (id) => set({ selectedPlanetId: id, cameraMode: 'planet' }),
 
@@ -122,7 +134,20 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
 
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
-  toggleHumanLingo: () => set((s) => ({ humanLingo: !s.humanLingo })),
+  toggleHumanLingo: () =>
+    set((state) => {
+      const humanLingo = !state.humanLingo;
+      return { humanLingo, lingoPreference: humanLingo ? 'on' : 'off' };
+    }),
+
+  applyAssistantKey: (keyState) =>
+    set((state) => {
+      const assistantRejected = keyState === 'rejected' || state.assistantRejected;
+      if (state.lingoPreference !== 'auto') return { assistantRejected };
+      return { humanLingo: keyState === 'ready', assistantRejected };
+    }),
+
+  setHoveredPlanet: (id) => set({ hoveredPlanetId: id }),
 
   setHumanizedTexts: (texts) =>
     set((s) => ({ humanizedTexts: rememberTranslations(s.humanizedTexts, texts) })),

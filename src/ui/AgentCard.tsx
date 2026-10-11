@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
+import { visibleActivity } from '../../shared/humanize';
 import type { AgentInfo } from '../types';
 import type { AgentIdentity } from './agentIdentity';
 import { useSpaceStore } from '../store';
 import { API_ORIGIN, authHeaders } from '../api';
+import { activityPhrase } from './attention';
 import { cssVars } from './cssVars';
 import styles from './AgentCard.module.css';
 
@@ -96,14 +98,13 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const badgeColor =
     agent.status === 'waiting' ? '#ffaa44' : agent.status === 'error' ? '#ff4444' : '#aaa';
 
-  const action =
-    agent.status === 'error' && agent.errorReason
-      ? humanLingo
-        ? humanizedError || agent.errorReason
-        : agent.errorReason
-      : humanLingo
-        ? humanized || agent.lastAction || ''
-        : agent.lastAction || '';
+  const raw =
+    agent.status === 'error' && agent.errorReason ? agent.errorReason : agent.lastAction || '';
+  const translated = raw ? (agent.status === 'error' ? humanizedError : humanized) : undefined;
+  const action = visibleActivity(raw, translated, humanLingo);
+  const task = agent.currentTask?.trim() || agent.title?.trim() || '';
+  const primary = task || identity.name;
+  const quiet = activityPhrase(agent);
 
   return (
     <div
@@ -133,10 +134,15 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
           <div className={styles.avatar}>{identity.initial}</div>
           <div className={styles.who}>
             <div className={styles.nameRow}>
-              <span className={styles.name}>{identity.name}</span>
-              <span className={styles.source}>{sourceLabel}</span>
+              <span className={styles.task} title={primary}>
+                {primary}
+              </span>
             </div>
-            {agent.title && <span className={styles.title}>{agent.title}</span>}
+            <div className={styles.subRow}>
+              {task && <span className={styles.alias}>{identity.name}</span>}
+              <span className={styles.source}>{sourceLabel}</span>
+              {quiet && <span className={styles.quiet}>{quiet}</span>}
+            </div>
           </div>
         </div>
 

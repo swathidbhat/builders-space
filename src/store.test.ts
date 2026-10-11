@@ -9,7 +9,9 @@ const empty = {
   selectedPlanetId: null,
   cameraMode: 'space' as const,
   sidebarOpen: true,
-  humanLingo: true,
+  humanLingo: false,
+  lingoPreference: 'auto' as const,
+  hoveredPlanetId: null,
   humanizedTexts: {},
 };
 
@@ -56,7 +58,17 @@ describe('space store', () => {
     useSpaceStore.getState().toggleSidebar();
     expect(useSpaceStore.getState().sidebarOpen).toBe(false);
     useSpaceStore.getState().toggleHumanLingo();
+    expect(useSpaceStore.getState().humanLingo).toBe(true);
+    expect(useSpaceStore.getState().lingoPreference).toBe('on');
+    useSpaceStore.getState().applyAssistantKey('missing');
+    expect(useSpaceStore.getState().humanLingo).toBe(true);
+    useSpaceStore.setState({ lingoPreference: 'auto', humanLingo: true });
+    useSpaceStore.getState().applyAssistantKey('missing');
     expect(useSpaceStore.getState().humanLingo).toBe(false);
+    useSpaceStore.getState().applyAssistantKey('ready');
+    expect(useSpaceStore.getState().humanLingo).toBe(true);
+    useSpaceStore.getState().setHoveredPlanet('lumen');
+    expect(useSpaceStore.getState().hoveredPlanetId).toBe('lumen');
     useSpaceStore.getState().setHumanizedTexts({ 'Read:App.tsx': 'Reading the app' });
     useSpaceStore.getState().setHumanizedTexts({ 'Shell:npm test': 'Running tests' });
     expect(useSpaceStore.getState().humanizedTexts).toEqual({

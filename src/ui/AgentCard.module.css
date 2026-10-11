@@ -32,8 +32,16 @@
   gap: 10px;
 }
 
-.nameRow {
+.nameRow,
+.subRow {
   gap: 6px;
+  min-width: 0;
+}
+
+.subRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .avatar {
@@ -56,12 +64,37 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
-.name {
+.identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.task {
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.alias {
+  font-size: 10px;
+  color: #889;
+}
+
+.quiet {
+  font-size: 10px;
+  color: #9ab;
+  white-space: nowrap;
 }
 
 .source {
