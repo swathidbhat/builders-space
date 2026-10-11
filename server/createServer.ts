@@ -6,6 +6,7 @@ import { ClaudeWatcher } from './watchers/claudeWatcher';
 import { CodexWatcher } from './watchers/codexWatcher';
 import { EventWatcher } from './watchers/eventWatcher';
 import { StateManager } from './stateManager';
+import { defaultHookRuntimeFile } from './hookRuntimeStore';
 import { humanizeTexts, HumanizeInputError } from './services/humanizer';
 import { getHookStatus, enableHooks, disableHooks, ensureAppDirs } from './services/hookSetup';
 import { buildOpenSessionCommand, runCommand, type CommandSpec } from './openSession';
@@ -43,7 +44,7 @@ export interface BuildersRuntime {
 export function createBuildersServer(options: CreateServerOptions = {}): BuildersRuntime {
   const token = options.token ?? createLaunchToken();
   const execute = options.runCommand ?? runCommand;
-  const stateManager = new StateManager();
+  const stateManager = new StateManager({ runtimeFile: defaultHookRuntimeFile() });
 
   if (options.publishToken) {
     ensureAppDirs();

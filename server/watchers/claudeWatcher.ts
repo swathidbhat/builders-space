@@ -147,6 +147,7 @@ export class ClaudeWatcher {
         const status = inferSessionStatus({
           lastActivityMs: data.lastActivityMs,
           processRunning: isProcessRunning,
+          turnFinished: data.turnFinished,
         });
 
         agents.push({

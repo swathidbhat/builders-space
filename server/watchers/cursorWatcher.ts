@@ -7,9 +7,11 @@ import {
   parseTranscriptDir,
   parseTranscriptFile,
 } from '../utils/parseTranscript';
-import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
+import { projectLabel, resolveEncodedProject } from '../utils/projectName';
 import { logCaught } from '../log';
 import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
+import { CwdCache } from '../process/cwdCache';
+import { cursorLiveCwds } from '../process/runningCwds';
 import { MAX_SESSION_AGE_MS } from '../../shared/config';
 import { inferSessionStatus } from '../../shared/status';
 import type { AgentInfo, ProjectInfo } from '../types';
@@ -35,12 +37,18 @@ export class CursorWatcher {
   private retryInterval: ReturnType<typeof setInterval> | null = null;
   private fallbackScanMs: number;
   private missingDirRetryMs: number;
+  private processes: CwdCache;
 
   constructor(onChange: CursorWatcherCallback, options: CursorWatcherOptions = {}) {
     this.cursorBase = options.base ?? join(homedir(), '.cursor', 'projects');
     this.onChange = onChange;
     this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
     this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
+    this.processes = new CwdCache(
+      'cursor',
+      () => this.scan(),
+      () => cursorLiveCwds(),
+    );
   }
 
   start(): void {
@@ -65,6 +73,7 @@ export class CursorWatcher {
   }
 
   stop(): void {
+    this.processes.stop();
     void this.jsonlWatch?.close();
     this.jsonlWatch = null;
     if (this.scanInterval) clearInterval(this.scanInterval);
@@ -75,6 +84,7 @@ export class CursorWatcher {
 
   private arm(): void {
     this.scan();
+    this.processes.start();
     try {
       this.jsonlWatch = watchJsonlTree(this.cursorBase, () => this.scan(), 'CursorWatcher');
     } catch (err) {
@@ -108,6 +118,7 @@ export class CursorWatcher {
   }
 
   private scanProjects(projectDirs: string[]): void {
+    const live = this.processes.current();
     for (const dirName of projectDirs) {
       if (/^\d+$/.test(dirName)) continue;
 
@@ -115,6 +126,7 @@ export class CursorWatcher {
       const agents: AgentInfo[] = [];
       let cwdFromSession: string | undefined;
 
+      const drafts: Array<{ turnFinished: boolean }> = [];
       const transcriptsDir = join(encodedPath, 'agent-transcripts');
       if (existsSync(transcriptsDir)) {
         try {
@@ -134,13 +146,12 @@ export class CursorWatcher {
 
               if (data.cwd && isAbsolute(data.cwd)) cwdFromSession = stripSlash(data.cwd);
 
-              const status = inferSessionStatus({ lastActivityMs: data.lastActivityMs });
-
+              drafts.push({ turnFinished: data.turnFinished });
               agents.push({
                 id: agentId,
                 source: 'cursor',
                 sessionId: entry.name,
-                status,
+                status: 'working',
                 statusSource: 'inferred',
                 currentTask: data.userQuery,
                 lastAction: data.lastAction,
@@ -148,6 +159,7 @@ export class CursorWatcher {
                 sessionMeta: {
                   projectPath: '',
                   transcriptPath: subDir,
+                  cwd: data.cwd,
                 },
               });
             } else if (entry.name.endsWith('.txt')) {
@@ -160,13 +172,12 @@ export class CursorWatcher {
               const agentId = `cursor-agent-${basename(entry.name, '.txt')}`;
               if (agents.some((a) => a.id === agentId)) continue;
 
-              const status = inferSessionStatus({ lastActivityMs: data.lastActivityMs });
-
+              drafts.push({ turnFinished: data.turnFinished });
               agents.push({
                 id: agentId,
                 source: 'cursor',
                 sessionId: basename(entry.name, '.txt'),
-                status,
+                status: 'working',
                 statusSource: 'inferred',
                 currentTask: data.userQuery,
                 lastAction: data.lastAction,
@@ -185,12 +196,21 @@ export class CursorWatcher {
 
       if (agents.length === 0) continue;
 
-      const path = cwdFromSession ?? resolveEncodedProjectPath(dirName);
-      const name = cwdFromSession
-        ? basename(path) || extractProjectName(dirName)
-        : extractProjectName(dirName);
+      const resolved = cwdFromSession
+        ? { path: cwdFromSession, matched: true }
+        : resolveEncodedProject(dirName);
+      const path = resolved.path;
+      const name = projectLabel(path, dirName, resolved.matched);
+      const processRunning = live.has(path);
 
-      for (const agent of agents) {
+      for (let i = 0; i < agents.length; i++) {
+        const agent = agents[i];
+        const cwd = agent.sessionMeta?.cwd;
+        agent.status = inferSessionStatus({
+          lastActivityMs: agent.lastActivityMs ?? 0,
+          processRunning: processRunning || (cwd ? live.has(stripSlash(cwd)) : false),
+          turnFinished: drafts[i]?.turnFinished,
+        });
         if (agent.sessionMeta) agent.sessionMeta.projectPath = path;
       }
 

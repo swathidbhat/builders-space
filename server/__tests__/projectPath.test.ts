@@ -90,7 +90,11 @@ describe('extractProjectName', () => {
       'infinity-canvas',
     );
     expect(extractProjectName('home-ada-CODE-widgets')).toBe('widgets');
-    expect(extractProjectName('just-a-name')).toBe('name');
+    expect(extractProjectName('just-a-name')).toBe('just-a-name');
+    expect(extractProjectName('weather-widget-pro')).toBe('weather-widget-pro');
+    expect(extractProjectName('-Users-alice-Projects-Side-Quest-Tracker')).toBe(
+      'Side-Quest-Tracker',
+    );
     expect(extractProjectName('-Downloads')).toBe('Downloads');
   });
 

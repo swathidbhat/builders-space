@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -238,5 +238,92 @@ describe('live session file updates', () => {
     watchers.push(watcher);
     watcher.start();
     expect(spy.mock.calls.some((call) => String(call[0]).includes('[ClaudeWatcher]'))).toBe(true);
+  });
+
+  it('shows a new project directory and drops a deleted one without the fallback scan', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'bs-cursor-dirs-'));
+    const line =
+      JSON.stringify({
+        role: 'user',
+        message: { content: [{ type: 'text', text: 'one' }] },
+      }) + '\n';
+    const first = join(base, '-tmp-first-app', 'agent-transcripts', 'a');
+    mkdirSync(first, { recursive: true });
+    writeFileSync(join(first, 'a.jsonl'), line);
+
+    const seen: Map<string, ProjectInfo>[] = [];
+    const watcher = new CursorWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      { base, fallbackScanMs: 60_000 },
+    );
+    watchers.push(watcher);
+    watcher.start();
+    await watcher.whenWatching();
+    expect([...seen.at(-1)!.values()][0].agents.map((agent) => agent.sessionId)).toEqual(['a']);
+
+    const second = join(base, '-tmp-second-app', 'agent-transcripts', 'b');
+    mkdirSync(second, { recursive: true });
+    writeFileSync(join(second, 'b.jsonl'), line);
+    await waitFor(
+      () =>
+        [...seen.at(-1)!.values()].some((project) =>
+          project.agents.some((agent) => agent.sessionId === 'b'),
+        ),
+      8_000,
+    );
+
+    rmSync(join(base, '-tmp-first-app'), { recursive: true, force: true });
+    await waitFor(
+      () =>
+        ![...seen.at(-1)!.values()].some((project) =>
+          project.agents.some((agent) => agent.sessionId === 'a'),
+        ),
+      8_000,
+    );
+    expect(
+      [...seen.at(-1)!.values()].some((project) =>
+        project.agents.some((agent) => agent.sessionId === 'b'),
+      ),
+    ).toBe(true);
+  });
+
+  it('names a Cursor txt project from the real folder, not the last hyphen', async () => {
+    const root = mkdtempSync(join('/tmp', 'bs-name-'));
+    const projectDir = join(root, 'code', 'weather-widget-pro');
+    mkdirSync(projectDir, { recursive: true });
+    const encoded = projectDir.slice(1).replaceAll('/', '-');
+    const base = mkdtempSync(join(tmpdir(), 'bs-cursor-name-'));
+    const transcripts = join(base, encoded, 'agent-transcripts');
+    mkdirSync(transcripts, { recursive: true });
+    writeFileSync(join(transcripts, 'chat.txt'), '<user_query>build the widget</user_query>\n');
+
+    const stale = join(base, '-Users-nobody-Projects-Side-Quest-Tracker', 'agent-transcripts');
+    mkdirSync(stale, { recursive: true });
+    writeFileSync(join(stale, 'old.txt'), '<user_query>side quest</user_query>\n');
+
+    try {
+      let seen: Map<string, ProjectInfo> | undefined;
+      const watcher = new CursorWatcher(
+        (projects) => {
+          seen = projects;
+        },
+        { base, fallbackScanMs: 60_000 },
+      );
+      watchers.push(watcher);
+      watcher.start();
+      await watcher.whenWatching();
+
+      const projects = [...(seen?.values() ?? [])];
+      const widget = projects.find((project) => project.path === projectDir);
+      expect(widget?.name).toBe('weather-widget-pro');
+      expect(widget?.name).not.toBe('pro');
+      const missing = projects.find((project) => project.name === 'Side-Quest-Tracker');
+      expect(missing).toBeTruthy();
+      expect(missing?.name).not.toBe('Projects Side Quest Tracker');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

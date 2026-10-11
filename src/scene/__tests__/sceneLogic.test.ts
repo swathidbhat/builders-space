@@ -84,6 +84,9 @@ describe('prettifyName', () => {
   it('turns separators into title case', () => {
     expect(prettifyName('lumen-lab')).toBe('Lumen Lab');
     expect(prettifyName('foo_bar')).toBe('Foo Bar');
+    expect(prettifyName('checkout-service')).toBe('Checkout Service');
+    expect(prettifyName('ml-pipeline')).toBe('ML Pipeline');
+    expect(prettifyName('api-gateway')).toBe('API Gateway');
   });
 });
 

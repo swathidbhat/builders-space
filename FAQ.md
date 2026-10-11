@@ -121,14 +121,18 @@ Every agent has a `statusSource` field — either `realtime` or `inferred` — t
 
 **Realtime** (any tool with active, recent hooks): the agent's status comes directly from hook events. A session start or post–tool-use event means **Working**. A stop without errors usually means **Needs you**. A session end usually means **Done**. A stop or session end with an error signal means **Error**. Cursor uses the same `statusSource` model when hooks are enabled and events match the agent (by session id or project path).
 
-**Inferred** (hooks inactive, stale, or not matching an agent): the app figures out status by scanning session files and checking whether the tool's process is running (where applicable). This works well but can occasionally misread a long-running operation as "waiting."
+**Inferred** (hooks inactive, stale, or not matching an agent): the app reads the session file and, when it can, whether that tool's process is still running. Silence is not "needs you".
 
-The system transitions between the two automatically. When hook events are flowing and still within the trust window, agents show `realtime`. If hook events stop arriving for more than 10 minutes (for active states) or 1 hour (for terminal states like done/error), the agent gracefully falls back to `inferred`.
+The system transitions between the two automatically. When hook events are flowing and still within the trust window, agents show `realtime`. Hook overlays are stored in `~/.builders-space/hook-runtime.json`, so an error or a stop survives a server restart. If the overlay is older than 10 minutes (active states such as working and waiting) or 1 hour (terminal states such as done and error), it expires and the agent falls back to `inferred`.
 
-**Without hooks** (all tools use inference):
+**Without hooks** (all tools use the same inference):
 
-- **Cursor** (file-based only): if the agent's transcript file was modified in the last 2 minutes → **Working**. If 2 minutes to 1 hour → **Needs you**. If over 1 hour → **Done**.
-- **Claude Code / Codex** (file + process detection): if the session file was written in the last 2 minutes → **Working**. If the process is alive but the session file hasn't changed in over 10 minutes → **Needs you**. If the process is dead and the session is less than 1 hour old → **Needs you**. If the process is dead and over 1 hour old → **Done**.
+- A transcript written in the last 2 minutes → **Working**.
+- The last message is a completed assistant turn or a question, and that was within the last hour → **Needs you**. A hook Stop event means the same thing while it is inside its trust window.
+- A live process that has not handed the turn back → **Working**, even when the file has been quiet. That is "possibly still busy", not an alert.
+- Otherwise → **Done**.
+
+Cursor chats do not each have their own process. The liveness check uses the editor's working directory and any workspace path on the `cursor` command line, alongside the cwd check Claude Code and Codex already use. Each agent includes `lastActivityMs` so the time since that activity can be shown later.
 
 ### What are hooks and why should I enable them?
 

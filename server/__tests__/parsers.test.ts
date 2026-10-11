@@ -121,7 +121,10 @@ describe('Claude and Cursor transcript parsers', () => {
     );
     const data = parseTranscriptFile(txt);
     expect(data?.userQuery).toBe('rename the sidebar');
+    expect(data?.turnFinished).toBe(true);
     expect(data?.isRecentlyActive).toBe(true);
+    const asking = write(dir, 'ask.txt', '<user_query>only the user</user_query>\n');
+    expect(parseTranscriptFile(asking)?.turnFinished).toBe(false);
 
     const jsonl = write(
       dir,
@@ -135,6 +138,7 @@ describe('Claude and Cursor transcript parsers', () => {
       }) + '\n',
     );
     expect(parseTranscriptDir(dir)?.lastAction?.endsWith('...')).toBe(true);
+    expect(parseTranscriptDir(dir)?.turnFinished).toBe(true);
     expect(parseTranscriptFile(jsonl)).toBeNull();
   });
 
@@ -258,11 +262,39 @@ describe('Codex session parser', () => {
       latestTask: 'check the build',
       lastAction: 'Shell:git -C lumen-lab status',
       isActive: true,
+      turnFinished: false,
     });
     expect(parseCodexSessionMeta(file)).toMatchObject({
       sessionId: 'codex-1',
       cwd: '/tmp/lumen-lab',
     });
+  });
+
+  it('treats a Codex assistant message as a finished turn', () => {
+    const dir = tempDir();
+    const now = new Date().toISOString();
+    const file = write(
+      dir,
+      'rollout-finished.jsonl',
+      [
+        JSON.stringify({
+          timestamp: now,
+          type: 'session_meta',
+          payload: { id: 'done-turn', cwd: '/tmp/app' },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'event_msg',
+          payload: { type: 'agent_message', message: 'checking' },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'response_item',
+          payload: { type: 'message', role: 'assistant', content: [] },
+        }),
+      ].join('\n') + '\n',
+    );
+    expect(parseCodexSessionFile(file)?.turnFinished).toBe(true);
   });
 
   it('formats the other Codex tools and survives bad arguments', () => {

@@ -13,6 +13,7 @@ export class CwdCache {
   constructor(
     private readonly needle: string,
     private readonly onUpdate: () => void,
+    private readonly load: () => Promise<Set<string>> = () => runningCwds(needle),
   ) {}
 
   current(): Set<string> {
@@ -23,7 +24,7 @@ export class CwdCache {
     this.stop();
     const generation = this.generation;
     const tick = () => {
-      void runningCwds(this.needle)
+      void this.load()
         .then((next) => {
           if (generation !== this.generation) return;
           if (sameCwdSet(this.cwds, next)) return;

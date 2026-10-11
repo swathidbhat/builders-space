@@ -1,4 +1,5 @@
 import { existsSync, statSync } from 'fs';
+import { basename } from 'path';
 import { logCaught } from '../log';
 
 /**
@@ -9,7 +10,16 @@ import { logCaught } from '../log';
 export function extractProjectName(dirName: string): string {
   const cleaned = dirName.startsWith('-') ? dirName.slice(1) : dirName;
 
-  const knownParents = ['Users', 'Documents', 'GitHub', 'CODE', 'Downloads', 'Desktop', 'home'];
+  const knownParents = [
+    'Users',
+    'Documents',
+    'GitHub',
+    'CODE',
+    'Downloads',
+    'Desktop',
+    'home',
+    'Projects',
+  ];
   const userRoots = ['Users', 'home'];
 
   const segments = cleaned.split('-');
@@ -34,7 +44,26 @@ export function extractProjectName(dirName: string): string {
     return segments.slice(lastKnownIdx + 1).join('-');
   }
 
-  return segments[segments.length - 1];
+  if (lastKnownIdx >= 0) return segments[lastKnownIdx];
+  return segments.join('-');
+}
+
+/**
+ * Folder name to show for an encoded project directory.
+ * A path the filesystem (or a session cwd) confirmed uses that directory's
+ * basename, so `weather-widget-pro` stays intact. A missing folder keeps the
+ * hyphenated tail after known parents such as `Projects`.
+ */
+export function projectLabel(
+  resolvedPath: string,
+  encodedDirName: string,
+  matched: boolean,
+): string {
+  if (matched) {
+    const base = basename(resolvedPath);
+    if (base) return base;
+  }
+  return extractProjectName(encodedDirName);
 }
 
 export type PathExists = (path: string) => boolean;
@@ -60,13 +89,20 @@ function directoryExists(path: string): boolean {
  *
  * Callers that have a session `cwd` should use that and not this decoder.
  */
+export function resolveEncodedProject(
+  dirName: string,
+  exists: PathExists = directoryExists,
+): { path: string; matched: boolean } {
+  const probed = probeEncodedPath(dirName, exists);
+  if (probed) return { path: probed, matched: true };
+  return { path: legacyDirNameToPath(dirName), matched: false };
+}
+
 export function resolveEncodedProjectPath(
   dirName: string,
   exists: PathExists = directoryExists,
 ): string {
-  const probed = probeEncodedPath(dirName, exists);
-  if (probed) return probed;
-  return legacyDirNameToPath(dirName);
+  return resolveEncodedProject(dirName, exists).path;
 }
 
 /** @deprecated Prefer resolveEncodedProjectPath. Kept as the name watchers used. */
