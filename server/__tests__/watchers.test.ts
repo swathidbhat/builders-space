@@ -32,14 +32,16 @@ function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void> {
 }
 
 function claudeLine(sessionId: string, cwd: string): string {
-  return JSON.stringify({
-    type: 'user',
-    sessionId,
-    cwd,
-    timestamp: new Date().toISOString(),
-    message: { role: 'user', content: 'ship the hyphen fix' },
-    slug: 'my-app',
-  }) + '\n';
+  return (
+    JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd,
+      timestamp: new Date().toISOString(),
+      message: { role: 'user', content: 'ship the hyphen fix' },
+      slug: 'my-app',
+    }) + '\n'
+  );
 }
 
 describe('live session file updates', () => {
@@ -48,10 +50,18 @@ describe('live session file updates', () => {
     const encoded = '-Users-alice-work-my-app';
     const dir = join(base, encoded);
     mkdirSync(dir);
-    writeFileSync(join(dir, 'sess-hyphen.jsonl'), claudeLine('sess-hyphen', '/Users/alice/work/my-app'));
+    writeFileSync(
+      join(dir, 'sess-hyphen.jsonl'),
+      claudeLine('sess-hyphen', '/Users/alice/work/my-app'),
+    );
 
     const seen: Map<string, ProjectInfo>[] = [];
-    const watcher = new ClaudeWatcher((projects) => { seen.push(projects); }, { base });
+    const watcher = new ClaudeWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      { base },
+    );
     watchers.push(watcher);
     watcher.start();
     await watcher.whenWatching();
@@ -62,24 +72,32 @@ describe('live session file updates', () => {
     expect(first.name).toBe('my-app');
 
     writeFileSync(join(dir, 'sess-2.jsonl'), claudeLine('sess-2', '/Users/alice/work/my-app'));
-    await waitFor(() => [...seen.at(-1)!.values()].some((project) =>
-      project.agents.some((agent) => agent.sessionId === 'sess-2'),
-    ));
+    await waitFor(() =>
+      [...seen.at(-1)!.values()].some((project) =>
+        project.agents.some((agent) => agent.sessionId === 'sess-2'),
+      ),
+    );
   });
 
   it('Cursor sees a nested transcript without a glob watch', async () => {
     const base = mkdtempSync(join(tmpdir(), 'bs-cursor-'));
     const projectDir = join(base, '-Users-alice-work-my-app', 'agent-transcripts', 'agent-1');
     mkdirSync(projectDir, { recursive: true });
-    const line = JSON.stringify({
-      role: 'user',
-      cwd: '/Users/alice/work/my-app',
-      message: { content: [{ type: 'text', text: 'fix the login' }] },
-    }) + '\n';
+    const line =
+      JSON.stringify({
+        role: 'user',
+        cwd: '/Users/alice/work/my-app',
+        message: { content: [{ type: 'text', text: 'fix the login' }] },
+      }) + '\n';
     writeFileSync(join(projectDir, 'agent-1.jsonl'), line);
 
     const seen: Map<string, ProjectInfo>[] = [];
-    const watcher = new CursorWatcher((projects) => { seen.push(projects); }, { base });
+    const watcher = new CursorWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      { base },
+    );
     watchers.push(watcher);
     watcher.start();
     await watcher.whenWatching();
@@ -90,7 +108,9 @@ describe('live session file updates', () => {
     writeFileSync(join(secondDir, 'agent-2.jsonl'), line.replace('fix the login', 'add tests'));
     await waitFor(() => {
       const projects = [...seen.at(-1)!.values()];
-      return projects.some((project) => project.agents.some((agent) => agent.sessionId === 'agent-2'));
+      return projects.some((project) =>
+        project.agents.some((agent) => agent.sessionId === 'agent-2'),
+      );
     });
   });
 
@@ -100,7 +120,9 @@ describe('live session file updates', () => {
     mkdirSync(join(home, '.codex'), { recursive: true });
     writeFileSync(
       join(home, '.codex', 'hooks.json'),
-      JSON.stringify({ hooks: { Stop: [{ hooks: [{ command: '~/.builders-space/hooks/status-hook.sh' }] }] } }),
+      JSON.stringify({
+        hooks: { Stop: [{ hooks: [{ command: '~/.builders-space/hooks/status-hook.sh' }] }] },
+      }),
     );
 
     const sessionsDir = join(home, '.codex', 'sessions');
@@ -115,10 +137,15 @@ describe('live session file updates', () => {
     writeFileSync(join(rolloutDir, 'rollout-1.jsonl'), meta + '\n');
 
     const seen: Map<string, ProjectInfo>[] = [];
-    const watcher = new CodexWatcher((projects) => { seen.push(projects); }, {
-      sessionsDir,
-      indexFile: join(home, '.codex', 'session_index.jsonl'),
-    });
+    const watcher = new CodexWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      {
+        sessionsDir,
+        indexFile: join(home, '.codex', 'session_index.jsonl'),
+      },
+    );
     watchers.push(watcher);
     watcher.start();
     await watcher.whenWatching();
@@ -127,9 +154,11 @@ describe('live session file updates', () => {
     expect(existsSync(join(project, '.codex', 'hooks.json'))).toBe(false);
 
     writeFileSync(join(rolloutDir, 'rollout-2.jsonl'), meta.replace('codex-1', 'codex-2') + '\n');
-    await waitFor(() => [...seen.at(-1)!.values()].some((entry) =>
-      entry.agents.some((agent) => agent.sessionId === 'codex-2'),
-    ));
+    await waitFor(() =>
+      [...seen.at(-1)!.values()].some((entry) =>
+        entry.agents.some((agent) => agent.sessionId === 'codex-2'),
+      ),
+    );
     expect(existsSync(join(project, '.codex', 'hooks.json'))).toBe(false);
   });
 
@@ -137,26 +166,38 @@ describe('live session file updates', () => {
     const root = mkdtempSync(join(tmpdir(), 'bs-cursor-late-'));
     const base = join(root, 'projects');
     const seen: Map<string, ProjectInfo>[] = [];
-    const watcher = new CursorWatcher((projects) => { seen.push(projects); }, {
-      base,
-      missingDirRetryMs: 100,
-      fallbackScanMs: 60_000,
-    });
+    const watcher = new CursorWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      {
+        base,
+        missingDirRetryMs: 100,
+        fallbackScanMs: 60_000,
+      },
+    );
     watchers.push(watcher);
     watcher.start();
     expect(seen).toHaveLength(0);
 
     const transcript = join(base, '-Users-alice-code-app', 'agent-transcripts', 'agent-9');
     mkdirSync(transcript, { recursive: true });
-    writeFileSync(join(transcript, 'agent-9.jsonl'), JSON.stringify({
-      role: 'user',
-      cwd: '/Users/alice/code/app',
-      message: { content: [{ type: 'text', text: 'hello' }] },
-    }) + '\n');
+    writeFileSync(
+      join(transcript, 'agent-9.jsonl'),
+      JSON.stringify({
+        role: 'user',
+        cwd: '/Users/alice/code/app',
+        message: { content: [{ type: 'text', text: 'hello' }] },
+      }) + '\n',
+    );
 
-    await waitFor(() => seen.some((projects) =>
-      [...projects.values()].some((project) => project.agents.some((agent) => agent.sessionId === 'agent-9')),
-    ));
+    await waitFor(() =>
+      seen.some((projects) =>
+        [...projects.values()].some((project) =>
+          project.agents.some((agent) => agent.sessionId === 'agent-9'),
+        ),
+      ),
+    );
     expect([...seen.at(-1)!.values()][0].path).toBe('/Users/alice/code/app');
   });
 

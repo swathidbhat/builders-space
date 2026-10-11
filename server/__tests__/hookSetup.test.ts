@@ -25,7 +25,9 @@ function runScript(scriptPath: string, input: string, home: string): Promise<voi
       env: { HOME: home, PATH: '/usr/bin:/bin' },
     });
     let stderr = '';
-    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve();
@@ -106,7 +108,9 @@ describe('hook install is opt-in and reversible', () => {
     expect(enabled.claude.status).toBe('ok');
     expect(enabled.cursor.status).toBe('ok');
     expect(enabled.codex.status).toBe('ok');
-    expect(readFileSync(join(home, '.claude', 'settings.json'), 'utf-8')).toContain('status-hook.sh');
+    expect(readFileSync(join(home, '.claude', 'settings.json'), 'utf-8')).toContain(
+      'status-hook.sh',
+    );
     expect(readFileSync(join(home, '.codex', 'hooks.json'), 'utf-8')).toContain('status-hook.sh');
     expect(existsSync(join(project, '.codex', 'hooks.json'))).toBe(false);
 

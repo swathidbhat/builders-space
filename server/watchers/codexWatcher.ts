@@ -124,7 +124,9 @@ export class CodexWatcher {
           const lsofOut = execSync(`lsof -p ${pid} -Fn 2>/dev/null | grep '^n/' | head -1`, {
             encoding: 'utf-8',
             timeout: 3000,
-          }).trim().replace(/^n/, '');
+          })
+            .trim()
+            .replace(/^n/, '');
           if (lsofOut) cwds.add(stripSlash(lsofOut));
         } catch {
           // Process exited or lsof has no cwd.
@@ -176,11 +178,14 @@ export class CodexWatcher {
     const threadNames = this.getThreadNames();
     const runningCwds = this.getRunningCodexCwds();
 
-    const projectSessions = new Map<string, Array<{
-      file: string;
-      sessionId: string;
-      lastActivityMs: number;
-    }>>();
+    const projectSessions = new Map<
+      string,
+      Array<{
+        file: string;
+        sessionId: string;
+        lastActivityMs: number;
+      }>
+    >();
 
     for (const file of sessionFiles) {
       const meta = parseCodexSessionMeta(file);

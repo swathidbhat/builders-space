@@ -26,13 +26,16 @@ export function ProjectPanel() {
   const project = projects.find((p) => p.id === selectedId);
 
   const identities = useMemo(
-    () => project ? getProjectAgentIdentities(project.agents.map((a) => a.id)) : new Map(),
-    [project?.agents],
+    () => (project ? getProjectAgentIdentities(project.agents.map((a) => a.id)) : new Map()),
+    [project],
   );
 
   const sortedAgents = useMemo(
-    () => project ? [...project.agents].sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status]) : [],
-    [project?.agents],
+    () =>
+      project
+        ? [...project.agents].sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
+        : [],
+    [project],
   );
 
   const lastHumanizeRef = useRef<string>('');
@@ -41,8 +44,8 @@ export function ProjectPanel() {
     if (!project || !humanLingo) return;
 
     const rawTexts = project.agents
-      .flatMap(a => [a.lastAction, a.errorReason].filter(Boolean) as string[])
-      .filter(t => !humanizedTexts[t])
+      .flatMap((a) => [a.lastAction, a.errorReason].filter(Boolean) as string[])
+      .filter((t) => !humanizedTexts[t])
       .filter((t, i, arr) => arr.indexOf(t) === i);
 
     if (rawTexts.length === 0) return;
@@ -88,7 +91,14 @@ export function ProjectPanel() {
         }
       `}</style>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '8px',
+        }}
+      >
         <div style={{ minWidth: 0, flex: 1 }}>
           <h2
             style={{
@@ -147,22 +157,18 @@ export function ProjectPanel() {
 
       {/* Stats row */}
       {(() => {
-        const errCount = project.agents.filter(a => a.status === 'error').length;
-        const waitCount = project.agents.filter(a => a.status === 'waiting').length;
+        const errCount = project.agents.filter((a) => a.status === 'error').length;
+        const waitCount = project.agents.filter((a) => a.status === 'waiting').length;
         return (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <Stat label="Agents" value={String(project.agents.length)} />
             <Stat
               label="Working"
-              value={String(project.agents.filter(a => a.status === 'working').length)}
+              value={String(project.agents.filter((a) => a.status === 'working').length)}
               color="#44ffaa"
             />
-            {errCount > 0 && (
-              <Stat label="Errors" value={String(errCount)} color="#ff4444" />
-            )}
-            {waitCount > 0 && (
-              <Stat label="Waiting" value={String(waitCount)} color="#ffaa44" />
-            )}
+            {errCount > 0 && <Stat label="Errors" value={String(errCount)} color="#ff4444" />}
+            {waitCount > 0 && <Stat label="Waiting" value={String(waitCount)} color="#ffaa44" />}
           </div>
         );
       })()}
@@ -172,7 +178,14 @@ export function ProjectPanel() {
 
       {/* Agents */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '10px',
+          }}
+        >
           <div
             style={{
               fontSize: '11px',
@@ -257,7 +270,12 @@ export function ProjectPanel() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {sortedAgents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} identity={identities.get(agent.id)!} humanLingo={humanLingo} />
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                identity={identities.get(agent.id)!}
+                humanLingo={humanLingo}
+              />
             ))}
           </div>
         )}
@@ -266,15 +284,7 @@ export function ProjectPanel() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-}) {
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div
       style={{

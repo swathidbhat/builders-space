@@ -12,7 +12,9 @@ function makeProject(overrides: Partial<ProjectInfo> & { path: string }): Projec
   };
 }
 
-function makeAgent(overrides: Partial<AgentInfo> & { source: AgentSource; sessionId: string }): AgentInfo {
+function makeAgent(
+  overrides: Partial<AgentInfo> & { source: AgentSource; sessionId: string },
+): AgentInfo {
   const { source, sessionId, ...rest } = overrides;
   return {
     id: `${source}-${sessionId}`,
@@ -36,10 +38,13 @@ describe('StateManager', () => {
   describe('no overlays', () => {
     it('all agents emit statusSource = inferred', () => {
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({ source: 'claude-code', sessionId: 'sess1' })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [makeAgent({ source: 'claude-code', sessionId: 'sess1' })],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       const state = sm.getState();
@@ -52,15 +57,20 @@ describe('StateManager', () => {
     it('flips agent to realtime and overrides status/errorReason/lastActivityMs', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -86,16 +96,21 @@ describe('StateManager', () => {
     it('preserves watcher-derived lastAction when overlay has none', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'codex',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastAction: 'Write:main.py',
-          lastActivityMs: now - 30_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'codex',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastAction: 'Write:main.py',
+              lastActivityMs: now - 30_000,
+            }),
+          ],
+        }),
+      );
       sm.updateCodexProjects(projects);
 
       sm.applyHookOverlay({
@@ -119,15 +134,20 @@ describe('StateManager', () => {
     it('sets error status and statusSource = realtime', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'cursor',
-          sessionId: 'sess1',
-          status: 'working',
-          lastActivityMs: now - 10_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'cursor',
+              sessionId: 'sess1',
+              status: 'working',
+              lastActivityMs: now - 10_000,
+            }),
+          ],
+        }),
+      );
       sm.updateCursorProjects(projects);
 
       sm.applyHookOverlay({
@@ -154,15 +174,20 @@ describe('StateManager', () => {
       const now = Date.now();
 
       const initialProjects = new Map<string, ProjectInfo>();
-      initialProjects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      initialProjects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(initialProjects);
 
       sm.applyHookOverlay({
@@ -177,15 +202,20 @@ describe('StateManager', () => {
       });
 
       const updatedProjects = new Map<string, ProjectInfo>();
-      updatedProjects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'done',
-          lastActivityMs: now - 30_000,
-        })],
-      }));
+      updatedProjects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'done',
+              lastActivityMs: now - 30_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(updatedProjects);
 
       const agent = sm.getState().projects[0].agents[0];
@@ -199,15 +229,20 @@ describe('StateManager', () => {
     it('immediately clears overlays and reverts agents to inferred', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -234,19 +269,25 @@ describe('StateManager', () => {
 
   describe('overlay expiry', () => {
     it('non-terminal overlay at exactly TTL boundary is still trusted', () => {
+      vi.useFakeTimers();
       const now = Date.now();
       const eventTime = now - HOOK_ACTIVE_TTL_MS;
 
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'done',
-          lastActivityMs: eventTime - 1000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'done',
+              lastActivityMs: eventTime - 1000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -259,7 +300,6 @@ describe('StateManager', () => {
         mode: 'realtime',
       });
 
-      vi.useFakeTimers();
       vi.setSystemTime(now);
 
       sm.updateClaudeProjects(projects);
@@ -279,15 +319,20 @@ describe('StateManager', () => {
       const eventTime = now - HOOK_TERMINAL_TTL_MS + 1000;
 
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: eventTime - 1000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: eventTime - 1000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -317,15 +362,20 @@ describe('StateManager', () => {
     it('Cursor realtime error overlay wins over newer watcher lastActivityMs until TTL', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'cursor',
-          sessionId: 'sess1',
-          status: 'working',
-          lastActivityMs: now - 10_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'cursor',
+              sessionId: 'sess1',
+              status: 'working',
+              lastActivityMs: now - 10_000,
+            }),
+          ],
+        }),
+      );
       sm.updateCursorProjects(projects);
 
       sm.applyHookOverlay({
@@ -340,15 +390,20 @@ describe('StateManager', () => {
       });
 
       const updatedProjects = new Map<string, ProjectInfo>();
-      updatedProjects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'cursor',
-          sessionId: 'sess1',
-          status: 'working',
-          lastActivityMs: now + 5_000,
-        })],
-      }));
+      updatedProjects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'cursor',
+              sessionId: 'sess1',
+              status: 'working',
+              lastActivityMs: now + 5_000,
+            }),
+          ],
+        }),
+      );
       sm.updateCursorProjects(updatedProjects);
 
       const agent = sm.getState().projects[0].agents[0];
@@ -378,15 +433,20 @@ describe('StateManager', () => {
       expect(sm.getState().projects).toHaveLength(0);
 
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 10_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 10_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       const agent = sm.getState().projects[0].agents[0];
@@ -397,13 +457,26 @@ describe('StateManager', () => {
     it('multiple overlays for different agents in the same project match independently', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [
-          makeAgent({ source: 'claude-code', sessionId: 'sess1', status: 'waiting', lastActivityMs: now - 60_000 }),
-          makeAgent({ source: 'claude-code', sessionId: 'sess2', status: 'waiting', lastActivityMs: now - 60_000 }),
-        ],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess2',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -427,8 +500,8 @@ describe('StateManager', () => {
       });
 
       const agents = sm.getState().projects[0].agents;
-      const agent1 = agents.find(a => a.sessionId === 'sess1')!;
-      const agent2 = agents.find(a => a.sessionId === 'sess2')!;
+      const agent1 = agents.find((a) => a.sessionId === 'sess1')!;
+      const agent2 = agents.find((a) => a.sessionId === 'sess2')!;
 
       expect(agent1.status).toBe('working');
       expect(agent1.statusSource).toBe('realtime');
@@ -440,15 +513,20 @@ describe('StateManager', () => {
       const now = Date.now();
 
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -466,23 +544,28 @@ describe('StateManager', () => {
       const emptyProjects = new Map<string, ProjectInfo>();
       sm.updateClaudeProjects(emptyProjects);
 
-      const agents = sm.getState().projects.flatMap(p => p.agents);
-      const orphan = agents.find(a => a.sessionId === 'sess1');
+      const agents = sm.getState().projects.flatMap((p) => p.agents);
+      const orphan = agents.find((a) => a.sessionId === 'sess1');
       expect(orphan).toBeUndefined();
     });
 
     it('rapid events for same agent: latest event wins in overlay', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -514,15 +597,20 @@ describe('StateManager', () => {
     it('event with empty sessionId and valid cwd falls through to cwd-based matching', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -543,15 +631,20 @@ describe('StateManager', () => {
     it('event with empty sessionId AND empty cwd: overlay stored but never matches', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -571,15 +664,20 @@ describe('StateManager', () => {
     it('clearHookRuntimeForSources with empty array is a no-op', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -601,15 +699,20 @@ describe('StateManager', () => {
     it('clearHookRuntimeForSources for source with no overlays is a no-op', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [makeAgent({
-          source: 'claude-code',
-          sessionId: 'sess1',
-          status: 'waiting',
-          lastActivityMs: now - 60_000,
-        })],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.clearHookRuntimeForSources(['codex']);
@@ -629,13 +732,26 @@ describe('StateManager', () => {
     it('an overlay for one session does not change another agent in the same project', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/Users/alice/work/my-app',
-        agents: [
-          makeAgent({ source: 'claude-code', sessionId: 'sess1', status: 'waiting', lastActivityMs: now - 60_000 }),
-          makeAgent({ source: 'claude-code', sessionId: 'sess2', status: 'working', lastActivityMs: now - 5_000 }),
-        ],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/Users/alice/work/my-app',
+          agents: [
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess1',
+              status: 'waiting',
+              lastActivityMs: now - 60_000,
+            }),
+            makeAgent({
+              source: 'claude-code',
+              sessionId: 'sess2',
+              status: 'working',
+              lastActivityMs: now - 5_000,
+            }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -650,8 +766,8 @@ describe('StateManager', () => {
       });
 
       const agents = sm.getState().projects[0].agents;
-      const sess1 = agents.find(a => a.sessionId === 'sess1')!;
-      const sess2 = agents.find(a => a.sessionId === 'sess2')!;
+      const sess1 = agents.find((a) => a.sessionId === 'sess1')!;
+      const sess2 = agents.find((a) => a.sessionId === 'sess2')!;
       expect(sess1.status).toBe('error');
       expect(sess1.statusSource).toBe('realtime');
       expect(sess2.status).toBe('working');
@@ -662,13 +778,16 @@ describe('StateManager', () => {
     it('an event with no session id does not mark every agent in the project', () => {
       const now = Date.now();
       const projects = new Map<string, ProjectInfo>();
-      projects.set('/proj', makeProject({
-        path: '/proj',
-        agents: [
-          makeAgent({ source: 'claude-code', sessionId: 'sess1', status: 'waiting' }),
-          makeAgent({ source: 'claude-code', sessionId: 'sess2', status: 'waiting' }),
-        ],
-      }));
+      projects.set(
+        '/proj',
+        makeProject({
+          path: '/proj',
+          agents: [
+            makeAgent({ source: 'claude-code', sessionId: 'sess1', status: 'waiting' }),
+            makeAgent({ source: 'claude-code', sessionId: 'sess2', status: 'waiting' }),
+          ],
+        }),
+      );
       sm.updateClaudeProjects(projects);
 
       sm.applyHookOverlay({
@@ -692,24 +811,30 @@ describe('StateManager', () => {
   describe('project path identity', () => {
     it('does not merge my_app and my-app', () => {
       const underscore = new Map<string, ProjectInfo>();
-      underscore.set('/Users/alice/my_app', makeProject({
-        path: '/Users/alice/my_app',
-        name: 'my_app',
-        agents: [makeAgent({ source: 'cursor', sessionId: 'c1', status: 'working' })],
-      }));
+      underscore.set(
+        '/Users/alice/my_app',
+        makeProject({
+          path: '/Users/alice/my_app',
+          name: 'my_app',
+          agents: [makeAgent({ source: 'cursor', sessionId: 'c1', status: 'working' })],
+        }),
+      );
       sm.updateCursorProjects(underscore);
 
       const hyphen = new Map<string, ProjectInfo>();
-      hyphen.set('/Users/alice/my-app', makeProject({
-        path: '/Users/alice/my-app',
-        name: 'my-app',
-        agents: [makeAgent({ source: 'claude-code', sessionId: 's1', status: 'error' })],
-      }));
+      hyphen.set(
+        '/Users/alice/my-app',
+        makeProject({
+          path: '/Users/alice/my-app',
+          name: 'my-app',
+          agents: [makeAgent({ source: 'claude-code', sessionId: 's1', status: 'error' })],
+        }),
+      );
       sm.updateClaudeProjects(hyphen);
 
       const projects = sm.getState().projects;
       expect(projects).toHaveLength(2);
-      const names = projects.map(p => p.path).sort();
+      const names = projects.map((p) => p.path).sort();
       expect(names).toEqual(['/Users/alice/my-app', '/Users/alice/my_app']);
     });
   });

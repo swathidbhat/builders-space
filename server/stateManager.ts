@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import type { SpaceData, ProjectInfo, AgentSource, AgentStatus, AgentInfo } from './types';
 
-export const HOOK_ACTIVE_TTL_MS = 600_000;    // 10 minutes — non-terminal states
+export const HOOK_ACTIVE_TTL_MS = 600_000; // 10 minutes — non-terminal states
 export const HOOK_TERMINAL_TTL_MS = 3_600_000; // 1 hour — terminal states
 
 export interface HookRuntimeEntry {
@@ -78,11 +78,11 @@ export class StateManager extends EventEmitter {
     // Step 1: Merge watcher project maps
     const merged = new Map<string, ProjectInfo>();
 
-    for (const [_key, project] of this.cursorProjects) {
+    for (const project of this.cursorProjects.values()) {
       merged.set(this.normalizeKey(project.path), { ...project, agents: [...project.agents] });
     }
 
-    for (const [_key, project] of this.claudeProjects) {
+    for (const project of this.claudeProjects.values()) {
       const normalizedKey = this.normalizeKey(project.path);
       const existing = merged.get(normalizedKey);
       if (existing) {
@@ -92,7 +92,7 @@ export class StateManager extends EventEmitter {
       }
     }
 
-    for (const [_key, project] of this.codexProjects) {
+    for (const project of this.codexProjects.values()) {
       const normalizedKey = this.normalizeKey(project.path);
       const existing = merged.get(normalizedKey);
       if (existing) {

@@ -59,7 +59,7 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
 
     const fileMtime = safeStatMtime(filePath);
     const effectiveTimestamp = Math.max(latestTimestamp, fileMtime);
-    const isActive = (Date.now() - effectiveTimestamp) < 2 * 60 * 1000;
+    const isActive = Date.now() - effectiveTimestamp < 2 * 60 * 1000;
 
     return {
       sessionId,
@@ -121,7 +121,7 @@ function formatCodexToolUse(name: string, argsJson?: string): string {
     const args = JSON.parse(argsJson);
 
     if (name === 'exec_command' || name === 'shell') {
-      const cmd = shortenPaths(((args.cmd || args.command || '') as string)).slice(0, 60);
+      const cmd = shortenPaths((args.cmd || args.command || '') as string).slice(0, 60);
       return cmd ? `Shell:${cmd}` : 'Shell';
     }
 

@@ -9,20 +9,27 @@ import type { ProjectInfo } from '../types';
 const TOKEN = 'test-launch-token';
 
 function project(dir: string): Map<string, ProjectInfo> {
-  return new Map([[dir, {
-    id: 'p',
-    name: 'my-app',
-    path: dir,
-    fileCount: 0,
-    agents: [{
-      id: 'claude-abc123',
-      source: 'claude-code',
-      sessionId: 'abc123',
-      status: 'waiting',
-      statusSource: 'inferred',
-      sessionMeta: { projectPath: dir, cwd: dir, sessionId: 'abc123' },
-    }],
-  }]]);
+  return new Map([
+    [
+      dir,
+      {
+        id: 'p',
+        name: 'my-app',
+        path: dir,
+        fileCount: 0,
+        agents: [
+          {
+            id: 'claude-abc123',
+            source: 'claude-code',
+            sessionId: 'abc123',
+            status: 'waiting',
+            statusSource: 'inferred',
+            sessionMeta: { projectPath: dir, cwd: dir, sessionId: 'abc123' },
+          },
+        ],
+      },
+    ],
+  ]);
 }
 
 describe('server access control', () => {

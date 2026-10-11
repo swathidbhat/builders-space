@@ -1,9 +1,44 @@
 const AGENT_NAMES = [
-  'Nova', 'Atlas', 'Comet', 'Pulsar', 'Nebula', 'Quasar', 'Orion', 'Vega',
-  'Lyra', 'Titan', 'Astra', 'Cosmo', 'Stella', 'Zenith', 'Helix', 'Pixel',
-  'Echo', 'Flux', 'Prism', 'Spark', 'Blaze', 'Drift', 'Ember', 'Frost',
-  'Glyph', 'Halo', 'Ion', 'Jet', 'Kite', 'Lumen', 'Neon', 'Opal',
-  'Phase', 'Rift', 'Sable', 'Tonic', 'Umbra', 'Volt', 'Warp', 'Zephyr',
+  'Nova',
+  'Atlas',
+  'Comet',
+  'Pulsar',
+  'Nebula',
+  'Quasar',
+  'Orion',
+  'Vega',
+  'Lyra',
+  'Titan',
+  'Astra',
+  'Cosmo',
+  'Stella',
+  'Zenith',
+  'Helix',
+  'Pixel',
+  'Echo',
+  'Flux',
+  'Prism',
+  'Spark',
+  'Blaze',
+  'Drift',
+  'Ember',
+  'Frost',
+  'Glyph',
+  'Halo',
+  'Ion',
+  'Jet',
+  'Kite',
+  'Lumen',
+  'Neon',
+  'Opal',
+  'Phase',
+  'Rift',
+  'Sable',
+  'Tonic',
+  'Umbra',
+  'Volt',
+  'Warp',
+  'Zephyr',
 ];
 
 const AVATAR_GRADIENTS: [string, string][] = [
@@ -32,14 +67,7 @@ export const HAIR_COLORS = [
   '#8a3a3a',
 ];
 
-const SKIN_TONES = [
-  '#e8b88a',
-  '#f5d0a9',
-  '#d4a373',
-  '#c89060',
-  '#b07d56',
-  '#8d5e3c',
-];
+const SKIN_TONES = ['#e8b88a', '#f5d0a9', '#d4a373', '#c89060', '#b07d56', '#8d5e3c'];
 
 export type AvatarShape = 'circle' | 'squircle' | 'rounded-square';
 const AVATAR_SHAPES: AvatarShape[] = ['circle', 'squircle', 'rounded-square'];
@@ -47,7 +75,7 @@ const AVATAR_SHAPES: AvatarShape[] = ['circle', 'squircle', 'rounded-square'];
 function hash(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h) + s.charCodeAt(i);
+    h = (h << 5) - h + s.charCodeAt(i);
     h |= 0;
   }
   return Math.abs(h);
@@ -57,9 +85,15 @@ function darken(hex: string, amount = 0.4): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  const dr = Math.round(r * (1 - amount)).toString(16).padStart(2, '0');
-  const dg = Math.round(g * (1 - amount)).toString(16).padStart(2, '0');
-  const db = Math.round(b * (1 - amount)).toString(16).padStart(2, '0');
+  const dr = Math.round(r * (1 - amount))
+    .toString(16)
+    .padStart(2, '0');
+  const dg = Math.round(g * (1 - amount))
+    .toString(16)
+    .padStart(2, '0');
+  const db = Math.round(b * (1 - amount))
+    .toString(16)
+    .padStart(2, '0');
   return `#${dr}${dg}${db}`;
 }
 
@@ -114,9 +148,7 @@ export function getProjectAgentIdentities(agentIds: string[]): Map<string, Agent
     const gradient = AVATAR_GRADIENTS[gradIdx];
     const suitColor = gradient[0];
 
-    const borderRadius =
-      shape === 'circle' ? '50%' :
-      shape === 'squircle' ? '30%' : '6px';
+    const borderRadius = shape === 'circle' ? '50%' : shape === 'squircle' ? '30%' : '6px';
 
     map.set(id, {
       name,

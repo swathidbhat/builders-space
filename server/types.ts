@@ -52,8 +52,5 @@ export interface HumanizeResponse {
 
 export interface ClientToServerEvents {
   'space:request-state': () => void;
-  'space:humanize': (
-    texts: string[],
-    callback: (result: HumanizeResponse) => void,
-  ) => void;
+  'space:humanize': (texts: string[], callback: (result: HumanizeResponse) => void) => void;
 }

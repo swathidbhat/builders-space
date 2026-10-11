@@ -33,7 +33,8 @@ export function HUD() {
         zIndex: 50,
         fontFamily: "'Space Grotesk', sans-serif",
         pointerEvents: 'none',
-        background: 'linear-gradient(180deg, rgba(5,5,15,0.85) 0%, rgba(5,5,15,0.4) 70%, transparent 100%)',
+        background:
+          'linear-gradient(180deg, rgba(5,5,15,0.85) 0%, rgba(5,5,15,0.4) 70%, transparent 100%)',
       }}
     >
       <div>
@@ -71,9 +72,7 @@ export function HUD() {
         {waitingAgents > 0 && (
           <HUDCounter label="Awaiting you" value={waitingAgents} color="#ffaa44" pulse />
         )}
-        {errorAgents > 0 && (
-          <HUDCounter label="Errors" value={errorAgents} color="#ff4444" pulse />
-        )}
+        {errorAgents > 0 && <HUDCounter label="Errors" value={errorAgents} color="#ff4444" pulse />}
       </div>
     </div>
   );

@@ -10,9 +10,7 @@ export interface CommandSpec {
   args: string[];
 }
 
-export type OpenSessionResult =
-  | { spec: CommandSpec; resumed: boolean }
-  | { error: string };
+export type OpenSessionResult = { spec: CommandSpec; resumed: boolean } | { error: string };
 
 /**
  * AppleScript passed to osascript. The directory and session id are argv

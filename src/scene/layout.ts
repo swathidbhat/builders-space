@@ -35,11 +35,7 @@ export function layoutOrbitalLanes(projects: ProjectInfo[]): OrbitalLayout {
 
     for (let i = startIdx; i < endIdx; i++) {
       const angle = ((i - startIdx) / planetsInRing) * Math.PI * 2;
-      positions[sorted[i].originalIndex] = [
-        Math.cos(angle) * radius,
-        0,
-        Math.sin(angle) * radius,
-      ];
+      positions[sorted[i].originalIndex] = [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
     }
   }
 

@@ -2,9 +2,7 @@ import { useMemo } from 'react';
 import { useSpaceStore } from '../store';
 
 function prettifyName(raw: string): string {
-  return raw
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return raw.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function getStatusColor(project: { agents: { status: string }[] }): string {
@@ -79,8 +77,7 @@ export function Sidebar() {
         left: 0,
         width: '200px',
         height: '100vh',
-        background:
-          'linear-gradient(180deg, rgba(10,10,30,0.92), rgba(5,5,20,0.96))',
+        background: 'linear-gradient(180deg, rgba(10,10,30,0.92), rgba(5,5,20,0.96))',
         backdropFilter: 'blur(20px)',
         borderRight: '1px solid rgba(100,140,255,0.08)',
         zIndex: 60,
@@ -167,9 +164,7 @@ export function Sidebar() {
                 gap: '8px',
                 width: '100%',
                 padding: '7px 14px',
-                background: isSelected
-                  ? 'rgba(100,140,255,0.12)'
-                  : 'transparent',
+                background: isSelected ? 'rgba(100,140,255,0.12)' : 'transparent',
                 border: 'none',
                 borderLeft: isSelected
                   ? '2px solid rgba(100,140,255,0.5)'
@@ -180,13 +175,10 @@ export function Sidebar() {
                 transition: 'background 0.15s',
               }}
               onMouseEnter={(e) => {
-                if (!isSelected)
-                  e.currentTarget.style.background =
-                    'rgba(100,140,255,0.06)';
+                if (!isSelected) e.currentTarget.style.background = 'rgba(100,140,255,0.06)';
               }}
               onMouseLeave={(e) => {
-                if (!isSelected)
-                  e.currentTarget.style.background = 'transparent';
+                if (!isSelected) e.currentTarget.style.background = 'transparent';
               }}
             >
               <span

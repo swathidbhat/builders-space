@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { layoutOrbitalLanes } from '../layout';
-import type { ProjectInfo } from '../../types';
+import type { AgentStatus, ProjectInfo } from '../../types';
 
 function makeProject(
   name: string,
@@ -15,7 +15,7 @@ function makeProject(
       id: `${name}-agent-${i}`,
       source: 'claude-code' as const,
       sessionId: `session-${i}`,
-      status: a.status as any,
+      status: a.status as AgentStatus,
       lastActivityMs: a.lastActivityMs,
     })),
   };
@@ -35,11 +35,7 @@ describe('layoutOrbitalLanes', () => {
   });
 
   it('places all projects on the XZ plane (y = 0)', () => {
-    const projects = [
-      makeProject('Alpha'),
-      makeProject('Beta'),
-      makeProject('Gamma'),
-    ];
+    const projects = [makeProject('Alpha'), makeProject('Beta'), makeProject('Gamma')];
     const { positions } = layoutOrbitalLanes(projects);
     for (const [, y] of positions) {
       expect(y).toBe(0);
@@ -47,11 +43,7 @@ describe('layoutOrbitalLanes', () => {
   });
 
   it('assigns positions deterministically by project name', () => {
-    const projects = [
-      makeProject('Zeta'),
-      makeProject('Alpha'),
-      makeProject('Mango'),
-    ];
+    const projects = [makeProject('Zeta'), makeProject('Alpha'), makeProject('Mango')];
     const a = layoutOrbitalLanes(projects);
     const b = layoutOrbitalLanes(projects);
     expect(a.positions).toEqual(b.positions);
@@ -84,9 +76,7 @@ describe('layoutOrbitalLanes', () => {
       makeProject('Alpha', [{ status: 'working', lastActivityMs: 99999 }]),
       makeProject('Beta', [{ status: 'working', lastActivityMs: 1 }]),
     ];
-    expect(layoutOrbitalLanes(before).positions).toEqual(
-      layoutOrbitalLanes(after).positions,
-    );
+    expect(layoutOrbitalLanes(before).positions).toEqual(layoutOrbitalLanes(after).positions);
   });
 
   it('distributes >8 projects across multiple rings', () => {
@@ -103,9 +93,7 @@ describe('layoutOrbitalLanes', () => {
   });
 
   it('gives every project a unique position', () => {
-    const projects = Array.from({ length: 6 }, (_, i) =>
-      makeProject(`P${i}`),
-    );
+    const projects = Array.from({ length: 6 }, (_, i) => makeProject(`P${i}`));
     const { positions } = layoutOrbitalLanes(projects);
     const serialized = positions.map((p) => p.join(','));
     expect(new Set(serialized).size).toBe(6);
@@ -119,8 +107,16 @@ describe('layoutOrbitalLanes', () => {
     const layout1 = layoutOrbitalLanes([a, b, c]);
     const layout2 = layoutOrbitalLanes([c, a, b]);
 
-    const pos1ByName = { Alpha: layout1.positions[0], Beta: layout1.positions[1], Gamma: layout1.positions[2] };
-    const pos2ByName = { Alpha: layout2.positions[1], Beta: layout2.positions[2], Gamma: layout2.positions[0] };
+    const pos1ByName = {
+      Alpha: layout1.positions[0],
+      Beta: layout1.positions[1],
+      Gamma: layout1.positions[2],
+    };
+    const pos2ByName = {
+      Alpha: layout2.positions[1],
+      Beta: layout2.positions[2],
+      Gamma: layout2.positions[0],
+    };
 
     for (const name of ['Alpha', 'Beta', 'Gamma'] as const) {
       expect(pos1ByName[name]).toEqual(pos2ByName[name]);
