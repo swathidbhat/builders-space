@@ -59,7 +59,7 @@ export function AssistantNotice() {
   if (!kind || dismissed === kind) return null;
 
   return (
-    <aside className={styles.notice} role="status">
+    <aside className={styles.notice} role="status" data-overlay="notice">
       <p>{COPY[kind]}</p>
       <button
         type="button"

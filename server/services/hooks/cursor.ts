@@ -7,7 +7,12 @@ import { cursorDir, cursorHooksPath } from './paths';
 import { cursorConfigSchema, readJsonConfig } from './jsonConfig';
 import { STATUS_HOOK_COMMAND } from './scripts';
 import { statusFromToolDir } from './status';
-import type { EnableToolResult, HookManifest, ToolHookAdapter } from './types';
+import {
+  enabledResult,
+  type EnableToolResult,
+  type HookManifest,
+  type ToolHookAdapter,
+} from './types';
 
 const CURSOR_HOOK_KEYS = ['sessionStart', 'postToolUse', 'stop', 'sessionEnd'] as const;
 
@@ -46,17 +51,17 @@ function enable(manifest: HookManifest): EnableToolResult {
     if (!existsSync(configPath)) {
       writeFileSync(configPath, JSON.stringify(freshCursorConfig(), null, 2) + '\n');
       noteCreated(manifest, configPath);
-      return { status: 'ok' };
+      return enabledResult([configPath]);
     }
 
     const content = readFileSync(configPath, 'utf-8');
-    if (content.includes('status-hook.sh')) return { status: 'ok' };
+    if (content.includes('status-hook.sh')) return enabledResult([]);
 
     backupFile(configPath, 'cursor-hooks.json');
     const config = readJsonConfig(content, cursorConfigSchema);
     mergeCursorHooksIntoConfig(config);
     writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-    return { status: 'ok' };
+    return enabledResult([configPath]);
   } catch (err) {
     logCaught('hookSetup', err, 'enable cursor');
     return { status: 'error', error: String(err) };

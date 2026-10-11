@@ -15,6 +15,7 @@ export function ProjectPanel() {
   const projects = useSpaceStore((s) => s.projects);
   const deselectPlanet = useSpaceStore((s) => s.deselectPlanet);
   const humanLingo = useSpaceStore((s) => s.humanLingo);
+  const besideList = useSpaceStore((s) => s.sidebarOverlayOpen);
   const toggleHumanLingo = useSpaceStore((s) => s.toggleHumanLingo);
 
   const project = projects.find((item) => item.id === selectedId);
@@ -35,7 +36,11 @@ export function ProjectPanel() {
   if (!project) return null;
 
   return (
-    <div className={styles.panel}>
+    <aside
+      className={besideList ? `${styles.panel} ${styles.besideList}` : styles.panel}
+      aria-label="Project details"
+      data-overlay="panel"
+    >
       <ProjectPanelHeader name={project.name} path={project.path} onClose={deselectPlanet} />
       <ProjectStats agents={project.agents} />
       <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
@@ -61,6 +66,6 @@ export function ProjectPanel() {
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }

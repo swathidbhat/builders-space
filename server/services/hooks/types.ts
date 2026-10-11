@@ -12,12 +12,24 @@ export interface EnableToolResult {
   status: EnableResult;
   snippet?: string;
   error?: string;
+  changedFiles?: string[];
+  restartRequired?: boolean;
 }
 
 export interface EnableResultMap {
   claude: EnableToolResult;
   cursor: EnableToolResult;
   codex: EnableToolResult;
+  changedFiles: string[];
+  restartRequired: boolean;
+}
+
+export function enabledResult(changedFiles: string[]): EnableToolResult {
+  return {
+    status: 'ok',
+    changedFiles,
+    restartRequired: changedFiles.length > 0,
+  };
 }
 
 export interface HookManifest {

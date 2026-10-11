@@ -215,9 +215,11 @@ describe('label placement', () => {
       viewport,
     );
     const byId = Object.fromEntries(placed.map((spot) => [spot.id, spot]));
+    expect(byId.error.hidden).toBe(false);
+    expect(byId.wait.hidden).toBe(false);
+    expect(byId.quiet.hidden).toBe(true);
     expect(byId.error.y).toBeGreaterThanOrEqual(112);
     expect(byId.wait.y).toBeGreaterThanOrEqual(112);
-    expect(byId.quiet.y).toBeGreaterThan(byId.error.y);
     expect(Math.abs(byId.error.y - byId.wait.y)).toBeGreaterThanOrEqual(14);
 
     const clear = resolveLabelCollisions(
@@ -225,7 +227,139 @@ describe('label placement', () => {
       chromeForbidden(1920, 1080, { sidebarOpen: false, panelOpen: false }),
       viewport,
     );
-    expect(clear).toEqual([{ id: 'solo', x: 900, y: 400 }]);
+    expect(clear).toEqual([{ id: 'solo', x: 900, y: 400, hidden: false }]);
+  });
+
+  it('keeps attention labels and hides idle labels that cannot find a clear spot', () => {
+    const idle = Array.from({ length: 8 }, (_, index) => ({
+      id: `idle-${index}`,
+      x: 220 + (index % 3) * 24,
+      y: 320 + (index % 2) * 12,
+      width: 180,
+      height: 40,
+      priority: labelPriority('idle', false),
+    }));
+    const viewport = { width: 1280, height: 800 };
+    const placed = resolveLabelCollisions(
+      [
+        { id: 'error', x: 220, y: 320, width: 180, height: 40, priority: 0 },
+        { id: 'wait', x: 640, y: 360, width: 180, height: 40, priority: 1 },
+        ...idle,
+      ],
+      chromeForbidden(1280, 800, { sidebarOpen: false, panelOpen: false }),
+      viewport,
+    );
+    const byId = Object.fromEntries(placed.map((spot) => [spot.id, spot]));
+    expect(byId.error.hidden).toBe(false);
+    expect(byId.wait.hidden).toBe(false);
+    const hiddenIdle = placed.filter((spot) => spot.id.startsWith('idle-') && spot.hidden);
+    expect(hiddenIdle.length).toBeGreaterThan(0);
+
+    const visible = placed.filter((spot) => !spot.hidden);
+    for (let i = 0; i < visible.length; i++) {
+      for (let j = i + 1; j < visible.length; j++) {
+        const a = visible[i];
+        const b = visible[j];
+        const aLeft = a.x - 90;
+        const aRight = a.x + 90;
+        const aTop = a.y - 20;
+        const aBottom = a.y + 20;
+        const separated =
+          aRight <= b.x - 90 || aLeft >= b.x + 90 || aBottom <= b.y - 20 || aTop >= b.y + 20;
+        expect(separated).toBe(true);
+      }
+    }
+  });
+
+  it('pulls an off-screen attention label below the HUD', () => {
+    const viewport = { width: 800, height: 900 };
+    const placed = resolveLabelCollisions(
+      [{ id: 'stripe', x: -731, y: 65, width: 204, height: 45, priority: 0 }],
+      chromeForbidden(800, 900, { sidebarOpen: false, panelOpen: false }),
+      viewport,
+    );
+    expect(placed[0].hidden).toBe(false);
+    expect(placed[0].y - 22.5).toBeGreaterThanOrEqual(112);
+    expect(placed[0].x - 102).toBeGreaterThanOrEqual(0);
+    expect(placed[0].x + 102).toBeLessThanOrEqual(800);
+  });
+
+  it('keeps attention labels clear of a sidebar overlay and a bottom sheet', () => {
+    const viewport = { width: 800, height: 900 };
+    const forbidden = [
+      ...chromeForbidden(800, 900, { sidebarOpen: false, panelOpen: false }),
+      { left: 0, top: 64, right: 248, bottom: 900 },
+      { left: 0, top: 520, right: 800, bottom: 900 },
+    ];
+    const placed = resolveLabelCollisions(
+      [
+        { id: 'a', x: -731, y: 65, width: 204, height: 45, priority: 0 },
+        { id: 'b', x: -400, y: 80, width: 180, height: 40, priority: 0 },
+      ],
+      forbidden,
+      viewport,
+    );
+    for (const spot of placed) {
+      expect(spot.hidden).toBe(false);
+      expect(spot.x - 90).toBeGreaterThanOrEqual(248);
+      expect(spot.y - 22).toBeGreaterThanOrEqual(112);
+      expect(spot.y + 22).toBeLessThanOrEqual(520);
+    }
+    expect(Math.abs(placed[0].y - placed[1].y)).toBeGreaterThanOrEqual(40);
+  });
+
+  it('packs attention labels into the sky above a tall sheet', () => {
+    const viewport = { width: 800, height: 900 };
+    const forbidden = [
+      ...chromeForbidden(800, 900, { sidebarOpen: false, panelOpen: false }),
+      { left: 0, top: 64, right: 248, bottom: 900 },
+      { left: 0, top: 240, right: 800, bottom: 900 },
+    ];
+    const placed = resolveLabelCollisions(
+      [0, 1, 2, 3].map((index) => ({
+        id: `a${index}`,
+        x: -700 + index * 30,
+        y: 60 + index * 8,
+        width: 200,
+        height: 44,
+        priority: index < 2 ? 0 : 1,
+      })),
+      forbidden,
+      viewport,
+    );
+    expect(placed.every((spot) => !spot.hidden)).toBe(true);
+    for (const spot of placed) {
+      expect(spot.x - 100).toBeGreaterThanOrEqual(247);
+      expect(spot.y - 22).toBeGreaterThanOrEqual(111);
+      expect(spot.y + 22).toBeLessThanOrEqual(241);
+    }
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const a = placed[i];
+        const b = placed[j];
+        const separated =
+          a.x + 100 <= b.x - 100 ||
+          a.x - 100 >= b.x + 100 ||
+          a.y + 22 <= b.y - 22 ||
+          a.y - 22 >= b.y + 22;
+        expect(separated).toBe(true);
+      }
+    }
+  });
+
+  it('lifts a label above a bottom dock that does not span the screen', () => {
+    const viewport = { width: 1280, height: 800 };
+    const placed = resolveLabelCollisions(
+      [{ id: 'error', x: 700, y: 760, width: 180, height: 40, priority: 0 }],
+      [
+        ...chromeForbidden(1280, 800, { sidebarOpen: true, panelOpen: false }),
+        { left: 260, top: 700, right: 1264, bottom: 800 },
+      ],
+      viewport,
+    );
+    expect(placed[0].hidden).toBe(false);
+    expect(placed[0].y + 20).toBeLessThanOrEqual(700);
+    expect(placed[0].x - 90).toBeGreaterThanOrEqual(248);
   });
 
   it('slides a label out of the sidebar and the detail panel', () => {

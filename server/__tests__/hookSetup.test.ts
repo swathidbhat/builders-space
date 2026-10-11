@@ -109,6 +109,16 @@ describe('hook install is opt-in and reversible', () => {
     expect(enabled.claude.status).toBe('ok');
     expect(enabled.cursor.status).toBe('ok');
     expect(enabled.codex.status).toBe('ok');
+    expect(enabled.restartRequired).toBe(true);
+    expect(enabled.claude.changedFiles).toContain(join(home, '.claude', 'settings.json'));
+    expect(enabled.cursor.changedFiles).toContain(join(home, '.cursor', 'hooks.json'));
+    expect(enabled.codex.changedFiles).toEqual(
+      expect.arrayContaining([
+        join(home, '.codex', 'config.toml'),
+        join(home, '.codex', 'hooks.json'),
+      ]),
+    );
+    expect(enabled.changedFiles.some((file) => file.endsWith('status-hook.sh'))).toBe(true);
     expect(readFileSync(join(home, '.claude', 'settings.json'), 'utf-8')).toContain(
       'status-hook.sh',
     );

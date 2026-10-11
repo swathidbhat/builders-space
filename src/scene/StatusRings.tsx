@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, DoubleSide, MeshBasicMaterial, RingGeometry, type Group } from 'three';
 import type { PlanetState } from '../../shared/status';
+import { prefersReducedMotion } from '../reducedMotion';
 import { STATUS_RING_COUNT, sampleStatusRing, statusRingLook } from './statusRingMotion';
 
 export function StatusRings({ radius, state }: { radius: number; state: PlanetState }) {
@@ -39,10 +40,11 @@ export function StatusRings({ radius, state }: { radius: number; state: PlanetSt
   }, [ringGeo, materials]);
 
   useFrame((s) => {
+    const elapsed = prefersReducedMotion() ? 0 : s.clock.elapsedTime;
     if (!ringsRef.current || (state !== 'error' && state !== 'waiting')) return;
     const children = ringsRef.current.children;
     for (let i = 0; i < STATUS_RING_COUNT; i++) {
-      const sample = sampleStatusRing(state, s.clock.elapsedTime, radius, i);
+      const sample = sampleStatusRing(state, elapsed, radius, i);
       matsRef.current[i].opacity = sample.opacity;
       if (sample.scale !== null) children[i].scale.setScalar(sample.scale);
     }

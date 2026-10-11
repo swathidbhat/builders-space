@@ -7,7 +7,12 @@ import { codexConfigPath, codexDir, codexHooksPath } from './paths';
 import { codexHooksSchema, readJsonConfig } from './jsonConfig';
 import { FIRE_HOOK_COMMAND, STATUS_HOOK_COMMAND } from './scripts';
 import { statusFromToolDir } from './status';
-import type { EnableToolResult, HookManifest, ToolHookAdapter } from './types';
+import {
+  enabledResult,
+  type EnableToolResult,
+  type HookManifest,
+  type ToolHookAdapter,
+} from './types';
 
 const CODEX_HOOKS_DEFINITION = {
   hooks: {
@@ -19,10 +24,10 @@ const CODEX_HOOKS_DEFINITION = {
   },
 };
 
-export function writeCodexHooksJson(hooksJsonPath: string, manifest?: HookManifest): void {
+export function writeCodexHooksJson(hooksJsonPath: string, manifest?: HookManifest): string[] {
   if (existsSync(hooksJsonPath)) {
     const content = readFileSync(hooksJsonPath, 'utf-8');
-    if (content.includes('status-hook.sh')) return;
+    if (content.includes('status-hook.sh')) return [];
 
     backupFile(hooksJsonPath, 'codex-hooks.json');
     const existing = readJsonConfig(content, codexHooksSchema);
@@ -34,28 +39,30 @@ export function writeCodexHooksJson(hooksJsonPath: string, manifest?: HookManife
     }
 
     writeFileSync(hooksJsonPath, JSON.stringify(existing, null, 2) + '\n');
-    return;
+    return [hooksJsonPath];
   }
 
   writeFileSync(hooksJsonPath, JSON.stringify(CODEX_HOOKS_DEFINITION, null, 2) + '\n');
   if (manifest) noteCreated(manifest, hooksJsonPath);
+  return [hooksJsonPath];
 }
 
-function ensureCodexFeatureFlag(manifest: HookManifest): void {
+function ensureCodexFeatureFlag(manifest: HookManifest): string[] {
   const configPath = codexConfigPath();
 
   if (!existsSync(configPath)) {
     writeFileSync(configPath, '[features]\ncodex_hooks = true\n');
     noteCreated(manifest, configPath);
-    return;
+    return [configPath];
   }
 
   const content = readFileSync(configPath, 'utf-8');
-  if (content.includes('codex_hooks')) return;
+  if (content.includes('codex_hooks')) return [];
 
   backupFile(configPath, 'codex-config.toml');
   writeFileSync(configPath, content.trimEnd() + '\n\n[features]\ncodex_hooks = true\n');
   manifest.codexFeatureFlagAdded = true;
+  return [configPath];
 }
 
 function removeCodexFeatureFlag(configPath: string): void {
@@ -74,9 +81,11 @@ function enable(manifest: HookManifest): EnableToolResult {
   if (!existsSync(codexDir())) return { status: 'not_installed' };
 
   try {
-    ensureCodexFeatureFlag(manifest);
-    writeCodexHooksJson(codexHooksPath(), manifest);
-    return { status: 'ok' };
+    const changed = [
+      ...ensureCodexFeatureFlag(manifest),
+      ...writeCodexHooksJson(codexHooksPath(), manifest),
+    ];
+    return enabledResult(changed);
   } catch (err) {
     logCaught('hookSetup', err, 'enable codex');
     return { status: 'error', error: String(err) };

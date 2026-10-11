@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BottomDock } from '../BottomDock';
 import { HUD } from '../HUD';
 import { Sidebar } from '../Sidebar';
 import { StatusLegend } from '../StatusLegend';
@@ -83,8 +84,62 @@ describe('status display', () => {
     fireEvent.click(projectButton('Zeta'));
     expect(useSpaceStore.getState().selectedPlanetId).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: '×' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close projects' }));
     expect(useSpaceStore.getState().sidebarOpen).toBe(false);
+  });
+
+  it('keeps Lumen Lab untruncated and in the accessible name', () => {
+    const lumen = testProject('lumen-lab', [{ id: 'a', status: 'error' }]);
+    lumen.agents[0].errorReason = 'TypeError: Cannot read properties of undefined';
+    lumen.agents[0].currentTask = 'verify the stripe webhook signature';
+    lumen.agents[0].quietForMs = 5 * 60_000;
+    useSpaceStore.setState({ projects: [lumen], sidebarOpen: true });
+    render(<Sidebar />);
+
+    const button = within(screen.getByRole('region', { name: 'Needs you' })).getByRole('button', {
+      name: /Lumen Lab/,
+    });
+    expect(button.getAttribute('aria-label')).toMatch(/Error: Lumen Lab/);
+    expect(button.getAttribute('title')).toMatch(/Lumen Lab/);
+    const name = button.querySelector('[data-project-name]');
+    expect(name?.textContent).toBe('Lumen Lab');
+    expect(name?.parentElement?.textContent).not.toMatch(/quiet/);
+    expect(button.textContent).toMatch(/quiet for 5 min/);
+  });
+
+  it('keeps a narrow sidebar collapsed until its toggle is used', () => {
+    const listeners = new Set<() => void>();
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: (_type: string, listener: EventListener) => {
+        listeners.add(listener as () => void);
+      },
+      removeEventListener: (_type: string, listener: EventListener) => {
+        listeners.delete(listener as () => void);
+      },
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      useSpaceStore.setState({
+        sidebarOpen: true,
+        projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
+      });
+      render(<Sidebar />);
+      expect(screen.queryByRole('region', { name: 'All projects' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
+      expect(screen.getByRole('region', { name: 'All projects' })).toBeTruthy();
+      expect(useSpaceStore.getState().sidebarOpen).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Close projects' }));
+      expect(screen.queryByRole('region', { name: 'All projects' })).toBeNull();
+    } finally {
+      if (original) window.matchMedia = original;
+      else delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
+    }
   });
 
   it('shows a collapsed sidebar and an empty-project dot', () => {
@@ -101,7 +156,7 @@ describe('status display', () => {
       ],
     });
     render(<Sidebar />);
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
     expect(useSpaceStore.getState().sidebarOpen).toBe(true);
     expect(dot('Bare').style.getPropertyValue('--dot')).toBe('#444');
   });
@@ -162,7 +217,12 @@ describe('status display', () => {
       snapshotSeen: true,
       projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
     });
-    render(<HUD />);
+    render(
+      <>
+        <HUD />
+        <BottomDock />
+      </>,
+    );
     expect(screen.getByText('Disconnected — retrying')).toBeTruthy();
     expect(screen.getByText('1 planet discovered · last update is stale')).toBeTruthy();
   });

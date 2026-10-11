@@ -41,11 +41,9 @@
 
 @keyframes sidebarIn {
   from {
-    transform: translateX(-100%);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
     opacity: 1;
   }
 }
@@ -59,9 +57,9 @@
 }
 
 .heading {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: #667;
+  color: #c5cbe0;
   text-transform: uppercase;
   font-family: 'Orbitron', sans-serif;
   letter-spacing: 0.1em;
@@ -70,7 +68,7 @@
 .close {
   background: none;
   border: none;
-  color: #556;
+  color: #d5dced;
   font-size: 16px;
   cursor: pointer;
   padding: 0 2px;
@@ -121,10 +119,20 @@
   flex-shrink: 0;
 }
 
+.glyph {
+  width: 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #e8eeff;
+  text-align: center;
+}
+
 .name {
   font-size: 12px;
   font-weight: 400;
-  color: #99a;
+  color: #d5dced;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -137,8 +145,8 @@
 }
 
 .count {
-  font-size: 10px;
-  color: #556;
+  font-size: 11px;
+  color: #c5cbe0;
   font-weight: 500;
   flex-shrink: 0;
 }
@@ -187,12 +195,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-width: 0;
+}
+
+.urgentTaskRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 14px;
 }
 
 .urgentTime {
-  font-size: 10px;
-  color: #99a;
-  flex-shrink: 0;
+  font-size: 11px;
+  color: #d5dced;
+  flex: none;
   white-space: nowrap;
 }
 
@@ -204,6 +221,15 @@
   overflow: hidden;
   white-space: normal;
   line-height: 1.35;
+}
+
+.urgentTask {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 0;
+}
+
+.urgentDetail {
   padding-left: 14px;
 }
 
@@ -215,4 +241,24 @@
 .urgentDetail {
   font-size: 11px;
   color: #f0c2c2;
+}
+
+@media (max-width: 999px) {
+  .collapsed {
+    top: 14px;
+    z-index: 80;
+  }
+
+  .panel {
+    top: calc(var(--hud-bottom, 96px) + 8px);
+    height: calc(100vh - var(--hud-bottom, 96px) - 8px);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
+    z-index: 75;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
 }
