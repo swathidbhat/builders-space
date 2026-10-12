@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { CLIENT_TRANSLATION_CACHE_MAX } from '../shared/config';
+import { reuseProjects } from './snapshotIdentity';
 import type { ProjectInfo, SpaceData } from './types';
 
 function rememberTranslations(
@@ -82,20 +83,35 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
 
   setData: (data) =>
     set((state) => {
-      const projects = data.projects.filter((p) => p.agents.length > 0);
+      const incoming = data.projects.filter((project) => project.agents.length > 0);
       const holding =
-        projects.length === 0 && state.projects.length > 0 && Date.now() < state.holdPreviousUntil;
+        incoming.length === 0 && state.projects.length > 0 && Date.now() < state.holdPreviousUntil;
       if (holding) return { pendingEmpty: true, snapshotSeen: true };
-      return {
+      const projects = reuseProjects(state.projects, incoming);
+      const scanStartedAt = projects.length === 0 ? (state.scanStartedAt ?? Date.now()) : null;
+      const next = {
         projects,
         lastUpdated: data.lastUpdated,
-        connection: 'live',
+        connection: 'live' as const,
         dataStale: false,
         snapshotSeen: true,
         holdPreviousUntil: 0,
         pendingEmpty: false,
-        scanStartedAt: projects.length === 0 ? (state.scanStartedAt ?? Date.now()) : null,
+        scanStartedAt,
       };
+      if (
+        projects === state.projects &&
+        state.lastUpdated === next.lastUpdated &&
+        state.connection === next.connection &&
+        state.dataStale === next.dataStale &&
+        state.snapshotSeen === next.snapshotSeen &&
+        state.holdPreviousUntil === next.holdPreviousUntil &&
+        state.pendingEmpty === next.pendingEmpty &&
+        state.scanStartedAt === next.scanStartedAt
+      ) {
+        return state;
+      }
+      return next;
     }),
 
   markDisconnected: () =>

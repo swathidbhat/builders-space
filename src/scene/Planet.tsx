@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { MathUtils, ShaderMaterial, type Mesh } from 'three';
 import { derivePlanetState } from '../../shared/status';
+import { prefersReducedMotion } from '../reducedMotion';
+import { motionAlpha, nearly, pageHidden } from '../renderBudget';
 import { useSpaceStore } from '../store';
 import type { ProjectInfo } from '../types';
 import { PlanetLabel } from './PlanetLabel';
@@ -25,7 +27,7 @@ export function advancePlanetMesh(
   hovered: boolean,
 ): void {
   mesh.rotation.y += delta * (idle ? 0.006 : 0.06);
-  const next = MathUtils.lerp(mesh.scale.x, hovered ? 1.04 : 1, delta * 8);
+  const next = MathUtils.lerp(mesh.scale.x, hovered ? 1.04 : 1, motionAlpha(delta, 8));
   mesh.scale.setScalar(next);
 }
 
@@ -34,8 +36,16 @@ interface PlanetProps {
   position: [number, number, number];
 }
 
-export function Planet({ project, position }: PlanetProps) {
+function samePosition(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number],
+): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+function PlanetMesh({ project, position }: PlanetProps) {
   const meshRef = useRef<Mesh>(null);
+  const invalidate = useThree((state) => state.invalidate);
   const selectPlanet = useSpaceStore((s) => s.selectPlanet);
 
   const seed = hashString(project.name);
@@ -74,24 +84,46 @@ export function Planet({ project, position }: PlanetProps) {
   }, [material]);
 
   useFrame((state, delta) => {
+    const hovered = useSpaceStore.getState().hoveredPlanetId === project.id;
     const targetDim = planetState === 'idle' ? 1 : -1;
+    const targetHover = hovered ? 1 : 0;
+    const targetScale = hovered ? 1.04 : 1;
+
+    if (pageHidden() || prefersReducedMotion()) {
+      material.uniforms.uDim.value = targetDim;
+      material.uniforms.uHover.value = targetHover;
+      meshRef.current?.scale.setScalar(targetScale);
+      return;
+    }
+
     material.uniforms.uDim.value = MathUtils.lerp(
       material.uniforms.uDim.value,
       targetDim,
-      delta * 3,
+      motionAlpha(delta, 3),
     );
-    const hovered = useSpaceStore.getState().hoveredPlanetId === project.id;
     material.uniforms.uHover.value = MathUtils.lerp(
       material.uniforms.uHover.value,
-      hovered ? 1 : 0,
-      delta * 8,
+      targetHover,
+      motionAlpha(delta, 8),
     );
 
     if (meshRef.current) {
       advancePlanetMesh(meshRef.current, delta, planetState === 'idle', hovered);
     }
-
     material.uniforms.uTime.value = state.clock.elapsedTime;
+
+    let moving = false;
+    if (nearly(material.uniforms.uDim.value, targetDim)) material.uniforms.uDim.value = targetDim;
+    else moving = true;
+    if (nearly(material.uniforms.uHover.value, targetHover)) {
+      material.uniforms.uHover.value = targetHover;
+    } else moving = true;
+    if (meshRef.current) {
+      if (nearly(meshRef.current.scale.x, targetScale, 0.001)) {
+        meshRef.current.scale.setScalar(targetScale);
+      } else moving = true;
+    }
+    if (moving) invalidate();
   });
 
   const handleClick = useCallback(
@@ -112,12 +144,14 @@ export function Planet({ project, position }: PlanetProps) {
           e.stopPropagation();
           document.body.style.cursor = 'pointer';
           useSpaceStore.getState().setHoveredPlanet(project.id);
+          if (!pageHidden()) invalidate();
         }}
         onPointerOut={() => {
           document.body.style.cursor = 'default';
           if (useSpaceStore.getState().hoveredPlanetId === project.id) {
             useSpaceStore.getState().setHoveredPlanet(null);
           }
+          if (!pageHidden()) invalidate();
         }}
       >
         <sphereGeometry args={[radius, 64, 64]} />
@@ -135,3 +169,7 @@ export function Planet({ project, position }: PlanetProps) {
     </group>
   );
 }
+
+export const Planet = memo(PlanetMesh, (prev, next) => {
+  return prev.project === next.project && samePosition(prev.position, next.position);
+});

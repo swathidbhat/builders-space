@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PerspectiveCamera } from 'three';
 import { useSpaceStore } from '../../store';
+import { MOTION_FRAME_MS } from '../../renderBudget';
 import { testProject } from '../../test/fixtures';
 
 const canvas = document.createElement('canvas');
@@ -15,6 +16,8 @@ const camera = new PerspectiveCamera(60, 1, 0.1, 500);
 camera.position.set(0, 20, 30);
 camera.lookAt(0, 0, 0);
 camera.updateMatrixWorld();
+
+const invalidate = vi.hoisted(() => vi.fn());
 
 vi.mock('@react-three/drei/core/OrbitControls', () => ({
   OrbitControls: () => null,
@@ -42,11 +45,22 @@ vi.mock('@react-three/fiber', () => ({
   ) => {
     cb({ clock: { elapsedTime: 1.5 }, size: { width: 800, height: 600 } }, 0.016);
   },
-  useThree: () => ({
-    camera,
-    gl: { domElement: canvas },
-    size: { width: 800, height: 600 },
-  }),
+  useThree: (
+    selector?: (state: {
+      camera: PerspectiveCamera;
+      gl: { domElement: HTMLCanvasElement };
+      size: { width: number; height: number };
+      invalidate: () => void;
+    }) => unknown,
+  ) => {
+    const state = {
+      camera,
+      gl: { domElement: canvas },
+      size: { width: 800, height: 600 },
+      invalidate,
+    };
+    return typeof selector === 'function' ? selector(state) : state;
+  },
 }));
 
 import { SpaceScene } from '../SpaceScene';
@@ -112,4 +126,80 @@ describe('scene components', () => {
     });
     expect(errors.filter((line) => line.includes('synchronously unmount'))).toEqual([]);
   });
+
+  it('pulses error rings until the tab is hidden, then stops', () => {
+    vi.useFakeTimers();
+    setVisibility('visible');
+    invalidate.mockClear();
+    useSpaceStore.setState({
+      projects: [testProject('lumen-lab', [{ id: 'a1', status: 'error' }])],
+      selectedPlanetId: null,
+      cameraMode: 'space',
+      sidebarOpen: true,
+    });
+
+    try {
+      render(<SpaceScene />);
+      const mounted = invalidate.mock.calls.length;
+      expect(mounted).toBeGreaterThan(0);
+      invalidate.mockClear();
+      vi.advanceTimersByTime(MOTION_FRAME_MS);
+      expect(invalidate).toHaveBeenCalled();
+
+      invalidate.mockClear();
+      setVisibility('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(MOTION_FRAME_MS * 4);
+      expect(invalidate).not.toHaveBeenCalled();
+
+      setVisibility('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(invalidate).toHaveBeenCalled();
+    } finally {
+      setVisibility('visible');
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not pulse rings when motion is reduced', () => {
+    vi.useFakeTimers();
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+    })) as typeof window.matchMedia;
+    invalidate.mockClear();
+    useSpaceStore.setState({
+      projects: [testProject('lumen-lab', [{ id: 'a1', status: 'error' }])],
+      selectedPlanetId: null,
+      cameraMode: 'space',
+    });
+
+    try {
+      render(<SpaceScene />);
+      invalidate.mockClear();
+      vi.advanceTimersByTime(MOTION_FRAME_MS * 4);
+      expect(invalidate).not.toHaveBeenCalled();
+    } finally {
+      window.matchMedia = original;
+      vi.useRealTimers();
+    }
+  });
 });
+
+function setVisibility(value: 'hidden' | 'visible') {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => value,
+  });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => value === 'hidden',
+  });
+}

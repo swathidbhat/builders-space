@@ -3,9 +3,12 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { layoutLiveLabels } from './labelRegistry';
 import { COMPACT_MAX_PX } from './labelPlacement';
 import { prefersReducedMotion } from '../reducedMotion';
+import { pageHidden } from '../renderBudget';
 import { OrbitControls } from '@react-three/drei/core/OrbitControls';
 import { AdditiveBlending, NoToneMapping, Vector3, type Points } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { AttentionClock } from './AttentionClock';
+import { stepCamera } from './cameraMotion';
 import { Starfield } from './Starfield';
 import { Planet } from './Planet';
 import { useSpaceStore } from '../store';
@@ -19,7 +22,8 @@ function useOrbitalLayout() {
 }
 
 function CameraController() {
-  const { camera } = useThree();
+  const camera = useThree((state) => state.camera);
+  const invalidate = useThree((state) => state.invalidate);
   const selectedId = useSpaceStore((s) => s.selectedPlanetId);
   const projects = useSpaceStore((s) => s.projects);
   const cameraMode = useSpaceStore((s) => s.cameraMode);
@@ -56,43 +60,36 @@ function CameraController() {
       transitioningRef.current = true;
       prevSelectionRef.current = { mode: cameraMode, id: selectedId };
     }
-  }, [cameraMode, selectedId, projects, positions, ringRadii]);
+
+    if (prefersReducedMotion()) {
+      camera.position.copy(targetPosRef.current);
+      if (controlsRef.current) {
+        controlsRef.current.target.copy(targetLookAtRef.current);
+        controlsRef.current.enabled = true;
+      }
+      transitioningRef.current = false;
+    }
+    invalidate();
+  }, [camera, cameraMode, invalidate, selectedId, projects, positions, ringRadii]);
 
   useFrame((_state, delta) => {
-    const reduced = prefersReducedMotion();
+    if (pageHidden()) return;
     const controls = controlsRef.current;
     if (!controls) return;
 
-    if (reduced) {
-      camera.position.copy(targetPosRef.current);
-      controls.target.copy(targetLookAtRef.current);
-      transitioningRef.current = false;
-      controls.enabled = true;
-      controls.update();
-      return;
-    }
-
-    const factor = 1 - Math.exp(-5 * delta);
-
-    camera.position.lerp(targetPosRef.current, factor);
-    controls.target.lerp(targetLookAtRef.current, factor);
-
-    if (transitioningRef.current) {
-      controls.enabled = false;
-
-      const settled =
-        camera.position.distanceTo(targetPosRef.current) < 0.05 &&
-        controls.target.distanceTo(targetLookAtRef.current) < 0.05;
-
-      if (settled) {
-        camera.position.copy(targetPosRef.current);
-        controls.target.copy(targetLookAtRef.current);
-        transitioningRef.current = false;
-        controls.enabled = true;
-      }
-    }
-
+    const step = stepCamera({
+      delta,
+      reducedMotion: prefersReducedMotion(),
+      position: camera.position,
+      targetPosition: targetPosRef.current,
+      lookAt: controls.target,
+      targetLookAt: targetLookAtRef.current,
+      transitioning: transitioningRef.current,
+    });
+    transitioningRef.current = step.transitioning;
+    controls.enabled = !step.transitioning;
     controls.update();
+    if (step.needsFrame) invalidate();
   });
 
   return (
@@ -191,6 +188,15 @@ function Nebula() {
   );
 }
 
+function LayoutInvalidator() {
+  const invalidate = useThree((state) => state.invalidate);
+  const sidebarOpen = useSpaceStore((state) => state.sidebarOpen);
+  useEffect(() => {
+    invalidate();
+  }, [invalidate, sidebarOpen]);
+  return null;
+}
+
 function LabelLayoutDriver() {
   useFrame((state) => {
     const width = state.size?.width ?? 0;
@@ -238,6 +244,7 @@ export function SpaceScene() {
 
   return (
     <Canvas
+      frameloop="demand"
       camera={{ position: [0, 20, 30], fov: 60, near: 0.1, far: 500 }}
       className={styles.canvas}
       onPointerMissed={() => {
@@ -256,6 +263,8 @@ export function SpaceScene() {
       </Suspense>
 
       <CameraController />
+      <AttentionClock />
+      <LayoutInvalidator />
       <LabelLayoutDriver />
     </Canvas>
   );

@@ -3,6 +3,8 @@ import { cssVars } from './cssVars';
 import styles from './PlanetSurface.module.css';
 import type { AgentInfo } from '../types';
 import type { AgentIdentity } from './agentIdentity';
+import { prefersReducedMotion } from '../reducedMotion';
+import { MOTION_FRAME_MS, pageHidden, surfaceKeepsDrawing } from '../renderBudget';
 import { drawSurfaceFrame, type SurfaceAnim } from './surface/drawSurface';
 import {
   GROUND_MIN,
@@ -23,7 +25,6 @@ interface Props {
 
 export function PlanetSurface({ agents, projectName, identities }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef(0);
   const frameRef = useRef(0);
 
   const pType = useMemo(() => PLANET_TYPES[hash(projectName) % PLANET_TYPES.length], [projectName]);
@@ -98,13 +99,36 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
     const scene = { pType, heights, stars, dustMotes, visible, anims, drawOrder, identities };
-    const loop = () => {
-      drawSurfaceFrame(ctx, ++frameRef.current, scene);
-      rafRef.current = requestAnimationFrame(loop);
+    let timer = 0;
+    const stop = () => {
+      window.clearInterval(timer);
+      timer = 0;
     };
-
-    rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
+    const paint = () => {
+      if (pageHidden()) return;
+      drawSurfaceFrame(ctx, ++frameRef.current, scene);
+    };
+    const sync = () => {
+      stop();
+      if (pageHidden()) return;
+      paint();
+      const kinds = anims.map((anim) => anim.kind);
+      if (!surfaceKeepsDrawing(kinds, prefersReducedMotion(), false)) return;
+      timer = window.setInterval(paint, MOTION_FRAME_MS);
+    };
+    const onVisibility = () => sync();
+    const media =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+    document.addEventListener('visibilitychange', onVisibility);
+    media?.addEventListener('change', sync);
+    sync();
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+      media?.removeEventListener('change', sync);
+    };
   }, [visible, anims, drawOrder, pType, heights, stars, dustMotes, identities]);
 
   return (
