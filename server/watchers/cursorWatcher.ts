@@ -79,7 +79,9 @@ export class CursorWatcher {
   }
 
   whenWatching(): Promise<void> {
-    return this.jsonlWatch?.ready ?? Promise.resolve();
+    return Promise.all([this.queue, this.jsonlWatch?.ready ?? Promise.resolve()]).then(
+      () => undefined,
+    );
   }
 
   stop(): void {
