@@ -71,10 +71,11 @@ export function pngBrightFraction(png: Buffer): number {
 
 /** Fail if the lazy sky never mounts or the canvas stays blank. */
 export async function assertSkyPainted(page: Page): Promise<void> {
+  const sky = page.getByRole('main', { name: 'Project sky' }).locator('canvas');
   await expect(page.getByText(/Loading the sky/)).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator('canvas')).toBeVisible();
+  await expect(sky).toBeVisible();
   await expect(page.locator('[data-planet-label]:visible').first()).toBeVisible();
-  const shot = await page.locator('canvas').screenshot();
+  const shot = await sky.screenshot();
   const bright = pngBrightFraction(shot);
   expect(bright, `canvas bright fraction ${bright}`).toBeGreaterThan(0.02);
 }
