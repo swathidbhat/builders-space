@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useSpaceStore } from '../store';
 import { cssVars } from './cssVars';
+import { formatAsOf } from './attention';
 import {
   DISCONNECT_BANNER,
   LOADING_SKY,
@@ -20,6 +21,7 @@ export function HUD() {
   const compact = useCompactLayout();
   const connection = useSpaceStore((s) => s.connection);
   const dataStale = useSpaceStore((s) => s.dataStale);
+  const lastUpdated = useSpaceStore((s) => s.lastUpdated);
   const snapshotSeen = useSpaceStore((s) => s.snapshotSeen);
   const scanStartedAt = useSpaceStore((s) => s.scanStartedAt);
   const now = useSkyClock();
@@ -30,9 +32,11 @@ export function HUD() {
     scanStartedAt,
     now,
   });
+  const disconnected = dataStale || connection === 'stale';
+  const asOf = disconnected && lastUpdated > 0 ? formatAsOf(lastUpdated) : undefined;
   const subtitle =
     projects.length > 0
-      ? planetSubtitle(projects.length, dataStale || connection === 'stale')
+      ? planetSubtitle(projects.length, disconnected, asOf)
       : phase === 'retrying'
         ? DISCONNECT_BANNER
         : phase === 'searching'
@@ -70,7 +74,7 @@ export function HUD() {
     const observer = new ResizeObserver(apply);
     observer.observe(header);
     return () => observer.disconnect();
-  }, [projects, connection, compact, selectedId, phase]);
+  }, [projects, connection, compact, selectedId, phase, lastUpdated, disconnected]);
 
   const hudClass = [
     styles.hud,
@@ -93,9 +97,16 @@ export function HUD() {
         title={`${totalAgents} ${totalAgents === 1 ? 'agent' : 'agents'} · ${workingAgents} working`}
       >
         {waitingAgents > 0 && (
-          <HUDCounter label="Needs you" value={waitingAgents} color="#ffaa44" pulse />
+          <HUDCounter
+            label="Needs you"
+            value={waitingAgents}
+            color="#ffaa44"
+            pulse={!disconnected}
+          />
         )}
-        {errorAgents > 0 && <HUDCounter label="Errors" value={errorAgents} color="#ff4444" pulse />}
+        {errorAgents > 0 && (
+          <HUDCounter label="Errors" value={errorAgents} color="#ff4444" pulse={!disconnected} />
+        )}
       </div>
     </header>
   );

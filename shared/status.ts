@@ -1,4 +1,4 @@
-import { ONE_HOUR_MS, RECENT_ACTIVITY_MS } from './config';
+import { RECENT_ACTIVITY_MS } from './config';
 import type { AgentStatus } from './types';
 
 export const STATUS_RANK: Record<AgentStatus, number> = {
@@ -51,9 +51,10 @@ export function derivePlanetState(project: {
  *
  * A recent write is working. "Needs you" (`waiting`) requires a finished turn:
  * the transcript's last message is a completed assistant turn or question, or a
- * hook Stop overlay applied elsewhere. A live process that has not handed the
- * turn back stays working — quiet, possibly still busy. Anything else is done.
- * File age alone is not "needs you".
+ * hook Stop overlay applied elsewhere. That stays "Needs you" until a new user
+ * turn or other activity clears it — an hour of silence does not. A live
+ * process that has not handed the turn back stays working. Anything else is
+ * done. File age alone is not "needs you".
  */
 export function inferSessionStatus(options: {
   lastActivityMs: number;
@@ -65,7 +66,7 @@ export function inferSessionStatus(options: {
   const now = options.now ?? Date.now();
   const age = now - options.lastActivityMs;
   if (age < RECENT_ACTIVITY_MS) return 'working';
-  if (options.turnFinished) return age < ONE_HOUR_MS ? 'waiting' : 'done';
+  if (options.turnFinished) return 'waiting';
   if (options.processRunning) return 'working';
   return 'done';
 }

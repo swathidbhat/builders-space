@@ -95,10 +95,25 @@
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
-  cursor: pointer;
   text-align: left;
   font-family: 'Space Grotesk', sans-serif;
   transition: background 0.15s;
+}
+
+.hit {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
 .nameLine {
@@ -167,14 +182,37 @@
   min-width: 0;
 }
 
-.reason {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.reason,
+.reasonOpen {
   font-size: 12px;
   line-height: 1.35;
   color: #c5cbe0;
+}
+
+.reason {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reasonOpen {
+  display: block;
+  overflow: visible;
+  white-space: pre-wrap;
+}
+
+.more {
+  align-self: flex-start;
+  margin-left: 26px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #b9d4ff;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  cursor: pointer;
 }
 
 .time {

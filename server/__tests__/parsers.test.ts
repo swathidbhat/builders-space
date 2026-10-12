@@ -12,6 +12,7 @@ import {
   parseTranscriptDir,
   parseTranscriptFile,
   shortenPaths,
+  txtAssistantReply,
   transcriptCacheSize,
   transcriptTxtTailLength,
 } from '../utils/parseTranscript';
@@ -74,6 +75,7 @@ describe('Claude and Cursor transcript parsers', () => {
     expect(data?.userQuery).toBe('fix the login form');
     expect(data?.cwd).toBe('/Users/ada/work/lumen-lab');
     expect(data?.lastAction).toBe('Updated the form.');
+    expect(data?.pendingQuestion).toBe('Updated the form. Next I will run tests.');
     expect(data?.isRecentlyActive).toBe(true);
   });
 
@@ -121,25 +123,106 @@ describe('Claude and Cursor transcript parsers', () => {
     );
     const data = parseTranscriptFile(txt);
     expect(data?.userQuery).toBe('rename the sidebar');
+    expect(data?.pendingQuestion).toBe('assistant notes');
     expect(data?.turnFinished).toBe(true);
     expect(data?.isRecentlyActive).toBe(true);
+    expect(parseTranscriptFile(txt)?.pendingQuestion).toBe('assistant notes');
     const asking = write(dir, 'ask.txt', '<user_query>only the user</user_query>\n');
     expect(parseTranscriptFile(asking)?.turnFinished).toBe(false);
+    expect(parseTranscriptFile(asking)?.pendingQuestion).toBeUndefined();
+    const full =
+      'The old charge path still has callers in checkout. Should I delete it anyway, or keep it behind a flag?';
+    const asked = write(
+      dir,
+      'asked.txt',
+      `<user_query>\n${'migrate the dashboard'}\n</user_query>\n${full}\n`,
+    );
+    expect(parseTranscriptFile(asked)?.pendingQuestion).toBe(full);
+    expect(parseTranscriptFile(asked)?.userQuery).toBe('migrate the dashboard');
+    expect(
+      txtAssistantReply('\nuser: keep going\nassistant: Should I also backfill existing orders?\n'),
+    ).toBe('Should I also backfill existing orders?');
 
+    const longSentence =
+      'This sentence is deliberately much longer than eighty characters so the parser truncates it cleanly.';
     const jsonl = write(
       dir,
       'long.jsonl',
       JSON.stringify({
         role: 'assistant',
-        message: {
-          content:
-            'This sentence is deliberately much longer than eighty characters so the parser truncates it cleanly.',
-        },
+        message: { content: longSentence },
       }) + '\n',
     );
-    expect(parseTranscriptDir(dir)?.lastAction?.endsWith('...')).toBe(true);
-    expect(parseTranscriptDir(dir)?.turnFinished).toBe(true);
+    const parsed = parseTranscriptDir(dir);
+    expect(parsed?.lastAction?.endsWith('...')).toBe(true);
+    expect(parsed?.pendingQuestion).toBe(longSentence);
+    expect(parsed?.turnFinished).toBe(true);
     expect(parseTranscriptFile(jsonl)).toBeNull();
+  });
+
+  it('keeps the whole Claude and Cursor question, then drops it when the user replies', () => {
+    const dir = tempDir();
+    const question =
+      'The rename touches 41 components. Should I update them all in this PR, or split it?';
+    const now = new Date().toISOString();
+    const claude = write(
+      dir,
+      'ask.jsonl',
+      [
+        JSON.stringify({
+          type: 'user',
+          sessionId: 'sess-ask',
+          cwd: '/tmp/billing',
+          timestamp: now,
+          message: { content: 'rename the sidebar' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          sessionId: 'sess-ask',
+          timestamp: now,
+          message: {
+            content: [
+              { type: 'tool_use', name: 'Read', input: { file_path: '/tmp/billing/App.tsx' } },
+              { type: 'text', text: question },
+            ],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
+    const asked = parseClaudeSessionFile(claude);
+    expect(asked?.lastAction).toBe('Read:App.tsx');
+    expect(asked?.pendingQuestion).toBe(question);
+    expect(asked?.latestTask).toBe('rename the sidebar');
+    expect(asked?.turnFinished).toBe(true);
+
+    writeFileSync(
+      claude,
+      [
+        JSON.stringify({
+          type: 'user',
+          sessionId: 'sess-ask',
+          cwd: '/tmp/billing',
+          timestamp: now,
+          message: { content: 'rename the sidebar' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          sessionId: 'sess-ask',
+          timestamp: now,
+          message: { content: [{ type: 'text', text: question }] },
+        }),
+        JSON.stringify({
+          type: 'user',
+          sessionId: 'sess-ask',
+          timestamp: now,
+          message: { content: 'split it' },
+        }),
+      ].join('\n') + '\n',
+    );
+    const answered = parseClaudeSessionFile(claude);
+    expect(answered?.turnFinished).toBe(false);
+    expect(answered?.pendingQuestion).toBeUndefined();
+    expect(answered?.latestTask).toBe('split it');
   });
 
   it('formats Claude tool uses and shortens deep paths', () => {
@@ -302,7 +385,76 @@ describe('Codex session parser', () => {
         }),
       ].join('\n') + '\n',
     );
-    expect(parseCodexSessionFile(file)?.turnFinished).toBe(true);
+    const finished = parseCodexSessionFile(file);
+    expect(finished?.turnFinished).toBe(true);
+    expect(finished?.pendingQuestion).toBe('checking');
+  });
+
+  it('keeps a Codex agent_message and hides it again after the user replies', () => {
+    const dir = tempDir();
+    const now = new Date().toISOString();
+    const question =
+      'The old charge path still has callers. Should I delete it anyway, or keep it behind a flag?';
+    const file = write(
+      dir,
+      'rollout-question.jsonl',
+      [
+        JSON.stringify({
+          timestamp: now,
+          type: 'session_meta',
+          payload: { id: 'ask', cwd: '/tmp/billing' },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'migrate the payments dashboard' },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'response_item',
+          payload: {
+            type: 'function_call',
+            name: 'exec_command',
+            arguments: JSON.stringify({ cmd: 'psql -c "select id from charges"' }),
+          },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'event_msg',
+          payload: { type: 'agent_message', message: question },
+        }),
+      ].join('\n') + '\n',
+    );
+    const asked = parseCodexSessionFile(file);
+    expect(asked?.turnFinished).toBe(true);
+    expect(asked?.lastAction).toBe('Shell:psql -c "select id from charges"');
+    expect(asked?.pendingQuestion).toBe(question);
+    expect(asked?.latestTask).toBe('migrate the payments dashboard');
+
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({
+          timestamp: now,
+          type: 'session_meta',
+          payload: { id: 'ask', cwd: '/tmp/billing' },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'event_msg',
+          payload: { type: 'agent_message', message: question },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'event_msg',
+          payload: { type: 'user_message', message: 'keep the flag' },
+        }),
+      ].join('\n') + '\n',
+    );
+    const answered = parseCodexSessionFile(file);
+    expect(answered?.turnFinished).toBe(false);
+    expect(answered?.pendingQuestion).toBeUndefined();
+    expect(answered?.latestTask).toBe('keep the flag');
   });
 
   it('formats the other Codex tools and survives bad arguments', () => {

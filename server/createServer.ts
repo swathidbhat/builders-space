@@ -6,6 +6,7 @@ import { ClaudeWatcher } from './watchers/claudeWatcher';
 import { CodexWatcher } from './watchers/codexWatcher';
 import { EventWatcher } from './watchers/eventWatcher';
 import { StateManager } from './stateManager';
+import { hookDisableStatusNote } from './hookDisableNote';
 import { defaultHookRuntimeFile } from './hookRuntimeStore';
 import { humanizeTexts, HumanizeInputError } from './services/humanizer';
 import { getHookStatus, enableHooks, disableHooks, ensureAppDirs } from './services/hookSetup';
@@ -202,9 +203,10 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
   });
 
   app.post('/api/hooks/disable', (_req, res) => {
+    const before = stateManager.getState();
     const result = disableHooks();
-    stateManager.clearHookRuntimeForSources(['claude-code', 'cursor', 'codex']);
-    res.json(result);
+    const statusNote = hookDisableStatusNote(before, stateManager.getState());
+    res.json(statusNote ? { ...result, statusNote } : result);
   });
 
   app.post('/api/open-session', (req, res) => {

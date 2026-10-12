@@ -1,5 +1,12 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -78,12 +85,16 @@ function ago(minutes) {
   return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
-function claudeProject(cwd, sessionId, task, iso, finished) {
+const BILLING_TASK = 'migrate the payments dashboard off the legacy charge path';
+const BILLING_QUESTION =
+  'The old charge path still has callers in checkout, including the receipt mailer and the nightly reconciliation job. Should I delete it anyway, or keep it behind a flag until those callers move?';
+
+function claudeProject(cwd, sessionId, task, iso, finished, reply) {
   const dirName = `-${cwd.replace(/^\//, '').replace(/\//g, '-')}`;
   const dir = join(home, '.claude', 'projects', dirName);
   mkdirSync(dir, { recursive: true });
   const assistant = finished
-    ? { type: 'text', text: 'Finished the pass.' }
+    ? { type: 'text', text: reply || 'Finished the pass.' }
     : { type: 'tool_use', name: 'Read', input: { file_path: `${cwd}/README.md` } };
   writeFileSync(
     join(dir, `${sessionId}.jsonl`),
@@ -118,9 +129,10 @@ const extraProjects = [
   {
     cwd: '/tmp/billing-question-backfill',
     sessionId: 'sess-billing',
-    task: 'Should the backfill include refunded orders?',
+    task: BILLING_TASK,
     iso: ago(12),
     finished: true,
+    reply: BILLING_QUESTION,
   },
   {
     cwd: '/tmp/live-ingest-worker',
@@ -134,7 +146,7 @@ const extraProjects = [
     sessionId: 'sess-design',
     task: 'publish the token update',
     iso: ago(180),
-    finished: true,
+    finished: false,
   },
   {
     cwd: '/tmp/api-gateway',
@@ -148,7 +160,7 @@ const extraProjects = [
     sessionId: 'sess-ml',
     task: 'check the training metrics',
     iso: ago(200),
-    finished: true,
+    finished: false,
   },
   {
     cwd: '/tmp/old-blog',
@@ -156,6 +168,7 @@ const extraProjects = [
     task: 'archive the old posts',
     iso: ago(240),
     finished: true,
+    reply: 'Should I delete the drafts, or keep them?',
   },
   {
     cwd: '/tmp/projects-side-quest-tracker-with-an-unreasonably-long-name',
@@ -174,7 +187,7 @@ const extraProjects = [
 ];
 
 for (const extra of extraProjects) {
-  claudeProject(extra.cwd, extra.sessionId, extra.task, extra.iso, extra.finished);
+  claudeProject(extra.cwd, extra.sessionId, extra.task, extra.iso, extra.finished, extra.reply);
   if (extra.error) {
     writeFileSync(
       join(eventsDir, `status-${extra.sessionId}.json`),
@@ -214,6 +227,35 @@ writeFileSync(
   ].join('\n') + '\n',
 );
 
+const billingWhen = new Date(Date.now() - 12 * 60_000);
+const billingCursor = join(
+  home,
+  '.cursor',
+  'projects',
+  '-tmp-billing-question-backfill',
+  'agent-transcripts',
+);
+mkdirSync(join(billingCursor, 'billing-turn'), { recursive: true });
+const billingJsonl = join(billingCursor, 'billing-turn', 'billing.jsonl');
+writeFileSync(
+  billingJsonl,
+  [
+    JSON.stringify({
+      role: 'user',
+      cwd: '/tmp/billing-question-backfill',
+      message: { content: [{ type: 'text', text: BILLING_TASK }] },
+    }),
+    JSON.stringify({
+      role: 'assistant',
+      message: { content: [{ type: 'text', text: BILLING_QUESTION }] },
+    }),
+  ].join('\n') + '\n',
+);
+utimesSync(billingJsonl, billingWhen, billingWhen);
+const billingTxt = join(billingCursor, 'billing.txt');
+writeFileSync(billingTxt, `<user_query>\n${BILLING_TASK}\n</user_query>\n${BILLING_QUESTION}\n`);
+utimesSync(billingTxt, billingWhen, billingWhen);
+
 const codexDir = join(home, '.codex', 'sessions', '2026', '10', '11');
 mkdirSync(codexDir, { recursive: true });
 writeFileSync(
@@ -240,6 +282,37 @@ writeFileSync(
     }),
   ].join('\n') + '\n',
 );
+const billingCodex = join(codexDir, 'rollout-2026-10-11T02-00-00-billing.jsonl');
+writeFileSync(
+  billingCodex,
+  [
+    JSON.stringify({
+      timestamp: billingWhen.toISOString(),
+      type: 'session_meta',
+      payload: { id: 'codex-billing', cwd: '/tmp/billing-question-backfill' },
+    }),
+    JSON.stringify({
+      timestamp: billingWhen.toISOString(),
+      type: 'event_msg',
+      payload: { type: 'user_message', message: BILLING_TASK },
+    }),
+    JSON.stringify({
+      timestamp: billingWhen.toISOString(),
+      type: 'response_item',
+      payload: {
+        type: 'function_call',
+        name: 'exec_command',
+        arguments: JSON.stringify({ cmd: 'psql -c "select id from charges"' }),
+      },
+    }),
+    JSON.stringify({
+      timestamp: billingWhen.toISOString(),
+      type: 'event_msg',
+      payload: { type: 'agent_message', message: BILLING_QUESTION },
+    }),
+  ].join('\n') + '\n',
+);
+utimesSync(billingCodex, billingWhen, billingWhen);
 
 const env = { ...process.env, HOME: home };
 const server = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {

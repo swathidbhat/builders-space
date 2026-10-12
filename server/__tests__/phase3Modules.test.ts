@@ -59,6 +59,20 @@ describe('shared status and humanize bounds', () => {
         now,
         turnFinished: true,
       }),
+    ).toBe('waiting');
+    expect(
+      inferSessionStatus({
+        lastActivityMs: now - 3 * ONE_HOUR_MS,
+        now,
+        turnFinished: true,
+      }),
+    ).toBe('waiting');
+    expect(
+      inferSessionStatus({
+        lastActivityMs: now - 3 * ONE_HOUR_MS,
+        now,
+        turnFinished: false,
+      }),
     ).toBe('done');
     expect(
       inferSessionStatus({

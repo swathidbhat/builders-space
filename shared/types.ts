@@ -19,6 +19,8 @@ export interface AgentInfo {
   statusSource?: AgentStatusSource;
   currentTask?: string;
   lastAction?: string;
+  /** Full assistant message still waiting on the user. Not the original task or the last command. */
+  pendingQuestion?: string;
   errorReason?: string;
   startedAt?: string;
   elapsedMs?: number;

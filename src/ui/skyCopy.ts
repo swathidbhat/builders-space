@@ -25,7 +25,8 @@ export function skyPhase(input: {
   return 'empty';
 }
 
-export function planetSubtitle(count: number, stale: boolean): string {
+export function planetSubtitle(count: number, stale: boolean, asOf?: string): string {
   const noun = `${count} ${count === 1 ? 'planet' : 'planets'} discovered`;
-  return stale ? `${noun} · ${STALE_MARK}` : noun;
+  if (!stale) return noun;
+  return asOf ? `${noun} · ${STALE_MARK}, ${asOf}` : `${noun} · ${STALE_MARK}`;
 }

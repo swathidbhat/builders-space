@@ -155,6 +155,7 @@ export class CursorWatcher {
                 statusSource: 'inferred',
                 currentTask: data.userQuery,
                 lastAction: data.lastAction,
+                pendingQuestion: data.pendingQuestion,
                 lastActivityMs: data.lastActivityMs,
                 sessionMeta: {
                   projectPath: '',
@@ -181,6 +182,7 @@ export class CursorWatcher {
                 statusSource: 'inferred',
                 currentTask: data.userQuery,
                 lastAction: data.lastAction,
+                pendingQuestion: data.pendingQuestion,
                 lastActivityMs: data.lastActivityMs,
                 sessionMeta: {
                   projectPath: '',

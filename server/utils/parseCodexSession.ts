@@ -13,7 +13,7 @@ import {
   stringField,
   timestampMs,
 } from '../schema/sessionLog';
-import { shortenPaths } from './parseTranscript';
+import { capQuestion, shortenPaths } from './parseTranscript';
 
 export interface CodexSessionData {
   sessionId: string;
@@ -21,6 +21,7 @@ export interface CodexSessionData {
   threadName?: string;
   latestTask?: string;
   lastAction?: string;
+  pendingQuestion?: string;
   isActive: boolean;
   lastActivityMs: number;
   turnFinished: boolean;
@@ -31,6 +32,7 @@ interface CodexFold {
   cwd: string;
   latestTask?: string;
   lastAction?: string;
+  pendingQuestion?: string;
   latestTimestamp: number;
   turnFinished: boolean;
 }
@@ -94,8 +96,11 @@ function applyCodexLine(fold: CodexFold, line: string): void {
     if (user && user.message.length > 0) {
       fold.latestTask = user.message.slice(0, 200);
       fold.turnFinished = false;
+      fold.pendingQuestion = undefined;
     } else if (codexAssistantSpoke(entry.payload)) {
       fold.turnFinished = true;
+      const spoken = codexSpokenText(entry.payload);
+      if (spoken) fold.pendingQuestion = capQuestion(spoken);
     }
     return;
   }
@@ -105,17 +110,46 @@ function applyCodexLine(fold: CodexFold, line: string): void {
     if (call) {
       fold.lastAction = formatCodexToolUse(call.name, call.arguments);
       fold.turnFinished = false;
+      fold.pendingQuestion = undefined;
       return;
     }
-    if (codexAssistantSpoke(entry.payload)) fold.turnFinished = true;
+    if (codexAssistantSpoke(entry.payload)) {
+      fold.turnFinished = true;
+      const spoken = codexSpokenText(entry.payload);
+      if (spoken) fold.pendingQuestion = capQuestion(spoken);
+    }
   }
 }
 
 function codexAssistantSpoke(payload: unknown): boolean {
   if (!payload || typeof payload !== 'object') return false;
-  const record = payload as { type?: unknown; role?: unknown; message?: unknown };
+  const record = payload as { type?: unknown; role?: unknown };
   if (record.type === 'agent_message' || record.type === 'assistant_message') return true;
   return record.type === 'message' && record.role === 'assistant';
+}
+
+function codexSpokenText(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as {
+    type?: unknown;
+    role?: unknown;
+    message?: unknown;
+    content?: unknown;
+  };
+  if (record.type === 'agent_message' || record.type === 'assistant_message') {
+    return typeof record.message === 'string' ? record.message.trim() || undefined : undefined;
+  }
+  if (record.type !== 'message' || record.role !== 'assistant') return undefined;
+  if (typeof record.content === 'string') return record.content.trim() || undefined;
+  if (!Array.isArray(record.content)) return undefined;
+  const parts: string[] = [];
+  for (const block of record.content) {
+    if (!block || typeof block !== 'object') continue;
+    const text = (block as { text?: unknown }).text;
+    if (typeof text === 'string' && text.trim()) parts.push(text.trim());
+  }
+  const joined = parts.join('\n').trim();
+  return joined || undefined;
 }
 
 export function parseCodexSessionFile(filePath: string): CodexSessionData | null {
@@ -136,6 +170,7 @@ export function parseCodexSessionFile(filePath: string): CodexSessionData | null
       threadName: extractThreadName(filePath),
       latestTask: fold.latestTask,
       lastAction: fold.lastAction,
+      pendingQuestion: fold.turnFinished ? fold.pendingQuestion : undefined,
       isActive: Date.now() - effectiveTimestamp < RECENT_ACTIVITY_MS,
       lastActivityMs: effectiveTimestamp,
       turnFinished: fold.turnFinished,
