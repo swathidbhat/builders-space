@@ -213,7 +213,8 @@ export const fragmentShader = `
       lit *= 1.0 - uDim * 0.35;
     }
 
-    lit *= 1.0 + uHover * 0.35;
+    lit *= 1.0 + uHover * 0.85;
+    lit += uHover * vec3(0.35, 0.55, 1.0) * pow(rim, 1.6);
 
     gl_FragColor = vec4(lit, 1.0);
   }
@@ -238,31 +239,31 @@ export function buildColors(type: PlanetType, rand: () => number): PlanetTypeCon
   switch (type) {
     case 'gasGiant':
       return {
-        color1: hsl(20 + rand() * 40, 0.5 + rand() * 0.3, 0.5 + rand() * 0.15),
-        color2: hsl(30 + rand() * 50, 0.4 + rand() * 0.3, 0.4 + rand() * 0.15),
-        color3: hsl(rand() * 30, 0.6 + rand() * 0.2, 0.55 + rand() * 0.1),
-        rimColor: hsl(25 + rand() * 20, 0.3, 0.5),
+        color1: hsl(210 + rand() * 40, 0.45 + rand() * 0.25, 0.42 + rand() * 0.12),
+        color2: hsl(250 + rand() * 30, 0.4 + rand() * 0.25, 0.38 + rand() * 0.12),
+        color3: hsl(190 + rand() * 30, 0.35 + rand() * 0.2, 0.5 + rand() * 0.1),
+        rimColor: hsl(220, 0.35, 0.55),
       };
     case 'rocky':
       return {
-        color1: hsl(15 + rand() * 30, 0.3 + rand() * 0.25, 0.35 + rand() * 0.15),
-        color2: hsl(30 + rand() * 30, 0.2 + rand() * 0.2, 0.4 + rand() * 0.12),
-        color3: hsl(40 + rand() * 20, 0.15 + rand() * 0.15, 0.5 + rand() * 0.1),
-        rimColor: hsl(25, 0.3, 0.5),
+        color1: hsl(200 + rand() * 30, 0.22 + rand() * 0.16, 0.38 + rand() * 0.1),
+        color2: hsl(230 + rand() * 25, 0.18 + rand() * 0.14, 0.42 + rand() * 0.1),
+        color3: hsl(260 + rand() * 20, 0.16 + rand() * 0.12, 0.46 + rand() * 0.08),
+        rimColor: hsl(215, 0.25, 0.55),
       };
     case 'oceanic':
       return {
-        color1: hsl(180 + rand() * 40, 0.5 + rand() * 0.3, 0.38 + rand() * 0.12),
-        color2: hsl(35 + rand() * 25, 0.3 + rand() * 0.2, 0.5 + rand() * 0.1),
-        color3: hsl(20 + rand() * 30, 0.25 + rand() * 0.2, 0.45 + rand() * 0.1),
-        rimColor: hsl(190, 0.5, 0.6),
+        color1: hsl(185 + rand() * 30, 0.45 + rand() * 0.25, 0.38 + rand() * 0.1),
+        color2: hsl(205 + rand() * 25, 0.35 + rand() * 0.2, 0.46 + rand() * 0.1),
+        color3: hsl(230 + rand() * 25, 0.3 + rand() * 0.2, 0.42 + rand() * 0.1),
+        rimColor: hsl(195, 0.45, 0.58),
       };
     case 'volcanic':
       return {
-        color1: hsl(rand() * 20, 0.2 + rand() * 0.2, 0.25 + rand() * 0.1),
-        color2: hsl(15 + rand() * 20, 0.3 + rand() * 0.2, 0.28 + rand() * 0.1),
-        color3: hsl(10 + rand() * 20, 0.8 + rand() * 0.2, 0.55 + rand() * 0.1),
-        rimColor: hsl(10, 0.5, 0.4),
+        color1: hsl(255 + rand() * 25, 0.28 + rand() * 0.18, 0.28 + rand() * 0.08),
+        color2: hsl(270 + rand() * 20, 0.32 + rand() * 0.16, 0.32 + rand() * 0.08),
+        color3: hsl(230 + rand() * 20, 0.4 + rand() * 0.2, 0.48 + rand() * 0.08),
+        rimColor: hsl(250, 0.4, 0.5),
       };
     case 'ice':
       return {

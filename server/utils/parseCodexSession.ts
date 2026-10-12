@@ -152,10 +152,10 @@ function codexSpokenText(payload: unknown): string | undefined {
   return joined || undefined;
 }
 
-export function parseCodexSessionFile(filePath: string): CodexSessionData | null {
+export async function parseCodexSessionFile(filePath: string): Promise<CodexSessionData | null> {
   codexScan?.add(filePath);
   try {
-    const fold = foldAppendOnly(
+    const fold = await foldAppendOnly(
       filePath,
       codexFolds,
       (): CodexFold => ({ sessionId: '', cwd: '', latestTimestamp: 0, turnFinished: false }),

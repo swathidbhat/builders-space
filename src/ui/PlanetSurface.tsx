@@ -137,6 +137,8 @@ export function PlanetSurface({ agents, projectName, identities }: Props) {
       width={PX_W * SCALE}
       height={PX_H * SCALE}
       className={styles.surface}
+      role="img"
+      aria-label={`Pixel scene for ${projectName}`}
       style={cssVars({ '--aspect': `${PX_W} / ${PX_H}` })}
     />
   );

@@ -5,6 +5,7 @@ const ACRONYMS = new Set([
   'cli',
   'css',
   'db',
+  'etl',
   'html',
   'http',
   'ide',

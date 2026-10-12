@@ -9,6 +9,11 @@ export interface JsonlWatch {
   close: () => Promise<void>;
 }
 
+export interface FsChange {
+  event: 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
+  path: string;
+}
+
 const SESSION_EXTENSIONS = ['.jsonl', '.txt'];
 
 /**
@@ -19,15 +24,23 @@ const SESSION_EXTENSIONS = ['.jsonl', '.txt'];
  * Directory add and remove are signals too, so a new project or a deleted one
  * does not wait for the fallback rescan.
  */
-export function watchJsonlTree(root: string, onSignal: () => void, label: string): JsonlWatch {
+export function watchJsonlTree(
+  root: string,
+  onSignal: (changes: FsChange[]) => void,
+  label: string,
+): JsonlWatch {
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let batch: FsChange[] = [];
 
-  const schedule = () => {
+  const schedule = (change: FsChange) => {
+    batch.push(change);
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
+      const changes = batch;
+      batch = [];
       try {
-        onSignal();
+        onSignal(changes);
       } catch (err) {
         logCaught(label, err, 'scan after file change');
       }
@@ -41,11 +54,11 @@ export function watchJsonlTree(root: string, onSignal: () => void, label: string
       Boolean(stats?.isFile() && !SESSION_EXTENSIONS.some((ext) => filePath.endsWith(ext))),
   });
 
-  watcher.on('add', schedule);
-  watcher.on('addDir', schedule);
-  watcher.on('change', schedule);
-  watcher.on('unlink', schedule);
-  watcher.on('unlinkDir', schedule);
+  watcher.on('add', (filePath) => schedule({ event: 'add', path: filePath }));
+  watcher.on('addDir', (filePath) => schedule({ event: 'addDir', path: filePath }));
+  watcher.on('change', (filePath) => schedule({ event: 'change', path: filePath }));
+  watcher.on('unlink', (filePath) => schedule({ event: 'unlink', path: filePath }));
+  watcher.on('unlinkDir', (filePath) => schedule({ event: 'unlinkDir', path: filePath }));
   watcher.on('error', (err) => logCaught(label, err, 'file watch error'));
 
   const ready = new Promise<void>((resolve) => {

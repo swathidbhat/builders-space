@@ -48,6 +48,9 @@ describe('project panel', () => {
 
     render(<ProjectPanel />);
     flushFrames(8);
+    expect(document.activeElement).toBe(
+      screen.getByRole('complementary', { name: 'Project details' }),
+    );
     expect(
       screen.getByRole('heading', { name: /Lumen Lab\. 4 agents, 1 working, 1 error, 1 waiting/ }),
     ).toBeTruthy();
@@ -75,6 +78,14 @@ describe('project panel', () => {
     fireEvent.mouseLeave(screen.getByRole('button', { name: 'Close project details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close project details' }));
     expect(useSpaceStore.getState().selectedPlanetId).toBeNull();
+  });
+
+  it('says when the folder is no longer on disk', () => {
+    const project = testProject('side-quest', [{ id: 'a', status: 'waiting', source: 'cursor' }]);
+    project.path = '/tmp-bsqa2-home-Projects-side-quest-tracker';
+    useSpaceStore.setState({ projects: [project], selectedPlanetId: project.id });
+    render(<ProjectPanel />);
+    expect(screen.getByText('Folder no longer on disk')).toBeTruthy();
   });
 
   it('renders nothing until a project is selected', () => {

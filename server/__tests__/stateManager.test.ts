@@ -967,6 +967,41 @@ describe('StateManager', () => {
       const names = projects.map((p) => p.path).sort();
       expect(names).toEqual(['/Users/alice/my-app', '/Users/alice/my_app']);
     });
+
+    it('keeps /tmp/CaseApp and /tmp/caseapp as two planets on a case-sensitive system', () => {
+      const cursor = new Map<string, ProjectInfo>();
+      cursor.set(
+        '/tmp/CaseApp',
+        makeProject({
+          path: '/tmp/CaseApp',
+          name: 'CaseApp',
+          agents: [makeAgent({ source: 'cursor', sessionId: 'c1', status: 'working' })],
+        }),
+      );
+      sm.updateCursorProjects(cursor);
+      const claude = new Map<string, ProjectInfo>();
+      claude.set(
+        '/tmp/caseapp',
+        makeProject({
+          path: '/tmp/caseapp',
+          name: 'caseapp',
+          agents: [makeAgent({ source: 'claude-code', sessionId: 'k1', status: 'waiting' })],
+        }),
+      );
+      sm.updateClaudeProjects(claude);
+      const projects = sm.getState().projects;
+      expect(projects).toHaveLength(2);
+      expect(projects.map((project) => project.path).sort()).toEqual([
+        '/tmp/CaseApp',
+        '/tmp/caseapp',
+      ]);
+      expect(
+        projects.find((project) => project.path === '/tmp/CaseApp')?.agents.map((a) => a.sessionId),
+      ).toEqual(['c1']);
+      expect(
+        projects.find((project) => project.path === '/tmp/caseapp')?.agents.map((a) => a.sessionId),
+      ).toEqual(['k1']);
+    });
   });
 
   describe('unchanged state', () => {

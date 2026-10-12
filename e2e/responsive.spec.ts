@@ -27,9 +27,9 @@ async function settleSky(page: Page) {
   const settings = page.getByRole('button', { name: 'Settings, needs attention' });
   await expect(settings).toBeVisible({ timeout: 20_000 });
   await settings.click();
-  await expect(page.getByText(/No Anthropic API key is set/)).toBeVisible();
+  await expect(page.getByText(/Add an Anthropic key/)).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByText(/No Anthropic API key is set/)).toHaveCount(0);
+  await expect(page.getByText(/Add an Anthropic key/)).toHaveCount(0);
   await page.evaluate(() => {
     const store = window.__spaceStore;
     if (!store) throw new Error('space store is not available');

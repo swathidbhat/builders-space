@@ -1,5 +1,5 @@
-import { readdirSync, existsSync } from 'fs';
-import { join, basename, isAbsolute } from 'path';
+import { existsSync } from 'fs';
+import { join, basename, dirname, isAbsolute } from 'path';
 import { homedir } from 'os';
 import {
   beginClaudeParseScan,
@@ -8,7 +8,14 @@ import {
 } from '../utils/parseTranscript';
 import { extractProjectName, resolveEncodedProjectPath } from '../utils/projectName';
 import { logCaught } from '../log';
-import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
+import {
+  watchJsonlTree,
+  type FsChange,
+  type JsonlWatch,
+  FALLBACK_SCAN_MS,
+  MISSING_DIR_RETRY_MS,
+} from './fsWatch';
+import { collectSessionFiles, topDir } from './sessionFiles';
 import { CwdCache } from '../process/cwdCache';
 import { MAX_SESSION_AGE_MS } from '../../shared/config';
 import { inferSessionStatus } from '../../shared/status';
@@ -38,13 +45,22 @@ export class ClaudeWatcher {
   private fallbackScanMs: number;
   private missingDirRetryMs: number;
   private processes: CwdCache;
+  private sessions = new Map<string, AgentInfo>();
+  private sessionDir = new Map<string, string>();
+  private slugs = new Map<string, string>();
+  private turns = new Map<string, boolean>();
+  private queue: Promise<void> = Promise.resolve();
+  /** Directories read while scanning. Tests use this to see that a save does not walk the tree. */
+  readonly walked: string[] = [];
 
   constructor(onChange: ClaudeWatcherCallback, options: ClaudeWatcherOptions = {}) {
     this.claudeBase = options.base ?? join(homedir(), '.claude', 'projects');
     this.onChange = onChange;
     this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
     this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
-    this.processes = new CwdCache('claude', () => this.scan());
+    this.processes = new CwdCache('claude', () => {
+      this.enqueue(() => this.publish());
+    });
   }
 
   start(): void {
@@ -79,125 +95,157 @@ export class ClaudeWatcher {
   }
 
   private arm(): void {
-    this.scan();
+    this.enqueue(() => this.scanAll());
     this.processes.start();
     try {
-      this.jsonlWatch = watchJsonlTree(this.claudeBase, () => this.scan(), 'ClaudeWatcher');
+      this.jsonlWatch = watchJsonlTree(
+        this.claudeBase,
+        (changes) => {
+          this.enqueue(() => this.scanChanges(changes));
+        },
+        'ClaudeWatcher',
+      );
     } catch (err) {
       logCaught('ClaudeWatcher', err, 'starting file watch');
     }
-    this.scanInterval = setInterval(() => this.scan(), this.fallbackScanMs);
+    this.scanInterval = setInterval(() => {
+      this.enqueue(() => this.scanAll());
+    }, this.fallbackScanMs);
     this.scanInterval.unref?.();
     console.log(`[ClaudeWatcher] Watching ${this.claudeBase}`);
   }
 
-  private scan(): void {
-    this.projects.clear();
+  private enqueue(job: () => void | Promise<void>): void {
+    this.queue = this.queue.then(job).catch((err) => logCaught('ClaudeWatcher', err, 'scan'));
+  }
 
-    let projectDirs: string[];
-    try {
-      projectDirs = readdirSync(this.claudeBase, { withFileTypes: true })
-        .filter((d) => d.isDirectory())
-        .map((d) => d.name);
-    } catch (err) {
-      logCaught('ClaudeWatcher', err, `reading ${this.claudeBase}`);
-      this.onChange(new Map());
-      return;
+  /** Full tree walk. Startup and the fallback interval only. */
+  private async scanAll(): Promise<void> {
+    this.walked.push(this.claudeBase);
+    const files = collectSessionFiles(this.claudeBase, ['.jsonl'], 'ClaudeWatcher');
+    const live = new Set(files);
+    for (const file of this.sessions.keys()) {
+      if (!live.has(file)) this.sessions.delete(file);
     }
-
     beginClaudeParseScan();
     try {
-      this.scanProjects(projectDirs);
+      for (const file of files) await this.ingest(file);
     } finally {
       endClaudeParseScan();
     }
+    this.publish();
   }
 
-  private scanProjects(projectDirs: string[]): void {
-    const runningCwds = this.processes.current();
-
-    for (const dirName of projectDirs) {
-      const dirPath = join(this.claudeBase, dirName);
-      const agents: AgentInfo[] = [];
-      let bestSlug: string | undefined;
-
-      let sessionFiles: string[];
-      try {
-        sessionFiles = readdirSync(dirPath).filter((f) => f.endsWith('.jsonl'));
-      } catch (err) {
-        logCaught('ClaudeWatcher', err, `reading ${dirPath}`);
+  /** Update the files the watch already named. Does not reread sibling projects. */
+  private async scanChanges(changes: FsChange[]): Promise<void> {
+    const dirs = new Set<string>();
+    for (const change of changes) {
+      if (change.event === 'unlink' || change.event === 'unlinkDir') {
+        this.forget(change.path);
         continue;
       }
-
-      for (const file of sessionFiles) {
-        const data = parseClaudeSessionFile(join(dirPath, file));
-        if (!data) continue;
-
-        const claudeAgeMs = Date.now() - data.lastActivityMs;
-        if (claudeAgeMs > MAX_SESSION_AGE_MS) continue;
-
-        if (data.slug) bestSlug = data.slug;
-
-        const projectPath =
-          data.cwd && isAbsolute(data.cwd)
-            ? stripSlash(data.cwd)
-            : resolveEncodedProjectPath(dirName);
-
-        const isProcessRunning = data.cwd ? runningCwds.has(stripSlash(data.cwd)) : false;
-        const status = inferSessionStatus({
-          lastActivityMs: data.lastActivityMs,
-          processRunning: isProcessRunning,
-          turnFinished: data.turnFinished,
-        });
-
-        agents.push({
-          id: `claude-${data.sessionId}`,
-          source: 'claude-code',
-          sessionId: data.sessionId,
-          status,
-          statusSource: 'inferred',
-          currentTask: data.latestTask,
-          lastAction: data.lastAction,
-          pendingQuestion: data.pendingQuestion,
-          lastActivityMs: data.lastActivityMs,
-          sessionMeta: {
-            projectPath,
-            sessionId: data.sessionId,
-            cwd: data.cwd || projectPath,
-          },
-        });
+      const dirName = topDir(this.claudeBase, change.path);
+      if (dirName) dirs.add(dirName);
+    }
+    for (const dirName of dirs) {
+      const dirPath = join(this.claudeBase, dirName);
+      this.walked.push(dirPath);
+      for (const file of this.sessions.keys()) {
+        if (dirname(file) === dirPath) this.sessions.delete(file);
       }
-
-      if (agents.length === 0) continue;
-
-      const groups = new Map<string, AgentInfo[]>();
-      for (const agent of agents) {
-        const key = stripSlash(
-          agent.sessionMeta?.projectPath || resolveEncodedProjectPath(dirName),
-        );
-        const list = groups.get(key) ?? [];
-        list.push(agent);
-        groups.set(key, list);
+      for (const file of collectSessionFiles(dirPath, ['.jsonl'], 'ClaudeWatcher')) {
+        await this.ingest(file);
       }
+    }
+    this.publish();
+  }
 
-      for (const [pathKey, group] of groups) {
-        const existing = this.projects.get(pathKey);
-        if (existing) {
-          existing.agents.push(...group);
-          continue;
-        }
-        let name = basename(pathKey) || extractProjectName(dirName);
-        if (GENERIC_DIRS.includes(name)) {
-          name = bestSlug ?? name.toLowerCase();
-        }
-        this.projects.set(pathKey, {
-          id: `claude-${pathKey}`,
-          name,
-          path: pathKey,
-          fileCount: 0,
-          agents: group,
-        });
+  private forget(target: string): void {
+    for (const file of [...this.sessions.keys()]) {
+      if (file === target || file.startsWith(`${target}/`)) {
+        this.sessions.delete(file);
+        this.sessionDir.delete(file);
+        this.slugs.delete(file);
+        this.turns.delete(file);
       }
+    }
+  }
+
+  private async ingest(file: string): Promise<void> {
+    const dirName = basename(dirname(file));
+    const data = await parseClaudeSessionFile(file);
+    if (!data || Date.now() - data.lastActivityMs > MAX_SESSION_AGE_MS) {
+      this.sessions.delete(file);
+      return;
+    }
+    if (data.slug) this.slugs.set(file, data.slug);
+    this.turns.set(file, data.turnFinished);
+    const projectPath =
+      data.cwd && isAbsolute(data.cwd) ? stripSlash(data.cwd) : resolveEncodedProjectPath(dirName);
+    this.sessionDir.set(file, dirName);
+    this.sessions.set(file, {
+      id: `claude-${data.sessionId}`,
+      source: 'claude-code',
+      sessionId: data.sessionId,
+      status: 'working',
+      statusSource: 'inferred',
+      currentTask: data.latestTask,
+      lastAction: data.lastAction,
+      pendingQuestion: data.pendingQuestion,
+      lastActivityMs: data.lastActivityMs,
+      sessionMeta: {
+        projectPath,
+        sessionId: data.sessionId,
+        cwd: data.cwd || projectPath,
+      },
+    });
+  }
+
+  private publish(): void {
+    const runningCwds = this.processes.current();
+    this.projects.clear();
+    const slugByPath = new Map<string, string>();
+
+    for (const [file, stored] of this.sessions) {
+      const projectPath = stripSlash(
+        stored.sessionMeta?.projectPath ||
+          resolveEncodedProjectPath(this.sessionDir.get(file) || ''),
+      );
+      const cwd = stored.sessionMeta?.cwd;
+      const agent: AgentInfo = {
+        ...stored,
+        status: inferSessionStatus({
+          lastActivityMs: stored.lastActivityMs ?? 0,
+          processRunning: cwd ? runningCwds.has(stripSlash(cwd)) : false,
+          turnFinished: this.turns.get(file),
+        }),
+        sessionMeta: stored.sessionMeta
+          ? { ...stored.sessionMeta, projectPath }
+          : stored.sessionMeta,
+      };
+      const slug = this.slugs.get(file);
+      if (slug) slugByPath.set(projectPath, slug);
+      const existing = this.projects.get(projectPath);
+      if (existing) {
+        existing.agents.push(agent);
+        continue;
+      }
+      const dirName = this.sessionDir.get(file) || '';
+      let name = basename(projectPath) || extractProjectName(dirName);
+      if (GENERIC_DIRS.includes(name)) name = slug ?? name.toLowerCase();
+      this.projects.set(projectPath, {
+        id: `claude-${projectPath}`,
+        name,
+        path: projectPath,
+        fileCount: 0,
+        agents: [agent],
+      });
+    }
+
+    for (const [pathKey, project] of this.projects) {
+      if (!GENERIC_DIRS.includes(project.name)) continue;
+      const slug = slugByPath.get(pathKey);
+      if (slug) project.name = slug;
     }
 
     this.onChange(new Map(this.projects));

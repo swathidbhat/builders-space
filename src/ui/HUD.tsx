@@ -2,14 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useSpaceStore } from '../store';
 import { cssVars } from './cssVars';
 import { formatAsOf } from './attention';
-import {
-  DISCONNECT_BANNER,
-  LOADING_SKY,
-  NO_SESSIONS,
-  planetSubtitle,
-  SEARCHING_SKY,
-  skyPhase,
-} from './skyCopy';
+import { DISCONNECT_BANNER, LOADING_SKY, NO_SESSIONS, planetSubtitle, skyPhase } from './skyCopy';
 import { useCompactLayout } from './useCompactLayout';
 import { useSkyClock } from './useSkyClock';
 import styles from './HUD.module.css';
@@ -40,7 +33,7 @@ export function HUD() {
       : phase === 'retrying'
         ? DISCONNECT_BANNER
         : phase === 'searching'
-          ? SEARCHING_SKY
+          ? LOADING_SKY
           : phase === 'empty'
             ? NO_SESSIONS
             : LOADING_SKY;

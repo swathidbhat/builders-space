@@ -1,14 +1,19 @@
 import { createHash } from 'crypto';
-import { closeSync, fstatSync, openSync, readSync, statSync } from 'fs';
+import { closeSync, fstatSync, openSync, readSync } from 'fs';
+import { open, stat } from 'fs/promises';
 import { logCaught } from '../log';
 
 const TAIL_BYTES = 64;
 const HEAD_BYTES = 4096;
+/** Full-file hashes above this yield between chunks so a changed log does not stall the loop. */
+const ASYNC_HASH_BYTES = 256 * 1024;
 
 /** Byte offset remembered between scans of an append-only session log. */
 export interface ByteCursor {
   size: number;
   mtimeMs: number;
+  /** Inode, so a replaced file is not treated as the previous one. */
+  ino: number;
   /** SHA-256 of the whole file. A same-length rewrite that keeps the tail still changes this. */
   digest: string;
   /** SHA-256 of the first 4KB, so a same-mtime rewrite of the head is not missed. */
@@ -49,25 +54,27 @@ function readAt(filePath: string, start: number, length: number): Buffer | null 
   }
 }
 
-function hashFile(filePath: string): string | null {
-  let fd: number | undefined;
+/** Hash a changed log. Large files await between chunks so the loop can serve other work. */
+async function hashFile(filePath: string, size: number): Promise<string | null> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    fd = openSync(filePath, 'r');
+    handle = await open(filePath, 'r');
     const hash = createHash('sha256');
     const buf = Buffer.alloc(64 * 1024);
     let position = 0;
-    for (;;) {
-      const n = readSync(fd, buf, 0, buf.length, position);
-      if (n <= 0) break;
-      hash.update(buf.subarray(0, n));
-      position += n;
+    while (position < size) {
+      const { bytesRead } = await handle.read(buf, 0, buf.length, position);
+      if (bytesRead <= 0) break;
+      hash.update(buf.subarray(0, bytesRead));
+      position += bytesRead;
+      if (size > ASYNC_HASH_BYTES) await new Promise((resolve) => setImmediate(resolve));
     }
     return hash.digest('hex');
   } catch (err) {
     logCaught('incrementalRead', err, filePath);
     return null;
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    await handle?.close();
   }
 }
 
@@ -96,36 +103,55 @@ function splitLines(text: string): { lines: string[]; remainder: string } {
  * Read a session log from the previous offset.
  * Unchanged files return no lines. Growth past a matching tail returns only
  * new lines. A rewrite or shrink reads the file again from the start.
- * Same size and the same tail is unchanged only when the content hash agrees.
- * Files up to 4KB compare a head hash at the same mtime, so a same-millisecond
- * rewrite of the first line is still a reset. Larger files compare the full SHA-256.
+ * Same size, mtime, and inode skips the hash for files over 4KB. Smaller files
+ * still compare a head hash, so a same-millisecond rewrite of the first line
+ * is a reset. A hash runs only after size, mtime, or inode changes.
  */
-export function readIncremental(filePath: string, previous?: ByteCursor): IncrementalRead | null {
+export async function readIncremental(
+  filePath: string,
+  previous?: ByteCursor,
+): Promise<IncrementalRead | null> {
   let size: number;
   let mtimeMs: number;
+  let ino: number;
   try {
-    const stat = statSync(filePath);
-    size = stat.size;
-    mtimeMs = stat.mtimeMs;
+    const info = await stat(filePath);
+    size = info.size;
+    mtimeMs = info.mtimeMs;
+    ino = info.ino;
   } catch (err) {
     logCaught('incrementalRead', err, filePath);
     return null;
+  }
+
+  if (
+    previous &&
+    previous.size === size &&
+    previous.mtimeMs === mtimeMs &&
+    previous.ino === ino &&
+    size > HEAD_BYTES
+  ) {
+    return { mode: 'unchanged', cursor: previous };
   }
 
   if (previous && previous.size === size && previous.mtimeMs === mtimeMs && size <= HEAD_BYTES) {
     const tail = tailOf(filePath, size);
     const head = tail && tail.equals(previous.tail) ? headDigest(filePath, size) : null;
     if (tail && head && head === previous.head) {
-      return { mode: 'unchanged', cursor: previous };
+      return { mode: 'unchanged', cursor: { ...previous, ino } };
     }
   }
 
-  if (previous && previous.size === size) {
+  if (
+    previous &&
+    previous.size === size &&
+    (previous.mtimeMs !== mtimeMs || previous.ino !== ino)
+  ) {
     const tail = tailOf(filePath, size);
     if (tail && tail.equals(previous.tail)) {
-      const digest = hashFile(filePath);
+      const digest = await hashFile(filePath, size);
       if (digest && digest === previous.digest) {
-        return { mode: 'unchanged', cursor: { ...previous, mtimeMs } };
+        return { mode: 'unchanged', cursor: { ...previous, mtimeMs, ino } };
       }
     }
   }
@@ -148,7 +174,7 @@ export function readIncremental(filePath: string, previous?: ByteCursor): Increm
   const chunk = chunkBuf.toString('utf8');
   const { lines, remainder } = splitLines(prefix + chunk);
   const tail = tailOf(filePath, size);
-  const digest = hashFile(filePath);
+  const digest = await hashFile(filePath, size);
   const head = headDigest(filePath, size);
   if (!tail || !digest || !head) return null;
 
@@ -156,7 +182,7 @@ export function readIncremental(filePath: string, previous?: ByteCursor): Increm
     mode,
     lines,
     chunk,
-    cursor: { size, mtimeMs, digest, head, tail: Buffer.from(tail), remainder },
+    cursor: { size, mtimeMs, ino, digest, head, tail: Buffer.from(tail), remainder },
   };
 }
 
@@ -190,14 +216,14 @@ export function readFirstLine(filePath: string, maxBytes = 65_536): string | nul
  * Apply only new JSONL lines to `value`. A replaced file starts the fold over.
  * Returns null when the file cannot be read.
  */
-export function foldAppendOnly<T>(
+export async function foldAppendOnly<T>(
   filePath: string,
   cache: Map<string, FoldCache<T>>,
   create: () => T,
   applyLine: (value: T, line: string) => void,
-): T | null {
+): Promise<T | null> {
   const cached = cache.get(filePath);
-  const read = readIncremental(filePath, cached?.cursor);
+  const read = await readIncremental(filePath, cached?.cursor);
   if (!read) {
     cache.delete(filePath);
     return null;

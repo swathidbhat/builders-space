@@ -74,6 +74,7 @@ export function layoutLiveLabels(options: {
   height: number;
   sidebarOpen: boolean;
   panelOpen: boolean;
+  hideOffscreen?: boolean;
 }): void {
   const boxes: ScreenBox[] = [];
   for (const label of labels.values()) {
@@ -92,6 +93,7 @@ export function layoutLiveLabels(options: {
       ...measuredChrome(),
     ],
     { width: options.width, height: options.height },
+    { hideOffscreen: options.hideOffscreen },
   );
   for (const spot of placed) {
     const label = labels.get(spot.id);

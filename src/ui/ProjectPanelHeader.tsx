@@ -1,6 +1,13 @@
 import { prettifyName } from '../prettifyName';
 import styles from './ProjectPanel.module.css';
 
+/** Encoded folders that no longer exist are a single slash-free segment. */
+function pathCaption(path: string): string {
+  const body = path.replace(/^\/+/, '');
+  if (body.length > 0 && !body.includes('/')) return 'Folder no longer on disk';
+  return path;
+}
+
 export function ProjectPanelHeader({
   name,
   path,
@@ -19,7 +26,7 @@ export function ProjectPanelHeader({
           {prettifyName(name)}
           <span className={styles.srOnly}>{`. ${summary}`}</span>
         </h2>
-        <div className={styles.path}>{path}</div>
+        <div className={styles.path}>{pathCaption(path)}</div>
       </div>
       <button
         type="button"
