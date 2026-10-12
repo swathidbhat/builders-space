@@ -1,9 +1,14 @@
 import { mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { assertSkyPainted } from './paintedSky';
 
 const ARTIFACTS = '/opt/cursor/artifacts/trust';
 const QUESTION =
   'The old charge path still has callers in checkout, including the receipt mailer and the nightly reconciliation job. Should I delete it anyway, or keep it behind a flag until those callers move?';
+const CURSOR_JSONL_QUESTION =
+  'From the Cursor transcript: should the receipt mailer stay on the old charge path?';
+const CURSOR_TXT_QUESTION = 'From the Cursor notes: keep the flag until checkout moves?';
+const CODEX_QUESTION = 'From Codex: delete the legacy charge path, or leave the flag?';
 
 const VIEWPORTS = [
   { width: 1920, height: 1080 },
@@ -42,9 +47,12 @@ test('a waiting project shows the question, not the task or the last command', a
   await billing.click();
   const panel = page.getByRole('complementary', { name: 'Project details' });
   await expect(panel).toBeVisible();
-  await expect(panel.getByText(QUESTION).first()).toBeVisible();
+  await expect(panel.getByText(QUESTION)).toHaveCount(1);
+  await expect(panel.getByText(CURSOR_JSONL_QUESTION)).toHaveCount(1);
+  await expect(panel.getByText(CURSOR_TXT_QUESTION)).toHaveCount(1);
+  await expect(panel.getByText(CODEX_QUESTION)).toHaveCount(1);
   await expect(panel.getByText('psql')).toHaveCount(0);
-  await expect(panel.getByText(QUESTION)).toHaveCount(4);
+  await assertSkyPainted(page);
   await expect(
     page.getByRole('navigation', { name: 'Projects' }).getByText('Old Blog'),
   ).toBeVisible();
@@ -128,5 +136,14 @@ test('a disconnected sky stops the counters and stamps the last update', async (
   await expect(page.getByText('last activity just now')).toHaveCount(0);
   await expect(pulsing).toHaveCount(0);
   await expect(page.getByText('10 planets discovered').locator('xpath=..')).toContainText(/as of /);
+  await assertSkyPainted(page);
   await save(page, 'disconnected-1280x800.png');
+});
+
+test('the sky leaves loading and paints the planets', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+  await expect(page.getByText('10 planets discovered')).toBeVisible({ timeout: 20_000 });
+  await assertSkyPainted(page);
+  await expect(page.getByText(/Loading the sky/)).toHaveCount(0);
 });

@@ -88,6 +88,10 @@ function ago(minutes) {
 const BILLING_TASK = 'migrate the payments dashboard off the legacy charge path';
 const BILLING_QUESTION =
   'The old charge path still has callers in checkout, including the receipt mailer and the nightly reconciliation job. Should I delete it anyway, or keep it behind a flag until those callers move?';
+const CURSOR_JSONL_QUESTION =
+  'From the Cursor transcript: should the receipt mailer stay on the old charge path?';
+const CURSOR_TXT_QUESTION = 'From the Cursor notes: keep the flag until checkout moves?';
+const CODEX_QUESTION = 'From Codex: delete the legacy charge path, or leave the flag?';
 
 function claudeProject(cwd, sessionId, task, iso, finished, reply) {
   const dirName = `-${cwd.replace(/^\//, '').replace(/\//g, '-')}`;
@@ -130,7 +134,7 @@ const extraProjects = [
     cwd: '/tmp/billing-question-backfill',
     sessionId: 'sess-billing',
     task: BILLING_TASK,
-    iso: ago(12),
+    iso: ago(14),
     finished: true,
     reply: BILLING_QUESTION,
   },
@@ -247,13 +251,13 @@ writeFileSync(
     }),
     JSON.stringify({
       role: 'assistant',
-      message: { content: [{ type: 'text', text: BILLING_QUESTION }] },
+      message: { content: [{ type: 'text', text: CURSOR_JSONL_QUESTION }] },
     }),
   ].join('\n') + '\n',
 );
 utimesSync(billingJsonl, billingWhen, billingWhen);
 const billingTxt = join(billingCursor, 'billing.txt');
-writeFileSync(billingTxt, `<user_query>\n${BILLING_TASK}\n</user_query>\n${BILLING_QUESTION}\n`);
+writeFileSync(billingTxt, `<user_query>\n${BILLING_TASK}\n</user_query>\n${CURSOR_TXT_QUESTION}\n`);
 utimesSync(billingTxt, billingWhen, billingWhen);
 
 const codexDir = join(home, '.codex', 'sessions', '2026', '10', '11');
@@ -308,7 +312,7 @@ writeFileSync(
     JSON.stringify({
       timestamp: billingWhen.toISOString(),
       type: 'event_msg',
-      payload: { type: 'agent_message', message: BILLING_QUESTION },
+      payload: { type: 'agent_message', message: CODEX_QUESTION },
     }),
   ].join('\n') + '\n',
 );
