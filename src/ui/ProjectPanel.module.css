@@ -188,7 +188,7 @@
     left: 0;
     width: auto;
     height: auto;
-    max-height: min(72vh, 640px);
+    max-height: min(72vh, 640px, calc(100vh - 400px));
     border-left: none;
     border-top: 1px solid rgba(100, 140, 255, 0.2);
     border-radius: 16px 16px 0 0;
