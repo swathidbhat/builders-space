@@ -48,7 +48,11 @@ describe('project panel', () => {
 
     render(<ProjectPanel />);
     flushFrames(8);
-    expect(screen.getByRole('heading', { name: 'Lumen Lab' })).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: /Lumen Lab\. 4 agents, 1 working, 1 error, 1 waiting/ }),
+    ).toBeTruthy();
+    expect(screen.queryByText('Errors', { exact: true })).toBeNull();
+    expect(screen.queryByText('Waiting', { exact: true, selector: 'div' })).toBeNull();
     const labels = screen
       .getAllByText((_content, element) => {
         const text = element?.textContent ?? '';

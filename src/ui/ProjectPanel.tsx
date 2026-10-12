@@ -5,20 +5,20 @@ import { getProjectAgentIdentities } from './agentIdentity';
 import { HumanLingoToggle } from './HumanLingoToggle';
 import { PlanetSurface } from './PlanetSurface';
 import { ProjectPanelHeader } from './ProjectPanelHeader';
-import { ProjectStats } from './ProjectStats';
+import { projectStatsText } from './projectStatsText';
 import { useProjectHumanize } from './useProjectHumanize';
 import { compareAgentStatus } from '../../shared/status';
 import styles from './ProjectPanel.module.css';
 
 export function ProjectPanel() {
-  const selectedId = useSpaceStore((s) => s.selectedPlanetId);
-  const projects = useSpaceStore((s) => s.projects);
+  const project = useSpaceStore((s) =>
+    s.selectedPlanetId ? s.projects.find((item) => item.id === s.selectedPlanetId) : undefined,
+  );
   const deselectPlanet = useSpaceStore((s) => s.deselectPlanet);
   const humanLingo = useSpaceStore((s) => s.humanLingo);
   const besideList = useSpaceStore((s) => s.sidebarOverlayOpen);
   const toggleHumanLingo = useSpaceStore((s) => s.toggleHumanLingo);
 
-  const project = projects.find((item) => item.id === selectedId);
   useProjectHumanize(project, humanLingo);
 
   const identities = useMemo(
@@ -41,8 +41,12 @@ export function ProjectPanel() {
       aria-label="Project details"
       data-overlay="panel"
     >
-      <ProjectPanelHeader name={project.name} path={project.path} onClose={deselectPlanet} />
-      <ProjectStats agents={project.agents} />
+      <ProjectPanelHeader
+        name={project.name}
+        path={project.path}
+        summary={projectStatsText(project.agents)}
+        onClose={deselectPlanet}
+      />
       <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
 
       <div>

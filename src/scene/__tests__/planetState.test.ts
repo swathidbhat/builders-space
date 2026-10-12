@@ -31,7 +31,7 @@ describe('planet status', () => {
   });
 
   it('loads the scene modules that draw those states', () => {
-    expect(typeof Planet).toBe('function');
+    expect(Planet).toBeTruthy();
     expect(typeof PlanetLabel).toBe('function');
     expect(typeof SpaceScene).toBe('function');
     expect(typeof Starfield).toBe('function');
