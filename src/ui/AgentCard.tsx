@@ -4,7 +4,7 @@ import type { AgentInfo } from '../types';
 import type { AgentIdentity } from './agentIdentity';
 import { useSpaceStore } from '../store';
 import { API_ORIGIN, authHeaders } from '../api';
-import { activityPhrase } from './attention';
+import { activityPhrase, questionOverflows } from './attention';
 import { cssVars } from './cssVars';
 import styles from './AgentCard.module.css';
 
@@ -52,7 +52,11 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const sourceLabel = SOURCE_LABELS[agent.source] || agent.source;
   const accentColor = identity.gradient[0];
   const [toast, setToast] = useState<string | null>(null);
+  const [questionOpen, setQuestionOpen] = useState(false);
   const humanizedTexts = useSpaceStore((s) => s.humanizedTexts);
+  const connection = useSpaceStore((s) => s.connection);
+  const dataStale = useSpaceStore((s) => s.dataStale);
+  const lastUpdated = useSpaceStore((s) => s.lastUpdated);
   const humanized = agent.lastAction ? humanizedTexts[agent.lastAction] : undefined;
   const humanizedError = agent.errorReason ? humanizedTexts[agent.errorReason] : undefined;
 
@@ -98,20 +102,25 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
   const badgeColor =
     agent.status === 'waiting' ? '#ffaa44' : agent.status === 'error' ? '#ff4444' : '#aaa';
 
-  const raw =
-    agent.status === 'error' && agent.errorReason ? agent.errorReason : agent.lastAction || '';
+  const question = agent.status === 'waiting' ? agent.pendingQuestion?.trim() || '' : '';
+  const raw = question
+    ? ''
+    : agent.status === 'error' && agent.errorReason
+      ? agent.errorReason
+      : agent.lastAction || '';
   const translated = raw ? (agent.status === 'error' ? humanizedError : humanized) : undefined;
   const action = visibleActivity(raw, translated, humanLingo);
   const task = agent.currentTask?.trim() || agent.title?.trim() || '';
-  const primary = task || identity.name;
-  const quiet = activityPhrase(agent);
+  const primary = question || task || identity.name;
+  const quiet = activityPhrase(agent, Date.now(), {
+    disconnected: connection === 'stale' || dataStale,
+    asOfMs: lastUpdated > 0 ? lastUpdated : undefined,
+  });
+  const canExpand = questionOverflows(question);
 
   return (
-    <button
-      type="button"
+    <div
       className={styles.card}
-      onClick={openSession}
-      title={agent.sessionMeta ? 'Open session' : undefined}
       style={cssVars({
         '--accent': accentColor,
         '--accent-2': identity.gradient[1],
@@ -130,32 +139,54 @@ export function AgentCard({ agent, identity, humanLingo }: AgentCardProps) {
         '--badge-color': badgeColor,
       })}
     >
-      <div className={styles.top}>
-        <div className={styles.identity}>
-          <div className={styles.avatar}>{identity.initial}</div>
-          <div className={styles.who}>
-            <div className={styles.nameRow}>
-              <span className={styles.task} title={primary}>
-                {primary}
-              </span>
+      <button
+        type="button"
+        className={styles.open}
+        onClick={openSession}
+        title={agent.sessionMeta ? 'Open session' : undefined}
+      >
+        <div className={styles.top}>
+          <div className={styles.identity}>
+            <div className={styles.avatar}>{identity.initial}</div>
+            <div className={styles.who}>
+              <div className={styles.nameRow}>
+                <span
+                  className={question ? (questionOpen ? styles.askOpen : styles.ask) : styles.task}
+                  title={primary}
+                  data-agent-question={question ? '' : undefined}
+                  data-expanded={question ? (questionOpen ? 'true' : 'false') : undefined}
+                >
+                  {primary}
+                </span>
+              </div>
+              <div className={styles.subRow}>
+                {task && <span className={styles.alias}>{identity.name}</span>}
+                <span className={styles.source}>{sourceLabel}</span>
+                {quiet && <span className={styles.quiet}>{quiet}</span>}
+              </div>
             </div>
-            <div className={styles.subRow}>
-              {task && <span className={styles.alias}>{identity.name}</span>}
-              <span className={styles.source}>{sourceLabel}</span>
-              {quiet && <span className={styles.quiet}>{quiet}</span>}
-            </div>
+          </div>
+
+          <div className={styles.meta}>
+            <div className={styles.dot} aria-hidden="true" />
+            <span className={styles.badge}>{statusLabel}</span>
           </div>
         </div>
 
-        <div className={styles.meta}>
-          <div className={styles.dot} aria-hidden="true" />
-          <span className={styles.badge}>{statusLabel}</span>
-        </div>
-      </div>
-
-      <div className={styles.action}>{action}</div>
+        {action && <div className={styles.action}>{action}</div>}
+      </button>
+      {canExpand && (
+        <button
+          type="button"
+          className={styles.more}
+          aria-expanded={questionOpen}
+          onClick={() => setQuestionOpen((open) => !open)}
+        >
+          {questionOpen ? 'Show less' : 'Show more'}
+        </button>
+      )}
 
       {toast && <div className={styles.toast}>{toast}</div>}
-    </button>
+    </div>
   );
 }

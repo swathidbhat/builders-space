@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatAsOf } from '../attention';
 import { BottomDock } from '../BottomDock';
 import { HUD } from '../HUD';
 import { Sidebar } from '../Sidebar';
@@ -50,8 +51,9 @@ describe('status display', () => {
     zeta.agents[1].currentTask = 'verify the stripe webhook signature';
     zeta.agents[1].quietForMs = 8 * 60_000;
     const alpha = testProject('alpha', [{ id: 'wait', status: 'waiting' }]);
-    alpha.agents[0].currentTask = 'Should I also backfill existing orders?';
-    alpha.agents[0].lastAction = 'Should I also backfill existing orders?';
+    alpha.agents[0].currentTask = 'migrate the payments dashboard';
+    alpha.agents[0].lastAction = 'Shell:psql -c "select id from charges"';
+    alpha.agents[0].pendingQuestion = 'Should I also backfill existing orders?';
     alpha.agents[0].quietForMs = 3 * 60_000;
     const newerError = testProject('mid', [{ id: 'fresh', status: 'error' }]);
     newerError.agents[0].errorReason = 'disk full';
@@ -73,6 +75,9 @@ describe('status display', () => {
     const zetaTime = projects[0].querySelector('[data-project-time]');
     expect(zetaName?.parentElement?.contains(zetaTime ?? null)).toBe(false);
     expect(projects[0].querySelector('[data-project-reason]')?.textContent).toMatch(/signature/);
+    const alphaReason = projects[2].querySelector('[data-project-reason]');
+    expect(alphaReason?.textContent).toMatch(/backfill/);
+    expect(alphaReason?.textContent).not.toMatch(/psql|migrate/);
     expect(dot('Zeta').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
     expect(dot('Alpha').style.getPropertyValue('--dot')).toMatch(/ffaa44/i);
     expect(dot('Mid').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
@@ -217,21 +222,65 @@ describe('status display', () => {
     expect(screen.queryByText('Scanning for planets...')).toBeNull();
   });
 
+  it('expands a clamped waiting question without leaving the project row', () => {
+    const question =
+      'The old charge path still has callers in checkout, including the receipt mailer and the nightly reconciliation job. Should I delete it anyway, or keep it behind a flag until those callers move?';
+    const billing = testProject('billing', [{ id: 'ask', status: 'waiting' }]);
+    billing.agents[0].currentTask = 'migrate the payments dashboard';
+    billing.agents[0].lastAction = 'Shell:psql';
+    billing.agents[0].pendingQuestion = question;
+    billing.agents[0].quietForMs = 12 * 60_000;
+    useSpaceStore.setState({ projects: [billing], sidebarOpen: true });
+    render(<Sidebar />);
+
+    const reason = projectButton('Billing').querySelector('[data-project-reason]');
+    expect(reason?.textContent).toBe(question);
+    expect(reason?.getAttribute('data-expanded')).toBe('false');
+    expect(projectButton('Billing').getAttribute('aria-label')).toMatch(/until those callers move/);
+    expect(projectButton('Billing').textContent).not.toMatch(/psql|migrate/);
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(reason?.getAttribute('data-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(reason?.getAttribute('data-expanded')).toBe('false');
+  });
+
   it('keeps the last count and shows a retry banner when the connection is stale', () => {
+    const asOfMs = new Date(2026, 9, 12, 4, 52, 0).getTime();
+    const lumen = testProject('lumen', [
+      { id: 'a', status: 'waiting' },
+      { id: 'b', status: 'error' },
+    ]);
+    lumen.agents[0].pendingQuestion = 'Should I keep going?';
+    lumen.agents[0].lastActivityMs = Date.now();
+    lumen.agents[1].errorReason = 'TypeError: stripe';
+    lumen.agents[1].lastActivityMs = Date.now() - 5 * 60_000;
     useSpaceStore.setState({
       connection: 'stale',
       dataStale: true,
       snapshotSeen: true,
-      projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
+      lastUpdated: asOfMs,
+      projects: [lumen],
     });
     render(
       <>
         <HUD />
         <BottomDock />
+        <Sidebar />
       </>,
     );
-    expect(screen.getByText('Disconnected — retrying')).toBeTruthy();
-    expect(screen.getByText('1 planet discovered · last update is stale')).toBeTruthy();
+    expect(
+      screen.getByText(`Disconnected — retrying. Statuses ${formatAsOf(asOfMs)}.`),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(`1 planet discovered · last update is stale, ${formatAsOf(asOfMs)}`),
+    ).toBeTruthy();
+    expect(screen.queryByText(/last activity just now/)).toBeNull();
+    expect(projectButton('Lumen').textContent).toMatch(
+      new RegExp(`quiet for 5 min · ${formatAsOf(asOfMs)}`),
+    );
+    const pulses = screen.getAllByText('1').map((node) => node.className);
+    expect(pulses.some((className) => className.includes('pulse'))).toBe(false);
   });
 
   it('replaces the search line after the empty timeout', async () => {

@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { dominantStatus, projectStatusColor } from '../../shared/status';
 import { prettifyName } from '../prettifyName';
 import { useSpaceStore } from '../store';
-import { needsYouRows, type AttentionRow, projectsByUrgency } from './attention';
+import {
+  needsYouRows,
+  projectsByUrgency,
+  questionOverflows,
+  type ActivityClock,
+  type AttentionRow,
+} from './attention';
 import { cssVars } from './cssVars';
 import { STATUS_MARK, STATUS_WORD } from './statusCue';
 import { useCompactLayout } from './useCompactLayout';
@@ -15,8 +21,12 @@ export function Sidebar() {
   const deselectPlanet = useSpaceStore((s) => s.deselectPlanet);
   const sidebarOpen = useSpaceStore((s) => s.sidebarOpen);
   const toggleSidebar = useSpaceStore((s) => s.toggleSidebar);
+  const connection = useSpaceStore((s) => s.connection);
+  const dataStale = useSpaceStore((s) => s.dataStale);
+  const lastUpdated = useSpaceStore((s) => s.lastUpdated);
   const compact = useCompactLayout();
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!compact) setOverlayOpen(false);
@@ -33,11 +43,18 @@ export function Sidebar() {
     else toggleSidebar();
   };
 
+  const clock = useMemo<ActivityClock>(
+    () => ({
+      disconnected: connection === 'stale' || dataStale,
+      asOfMs: lastUpdated > 0 ? lastUpdated : undefined,
+    }),
+    [connection, dataStale, lastUpdated],
+  );
   const attention = useMemo(() => {
     const rows = new Map<string, AttentionRow>();
-    for (const row of needsYouRows(projects)) rows.set(row.projectId, row);
+    for (const row of needsYouRows(projects, Date.now(), clock)) rows.set(row.projectId, row);
     return rows;
-  }, [projects]);
+  }, [projects, clock]);
   const sorted = useMemo(() => projectsByUrgency(projects), [projects]);
 
   if (!open) {
@@ -82,48 +99,70 @@ export function Sidebar() {
                 project.agents.length === 1 ? 'agent' : 'agents'
               }`;
           const title = row ? `${pretty}. ${row.duration}. ${row.detail}` : pretty;
+          const openQuestion = Boolean(expanded[project.id]);
+          const canExpand = Boolean(row && questionOverflows(row.detail));
           return (
-            <button
+            <div
               key={project.id}
-              type="button"
               className={isSelected ? `${styles.item} ${styles.selected}` : styles.item}
-              title={title}
-              aria-label={accessible}
-              onClick={() => select(project.id)}
             >
-              <span className={styles.nameLine}>
-                <span
-                  className={styles.dot}
-                  aria-hidden="true"
-                  style={cssVars({
-                    '--dot': dotColor,
-                    '--dot-glow': `0 0 6px ${dotColor}66`,
-                  })}
-                />
-                <span className={styles.glyph} aria-hidden="true">
-                  {STATUS_MARK[status]}
+              <button
+                type="button"
+                className={styles.hit}
+                title={title}
+                aria-label={accessible}
+                onClick={() => select(project.id)}
+              >
+                <span className={styles.nameLine}>
+                  <span
+                    className={styles.dot}
+                    aria-hidden="true"
+                    style={cssVars({
+                      '--dot': dotColor,
+                      '--dot-glow': `0 0 6px ${dotColor}66`,
+                    })}
+                  />
+                  <span className={styles.glyph} aria-hidden="true">
+                    {STATUS_MARK[status]}
+                  </span>
+                  <span
+                    className={isSelected ? `${styles.name} ${styles.selectedName}` : styles.name}
+                    data-project-name=""
+                  >
+                    {pretty}
+                  </span>
+                  {!row && project.agents.length > 0 && (
+                    <span className={styles.count}>{project.agents.length}</span>
+                  )}
                 </span>
-                <span
-                  className={isSelected ? `${styles.name} ${styles.selectedName}` : styles.name}
-                  data-project-name=""
-                >
-                  {pretty}
-                </span>
-                {!row && project.agents.length > 0 && (
-                  <span className={styles.count}>{project.agents.length}</span>
+                {row && (
+                  <>
+                    <span
+                      className={openQuestion ? styles.reasonOpen : styles.reason}
+                      data-project-reason=""
+                      data-expanded={openQuestion ? 'true' : 'false'}
+                    >
+                      {row.detail}
+                    </span>
+                    <span className={styles.time} data-project-time="">
+                      {row.duration}
+                    </span>
+                  </>
                 )}
-              </span>
-              {row && (
-                <>
-                  <span className={styles.reason} data-project-reason="">
-                    {row.detail}
-                  </span>
-                  <span className={styles.time} data-project-time="">
-                    {row.duration}
-                  </span>
-                </>
+              </button>
+              {canExpand && (
+                <button
+                  type="button"
+                  className={styles.more}
+                  aria-expanded={openQuestion}
+                  onClick={() =>
+                    setExpanded((current) => ({ ...current, [project.id]: !current[project.id] }))
+                  }
+                >
+                  {openQuestion ? 'Show less' : 'Show more'}
+                </button>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

@@ -11,22 +11,23 @@
 }
 
 .banner {
-  align-self: center;
-  flex: 0 1 auto;
+  align-self: stretch;
+  flex: 0 0 auto;
   min-height: 0;
   max-width: 100%;
-  overflow: auto;
   pointer-events: none;
-  background: rgba(40, 18, 18, 0.92);
-  border: 1px solid rgba(255, 120, 80, 0.45);
-  color: #ffd0c2;
+  background: #6b1d16;
+  border: 1px solid #ffb0a0;
+  color: #fff8f6;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 13px;
-  letter-spacing: 0.03em;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   line-height: 1.35;
   text-align: center;
-  padding: 8px 14px;
-  border-radius: 999px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
 .menus {
@@ -79,9 +80,22 @@
   align-items: stretch;
   gap: 8px;
   width: min(320px, calc(100vw - 32px));
-  max-height: min(60vh, 440px);
+  max-height: min(60vh, calc(100vh - 120px));
   overflow: auto;
   z-index: 2;
+}
+
+.popoverPinned {
+  overflow: hidden;
+}
+
+.popoverPinned > * {
+  flex-shrink: 0;
+}
+
+.popoverPinned > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 @media (max-height: 700px) {

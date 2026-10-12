@@ -3,6 +3,7 @@ import { useSpaceStore } from '../store';
 import { AssistantNoticeCopy, useAssistantNotice } from './AssistantNotice';
 import { HookSetupCard } from './HookSetupCard';
 import { StatusLegend } from './StatusLegend';
+import { formatAsOf } from './attention';
 import { DISCONNECT_BANNER } from './skyCopy';
 import styles from './BottomDock.module.css';
 
@@ -81,6 +82,7 @@ const WRENCH = (
  */
 export function BottomDock() {
   const connection = useSpaceStore((s) => s.connection);
+  const lastUpdated = useSpaceStore((s) => s.lastUpdated);
   const panelOpen = useSpaceStore((s) => s.selectedPlanetId !== null);
   const sidebarOpen = useSpaceStore((s) => s.sidebarOpen);
   const notice = useAssistantNotice();
@@ -149,6 +151,7 @@ export function BottomDock() {
       {connection === 'stale' && (
         <div className={styles.banner} role="status" data-overlay="disconnect">
           {DISCONNECT_BANNER}
+          {lastUpdated > 0 ? `. Statuses ${formatAsOf(lastUpdated)}.` : ''}
         </div>
       )}
       <div className={styles.menus} ref={menusRef}>
@@ -183,7 +186,7 @@ export function BottomDock() {
             {notice.kind && <span className={styles.attention} aria-hidden="true" />}
           </button>
           {menu === 'settings' && (
-            <div id="sky-settings" className={styles.popover}>
+            <div id="sky-settings" className={`${styles.popover} ${styles.popoverPinned}`}>
               {notice.kind && <AssistantNoticeCopy kind={notice.kind} onDismiss={notice.dismiss} />}
               <HookSetupCard />
             </div>

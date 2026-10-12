@@ -37,7 +37,7 @@ describe('watcher status from file age', () => {
       ['working', now, 'user'],
       ['waiting', now - 30 * 60 * 1000, 'assistant'],
       ['quiet', now - 30 * 60 * 1000, 'user'],
-      ['done', now - 2 * 60 * 60 * 1000, 'assistant'],
+      ['unanswered', now - 2 * 60 * 60 * 1000, 'assistant'],
       ['stale', now - 49 * 60 * 60 * 1000, 'user'],
     ] as const;
     for (const [id, at, role] of cases) {
@@ -78,8 +78,12 @@ describe('watcher status from file age', () => {
     expect(ageStatus(seen, 'working')).toBe('working');
     expect(ageStatus(seen, 'waiting')).toBe('waiting');
     expect(ageStatus(seen, 'quiet')).toBe('done');
-    expect(ageStatus(seen, 'done')).toBe('done');
+    expect(ageStatus(seen, 'unanswered')).toBe('waiting');
     expect(ageStatus(seen, 'stale')).toBeUndefined();
+    const unanswered = [...(seen?.values() ?? [])]
+      .flatMap((project) => project.agents)
+      .find((agent) => agent.sessionId === 'unanswered');
+    expect(unanswered?.pendingQuestion).toBe('Should I keep going?');
   });
 
   it('classifies Cursor transcripts from mtime, including txt exports', async () => {
@@ -127,6 +131,10 @@ describe('watcher status from file age', () => {
     expect(ageStatus(seen, 'waiting')).toBe('waiting');
     expect(ageStatus(seen, 'quiet')).toBe('done');
     expect(ageStatus(seen, 'done')).toBe('done');
+    const waitingAgent = [...(seen?.values() ?? [])]
+      .flatMap((project) => project.agents)
+      .find((agent) => agent.sessionId === 'waiting');
+    expect(waitingAgent?.pendingQuestion).toBe('Should I also backfill existing orders?');
   });
 
   it('uses the Codex session index for titles and drops old rollouts', async () => {
@@ -142,11 +150,21 @@ describe('watcher status from file age', () => {
     const live = join(sessionsDir, 'rollout-2026-10-11T01-00-00-live.jsonl');
     writeFileSync(
       live,
-      JSON.stringify({
-        timestamp: now,
-        type: 'session_meta',
-        payload: { id: 'live', cwd: '/tmp/lumen-lab' },
-      }) + '\n',
+      [
+        JSON.stringify({
+          timestamp: now,
+          type: 'session_meta',
+          payload: { id: 'live', cwd: '/tmp/lumen-lab' },
+        }),
+        JSON.stringify({
+          timestamp: now,
+          type: 'event_msg',
+          payload: {
+            type: 'agent_message',
+            message: 'Should I keep the nightly job, or drop it?',
+          },
+        }),
+      ].join('\n') + '\n',
     );
     const stale = join(sessionsDir, 'rollout-old.jsonl');
     const old = new Date(Date.now() - 50 * 60 * 60 * 1000);
@@ -175,6 +193,7 @@ describe('watcher status from file age', () => {
     expect(project.agents.map((agent) => agent.sessionId)).toEqual(['live']);
     expect(project.agents[0].title).toBe('Lumen thread');
     expect(project.agents[0].status).toBe('working');
+    expect(project.agents[0].pendingQuestion).toBe('Should I keep the nightly job, or drop it?');
   });
 });
 

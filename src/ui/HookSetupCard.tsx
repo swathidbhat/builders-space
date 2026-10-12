@@ -77,9 +77,11 @@ export function HookSetupCard() {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error('disable failed');
+      const data: { statusNote?: string } = await res.json();
       setEnableResult(null);
       setConfirmDisable(false);
-      setDisableMessage('Hooks removed. Restart Claude Code, Cursor, and Codex if they are open.');
+      const removed = 'Hooks removed. Restart Claude Code, Cursor, and Codex if they are open.';
+      setDisableMessage(data.statusNote ? `${removed} ${data.statusNote}` : removed);
       await fetchStatus();
     } catch {
       setDisableMessage('Could not remove hooks.');
@@ -152,54 +154,53 @@ export function HookSetupCard() {
           </p>
         )}
 
-        <div className={styles.actions}>
-          {confirmDisable ? (
-            <div className={styles.confirm} role="group" aria-label="Confirm disable hooks">
-              <p>Remove Builders Space hooks from Claude Code, Cursor, and Codex?</p>
-              <div className={styles.confirmActions}>
-                <button
-                  type="button"
-                  className={styles.disable}
-                  onClick={() => setConfirmDisable(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={styles.enable}
-                  onClick={handleDisable}
-                  disabled={loading}
-                >
-                  {loading ? 'Removing...' : 'Remove hooks'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {anyAvailable && !allConfigured && (
-                <button
-                  type="button"
-                  className={styles.enable}
-                  onClick={handleEnable}
-                  disabled={loading}
-                >
-                  {loading ? 'Setting up...' : 'Enable Hooks'}
-                </button>
-              )}
-              {anyConfigured && (
-                <button
-                  type="button"
-                  className={styles.disable}
-                  onClick={() => setConfirmDisable(true)}
-                  disabled={loading}
-                >
-                  Disable
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        {!confirmDisable && (
+          <div className={styles.actions}>
+            {anyAvailable && !allConfigured && (
+              <button
+                type="button"
+                className={styles.enable}
+                onClick={handleEnable}
+                disabled={loading}
+              >
+                {loading ? 'Setting up...' : 'Enable Hooks'}
+              </button>
+            )}
+            {anyConfigured && (
+              <button
+                type="button"
+                className={styles.disable}
+                onClick={() => setConfirmDisable(true)}
+                disabled={loading}
+              >
+                Disable
+              </button>
+            )}
+          </div>
+        )}
       </div>
+      {confirmDisable && (
+        <div className={styles.confirm} role="group" aria-label="Confirm disable hooks">
+          <p>Remove Builders Space hooks from Claude Code, Cursor, and Codex?</p>
+          <div className={styles.confirmActions}>
+            <button
+              type="button"
+              className={styles.disable}
+              onClick={() => setConfirmDisable(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={styles.enable}
+              onClick={handleDisable}
+              disabled={loading}
+            >
+              {loading ? 'Removing...' : 'Remove hooks'}
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

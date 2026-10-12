@@ -8,6 +8,7 @@ const AGENT_FIELDS = [
   'statusSource',
   'currentTask',
   'lastAction',
+  'pendingQuestion',
   'errorReason',
   'startedAt',
   'elapsedMs',

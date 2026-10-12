@@ -8,7 +8,12 @@ import { testAgent, testIdentity } from '../../test/fixtures';
 describe('agent cards', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    useSpaceStore.setState({ humanizedTexts: { 'Read:App.tsx': 'Reading the app' } });
+    useSpaceStore.setState({
+      humanizedTexts: { 'Read:App.tsx': 'Reading the app' },
+      connection: 'live',
+      dataStale: false,
+      lastUpdated: 0,
+    });
     window.__BUILDERS_SPACE_TOKEN__ = 'tok';
   });
 
@@ -214,6 +219,59 @@ describe('agent cards', () => {
     expect(screen.getByText(question)).toBeTruthy();
     expect(screen.queryByText('Unclear activity')).toBeNull();
     expect(screen.getByText('last activity just now')).toBeTruthy();
+  });
+
+  it('shows the waiting question instead of the task or the last command', () => {
+    const question =
+      'The old charge path still has callers in checkout, including the receipt mailer and the nightly reconciliation job. Should I delete it anyway, or keep it behind a flag until those callers move?';
+    const command = 'Shell:psql -c "select id from charges"';
+    useSpaceStore.setState({
+      humanizedTexts: { [command]: 'Unclear activity', [question]: 'Unclear activity' },
+    });
+    render(
+      <AgentCard
+        agent={testAgent({
+          id: 'ask',
+          status: 'waiting',
+          currentTask: 'migrate the payments dashboard',
+          lastAction: command,
+          pendingQuestion: question,
+          lastActivityMs: Date.now() - 65 * 60_000,
+        })}
+        identity={testIdentity('Prism')}
+        humanLingo
+      />,
+    );
+    const shown = screen.getByText(question);
+    expect(shown.getAttribute('data-expanded')).toBe('false');
+    expect(screen.queryByText('migrate the payments dashboard')).toBeNull();
+    expect(screen.queryByText(command)).toBeNull();
+    expect(screen.queryByText('Unclear activity')).toBeNull();
+    expect(screen.getByText('quiet for 65 min')).toBeTruthy();
+    expect(screen.getByText('Needs you')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(shown.getAttribute('data-expanded')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(shown.getAttribute('data-expanded')).toBe('false');
+  });
+
+  it('stamps last-known time and does not say just now while disconnected', () => {
+    const asOfMs = new Date(2026, 9, 12, 4, 52, 0).getTime();
+    useSpaceStore.setState({ connection: 'stale', dataStale: true, lastUpdated: asOfMs });
+    render(
+      <AgentCard
+        agent={testAgent({
+          id: 'ask',
+          status: 'waiting',
+          pendingQuestion: 'Should I keep going?',
+          lastActivityMs: Date.now(),
+        })}
+        identity={testIdentity('Prism')}
+        humanLingo={false}
+      />,
+    );
+    expect(screen.queryByText('last activity just now')).toBeNull();
+    expect(screen.getByText(`as of 4:52`)).toBeTruthy();
   });
 
   it('does not call the server when the agent has no session', () => {

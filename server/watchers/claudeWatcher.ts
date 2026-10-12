@@ -158,6 +158,7 @@ export class ClaudeWatcher {
           statusSource: 'inferred',
           currentTask: data.latestTask,
           lastAction: data.lastAction,
+          pendingQuestion: data.pendingQuestion,
           lastActivityMs: data.lastActivityMs,
           sessionMeta: {
             projectPath,

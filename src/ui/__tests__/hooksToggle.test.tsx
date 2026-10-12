@@ -61,10 +61,36 @@ describe('hooks toggle', () => {
     fireEvent.click(screen.getByText('Disable'));
     expect(screen.getByText(/Remove Builders Space hooks/)).toBeTruthy();
     fireEvent.click(screen.getByText('Remove hooks'));
-    expect(await screen.findByText(/Hooks removed/)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Hooks removed. Restart Claude Code, Cursor, and Codex if they are open.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/status changed/)).toBeNull();
     await vi.waitFor(() => {
       expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith('/disable'))).toBe(true);
     });
+  });
+
+  it('says so when disable changes a session status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).endsWith('/disable')) {
+          return jsonResponse({ claude: 'removed', statusNote: '1 session status changed.' });
+        }
+        return jsonResponse({
+          claude: 'configured',
+          cursor: 'not_installed',
+          codex: 'not_installed',
+        });
+      }),
+    );
+    render(<HookSetupCard />);
+    fireEvent.click(await screen.findByText('Disable'));
+    fireEvent.click(screen.getByText('Remove hooks'));
+    expect(await screen.findByText(/Hooks removed\./)).toBeTruthy();
+    expect(screen.getByText(/1 session status changed/)).toBeTruthy();
   });
 
   it('stays hidden when the status request fails', async () => {
