@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  align-items: flex-end;
   gap: 8px;
   min-width: 0;
   pointer-events: none;
@@ -28,19 +29,59 @@
   border-radius: 999px;
 }
 
-.row {
+.menus {
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px 12px;
-  width: 100%;
-  min-width: 0;
-  pointer-events: none;
+  justify-content: flex-end;
+  gap: 8px;
+  pointer-events: auto;
 }
 
-.row > * {
-  pointer-events: auto;
+.menu {
+  position: relative;
+}
+
+.iconButton {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 10, 30, 0.92);
+  color: #e8eeff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.attention {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffcc77;
+  box-shadow: 0 0 6px rgba(255, 170, 68, 0.8);
+}
+
+.popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(60vh, 440px);
+  overflow: auto;
+  z-index: 2;
 }
 
 @media (max-height: 700px) {

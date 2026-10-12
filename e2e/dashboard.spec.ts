@@ -10,7 +10,7 @@ function transportNoise(message: string): boolean {
 
 function lumenLab(page: Page) {
   return page
-    .getByRole('region', { name: 'All projects' })
+    .getByRole('navigation', { name: 'Projects' })
     .getByRole('button', { name: /Lumen Lab/ });
 }
 
@@ -47,10 +47,8 @@ test('dashboard renders live fixture sessions', async ({ page }) => {
   expect(box.width).toBeGreaterThan(0);
   expect(box.height).toBeGreaterThan(0);
 
-  const needsYou = page.getByRole('region', { name: 'Needs you' });
-  await expect(needsYou).toBeVisible();
-  await expect(needsYou).toContainText('TypeError: Cannot read properties of undefined');
-  await expect(needsYou).toContainText('verify the stripe webhook signature');
+  await expect(lumenLab(page)).toContainText('TypeError: Cannot read properties of undefined');
+  await expect(page.getByRole('button', { name: /Lumen Lab/ })).toHaveCount(1);
 
   const label = page.locator('[data-planet-label]:visible').first();
   await expect(label).toBeVisible();
@@ -66,6 +64,7 @@ test('dashboard renders live fixture sessions', async ({ page }) => {
   expect(readable.effective).toBeGreaterThanOrEqual(12);
 
   await lumenLab(page).click();
+  await expect(page.getByText('verify the stripe webhook signature')).toBeVisible();
   await expect(page.getByText('Claude').first()).toBeVisible();
   await expect(page.getByText('Cursor').first()).toBeVisible();
   await expect(page.getByText('Codex').first()).toBeVisible();

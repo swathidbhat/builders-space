@@ -9,14 +9,14 @@ import { useSpaceStore } from '../../store';
 import { testProject } from '../../test/fixtures';
 
 function projectButton(name: string): HTMLElement {
-  return within(screen.getByRole('region', { name: 'All projects' })).getByRole('button', {
+  return within(screen.getByRole('navigation', { name: 'Projects' })).getByRole('button', {
     name: new RegExp(name),
   });
 }
 
 function dot(name: string): HTMLElement {
-  const mark = projectButton(name).querySelector('span');
-  if (!mark) throw new Error(`missing status dot for ${name}`);
+  const mark = projectButton(name).querySelector('span[style*="--dot"]');
+  if (!(mark instanceof HTMLElement)) throw new Error(`missing status dot for ${name}`);
   return mark;
 }
 
@@ -61,17 +61,18 @@ describe('status display', () => {
     });
     render(<Sidebar />);
 
-    const needs = within(screen.getByRole('region', { name: 'Needs you' })).getAllByRole('button');
-    expect(needs.map((button) => button.textContent).join('\n')).toMatch(
-      /Zeta[\s\S]*quiet for 8 min[\s\S]*signature[\s\S]*Mid[\s\S]*disk full[\s\S]*Alpha[\s\S]*backfill/,
+    const projects = within(screen.getByRole('navigation', { name: 'Projects' }))
+      .getAllByRole('button')
+      .filter((button) => button.querySelector('[data-project-name]'));
+    expect(projects).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: /Zeta/ })).toHaveLength(1);
+    expect(projects.map((button) => button.textContent).join('\n')).toMatch(
+      /Zeta[\s\S]*signature[\s\S]*quiet for 8 min[\s\S]*Mid[\s\S]*disk full[\s\S]*Alpha[\s\S]*backfill[\s\S]*Quiet/,
     );
-
-    const projects = within(screen.getByRole('region', { name: 'All projects' })).getAllByRole(
-      'button',
-    );
-    expect(projects.map((button) => button.textContent).join(' ')).toMatch(
-      /Mid[\s\S]*Zeta[\s\S]*Alpha[\s\S]*Quiet/,
-    );
+    const zetaName = projects[0].querySelector('[data-project-name]');
+    const zetaTime = projects[0].querySelector('[data-project-time]');
+    expect(zetaName?.parentElement?.contains(zetaTime ?? null)).toBe(false);
+    expect(projects[0].querySelector('[data-project-reason]')?.textContent).toMatch(/signature/);
     expect(dot('Zeta').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
     expect(dot('Alpha').style.getPropertyValue('--dot')).toMatch(/ffaa44/i);
     expect(dot('Mid').style.getPropertyValue('--dot')).toMatch(/ff4444/i);
@@ -96,14 +97,14 @@ describe('status display', () => {
     useSpaceStore.setState({ projects: [lumen], sidebarOpen: true });
     render(<Sidebar />);
 
-    const button = within(screen.getByRole('region', { name: 'Needs you' })).getByRole('button', {
-      name: /Lumen Lab/,
-    });
+    const button = projectButton('Lumen Lab');
     expect(button.getAttribute('aria-label')).toMatch(/Error: Lumen Lab/);
     expect(button.getAttribute('title')).toMatch(/Lumen Lab/);
     const name = button.querySelector('[data-project-name]');
     expect(name?.textContent).toBe('Lumen Lab');
     expect(name?.parentElement?.textContent).not.toMatch(/quiet/);
+    expect(name?.parentElement?.contains(button.querySelector('[data-project-time]'))).toBe(false);
+    expect(button.querySelector('[data-project-reason]')?.textContent).toMatch(/TypeError/);
     expect(button.textContent).toMatch(/quiet for 5 min/);
   });
 
@@ -130,12 +131,12 @@ describe('status display', () => {
         projects: [testProject('lumen', [{ id: 'a', status: 'working' }])],
       });
       render(<Sidebar />);
-      expect(screen.queryByRole('region', { name: 'All projects' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Lumen/ })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
-      expect(screen.getByRole('region', { name: 'All projects' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Lumen/ })).toBeTruthy();
       expect(useSpaceStore.getState().sidebarOpen).toBe(true);
       fireEvent.click(screen.getByRole('button', { name: 'Close projects' }));
-      expect(screen.queryByRole('region', { name: 'All projects' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Lumen/ })).toBeNull();
     } finally {
       if (original) window.matchMedia = original;
       else delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
@@ -178,11 +179,14 @@ describe('status display', () => {
       selectedPlanetId: 'one',
     });
     const { rerender } = render(<HUD />);
-    expect(screen.getByText('5')).toBeTruthy();
-    expect(screen.getByText('3')).toBeTruthy();
-    expect(screen.getByText('Awaiting you')).toBeTruthy();
+    expect(screen.queryByText('Agents')).toBeNull();
+    expect(screen.queryByText('Working')).toBeNull();
+    expect(screen.getByText('Needs you')).toBeTruthy();
     expect(screen.getByText('Errors')).toBeTruthy();
     expect(screen.getByText('2 planets discovered')).toBeTruthy();
+    expect(document.querySelector('[data-counters]')?.getAttribute('title')).toBe(
+      '5 agents · 3 working',
+    );
     const pulses = screen.getAllByText('1').map((node) => node.className);
     expect(pulses.every((className) => className.includes('pulse'))).toBe(true);
 
@@ -194,7 +198,10 @@ describe('status display', () => {
     rerender(<HUD />);
     expect(screen.getByText('1 planet discovered')).toBeTruthy();
     expect(screen.queryByText('Errors')).toBeNull();
-    expect(screen.queryByText('Awaiting you')).toBeNull();
+    expect(screen.queryByText('Needs you')).toBeNull();
+    expect(document.querySelector('[data-counters]')?.getAttribute('title')).toBe(
+      '1 agent · 1 working',
+    );
   });
 
   it('explains ring and dot colors', () => {

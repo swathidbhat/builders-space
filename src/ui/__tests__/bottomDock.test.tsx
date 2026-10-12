@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useSpaceStore } from '../../store';
 import { BottomDock } from '../BottomDock';
 
 function box(left: number, top: number, right: number, bottom: number): DOMRect {
@@ -24,6 +25,8 @@ describe('bottom dock', () => {
     document.getElementById('projects-nav')?.remove();
     document.querySelector('aside[aria-label="Project details"]')?.remove();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    useSpaceStore.setState({ connection: 'connecting', assistantRejected: false });
   });
 
   it('clears an open project list and a bottom sheet', () => {
@@ -43,5 +46,30 @@ describe('bottom dock', () => {
     expect(dock).toBeTruthy();
     expect((dock as HTMLElement).style.left).toBe('260px');
     expect((dock as HTMLElement).style.bottom).toBe('672px');
+  });
+
+  it('tucks the key note and the legend into menus', async () => {
+    localStorage.clear();
+    useSpaceStore.setState({ connection: 'live', assistantRejected: false });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ assistant: 'missing' }),
+      })),
+    );
+    render(<BottomDock />);
+    expect(screen.queryByText(/No Anthropic API key/)).toBeNull();
+    const settings = await screen.findByRole('button', { name: 'Settings, needs attention' });
+    expect(settings.getAttribute('data-attention')).toBe('true');
+    fireEvent.click(settings);
+    expect(await screen.findByText(/No Anthropic API key is set/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Status help' }));
+    expect(screen.getByRole('complementary', { name: 'Status legend' }).textContent).toMatch(
+      /Rings pulse/,
+    );
+    expect(screen.queryByText(/No Anthropic API key/)).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('complementary', { name: 'Status legend' })).toBeNull();
   });
 });

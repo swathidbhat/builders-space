@@ -1,6 +1,6 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useSpaceStore } from '../store';
-import { AssistantNotice } from './AssistantNotice';
+import { AssistantNoticeCopy, useAssistantNotice } from './AssistantNotice';
 import { HookSetupCard } from './HookSetupCard';
 import { StatusLegend } from './StatusLegend';
 import { DISCONNECT_BANNER } from './skyCopy';
@@ -43,7 +43,7 @@ function readInsets(): DockInsets {
     }
   }
 
-  if (left + right > vw - 180) right = Math.max(16, vw - left - 180);
+  if (left + right > vw - 88) right = Math.max(16, vw - left - 88);
 
   const header = document.querySelector('header');
   const headerBottom = header instanceof HTMLElement ? header.getBoundingClientRect().bottom : 72;
@@ -59,15 +59,34 @@ function sameInsets(a: DockInsets, b: DockInsets): boolean {
   );
 }
 
+const WRENCH = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+  </svg>
+);
+
 /**
- * One bottom edge for the legend, notices, the disconnect banner, and hooks.
- * It sits in the rectangle left by the project list and the detail sheet.
+ * The bottom edge holds the disconnect banner and two menus.
+ * Help explains the marks. Settings holds the API-key note and hooks.
  */
 export function BottomDock() {
   const connection = useSpaceStore((s) => s.connection);
   const panelOpen = useSpaceStore((s) => s.selectedPlanetId !== null);
   const sidebarOpen = useSpaceStore((s) => s.sidebarOpen);
+  const notice = useAssistantNotice();
   const [insets, setInsets] = useState<DockInsets>(REST);
+  const [menu, setMenu] = useState<'help' | 'settings' | null>(null);
+  const menusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const apply = () => {
@@ -97,12 +116,33 @@ export function BottomDock() {
     };
   }, [panelOpen, sidebarOpen]);
 
+  useEffect(() => {
+    if (!menu) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!menusRef.current?.contains(event.target as Node)) setMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setMenu(null);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [menu]);
+
   const style = {
     left: insets.left,
     right: insets.right,
     bottom: insets.bottom,
     maxHeight: insets.maxHeight,
   } as CSSProperties;
+
+  const toggle = (next: 'help' | 'settings') =>
+    setMenu((current) => (current === next ? null : next));
 
   return (
     <div className={styles.dock} data-bottom-dock="" data-overlay="dock" style={style}>
@@ -111,10 +151,44 @@ export function BottomDock() {
           {DISCONNECT_BANNER}
         </div>
       )}
-      <AssistantNotice />
-      <div className={styles.row}>
-        <StatusLegend />
-        <HookSetupCard />
+      <div className={styles.menus} ref={menusRef}>
+        <div className={styles.menu}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Status help"
+            aria-expanded={menu === 'help'}
+            data-overlay="help"
+            onClick={() => toggle('help')}
+          >
+            ?
+          </button>
+          {menu === 'help' && (
+            <div id="status-help" className={styles.popover}>
+              <StatusLegend />
+            </div>
+          )}
+        </div>
+        <div className={styles.menu}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label={notice.kind ? 'Settings, needs attention' : 'Settings'}
+            aria-expanded={menu === 'settings'}
+            data-overlay="settings"
+            data-attention={notice.kind ? 'true' : 'false'}
+            onClick={() => toggle('settings')}
+          >
+            {WRENCH}
+            {notice.kind && <span className={styles.attention} aria-hidden="true" />}
+          </button>
+          {menu === 'settings' && (
+            <div id="sky-settings" className={styles.popover}>
+              {notice.kind && <AssistantNoticeCopy kind={notice.kind} onDismiss={notice.dismiss} />}
+              <HookSetupCard />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

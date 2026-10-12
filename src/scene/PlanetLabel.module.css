@@ -46,16 +46,3 @@
   border-color: rgba(255, 255, 255, 0.7);
   box-shadow: 0 0 14px rgba(180, 210, 255, 0.45);
 }
-
-.tip {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: #e8eeff;
-  background: rgba(5, 8, 20, 0.94);
-  border: 1px solid rgba(180, 200, 255, 0.28);
-  border-radius: 6px;
-  padding: 3px 8px;
-  display: inline-block;
-}

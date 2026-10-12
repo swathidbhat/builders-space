@@ -21,13 +21,15 @@ async function saveShot(page: Page, name: string) {
 }
 
 async function settleSky(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('space:hooks-seen', '1');
-  });
   await page.goto('/');
   await expect(page.getByText('10 planets discovered')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('[data-planet-label]:visible').first()).toBeVisible();
+  const settings = page.getByRole('button', { name: 'Settings, needs attention' });
+  await expect(settings).toBeVisible({ timeout: 20_000 });
+  await settings.click();
   await expect(page.getByText(/No Anthropic API key is set/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText(/No Anthropic API key is set/)).toHaveCount(0);
   await page.evaluate(() => {
     const store = window.__spaceStore;
     if (!store) throw new Error('space store is not available');
@@ -42,24 +44,35 @@ async function settleSky(page: Page) {
 }
 
 async function assertNeedsYouName(page: Page) {
-  const open = await page.getByRole('region', { name: 'Needs you' }).isVisible();
-  if (!open) return;
-  const name = page.locator('[data-project-name]', { hasText: 'Lumen Lab' }).first();
-  await expect(name).toBeVisible();
-  const fit = await name.evaluate((el) => ({
-    text: el.textContent,
-    overflow: el.scrollWidth - el.clientWidth,
-  }));
-  expect(fit.text).toBe('Lumen Lab');
-  expect(fit.overflow).toBeLessThanOrEqual(1);
+  const name = page.locator('#projects-nav [data-project-name]', { hasText: 'Lumen Lab' });
+  if ((await name.count()) === 0 || !(await name.first().isVisible())) return;
   const navWidth = await page
     .locator('#projects-nav')
     .evaluate((el) => el.getBoundingClientRect().width);
   expect(navWidth).toBeGreaterThan(200);
   expect(navWidth).toBeLessThan(280);
-  await expect(
-    page.getByRole('region', { name: 'Needs you' }).getByRole('button', { name: /Lumen Lab/ }),
-  ).toHaveAttribute('title', /Lumen Lab/);
+  const label = name.first();
+  await expect(label).toBeVisible();
+  const fit = await label.evaluate((el) => ({
+    text: el.textContent,
+    overflow: el.scrollWidth - el.clientWidth,
+  }));
+  expect(fit.text).toBe('Lumen Lab');
+  expect(fit.overflow).toBeLessThanOrEqual(1);
+  const button = page.getByRole('navigation', { name: 'Projects' }).getByRole('button', {
+    name: /Lumen Lab/,
+  });
+  await expect(button).toHaveAttribute('title', /Lumen Lab/);
+  await expect(button).toContainText('TypeError: Cannot read properties of undefined');
+  const stacked = await button.evaluate((el) => {
+    const reason = el.querySelector('[data-project-reason]');
+    const time = el.querySelector('[data-project-time]');
+    if (!(reason instanceof HTMLElement) || !(time instanceof HTMLElement)) return false;
+    const reasonBox = reason.getBoundingClientRect();
+    const timeBox = time.getBoundingClientRect();
+    return timeBox.top >= reasonBox.bottom - 2;
+  });
+  expect(stacked).toBe(true);
 }
 
 function intersects(
@@ -73,13 +86,15 @@ function intersects(
 
 async function assertReadableLayout(page: Page) {
   const header = page.getByRole('banner');
-  await expect(header.getByText('Agents')).toBeVisible();
-  await expect(header.getByText('Working')).toBeVisible();
+  await expect(header.getByText('Needs you')).toBeVisible();
   await expect(header.getByText('Errors')).toBeVisible();
-  await expect(header.getByText('Awaiting you')).toBeVisible();
-  await expect(
-    page.locator('[data-planet-label]:visible').filter({ hasText: 'error' }).first(),
-  ).toBeVisible();
+  await expect(header.getByText('Agents')).toHaveCount(0);
+  await expect(header.getByText('Working')).toHaveCount(0);
+  const labels = page.locator('[data-planet-label]:visible');
+  await expect(labels.filter({ hasText: 'Error' }).first()).toBeVisible();
+  const texts = await labels.allTextContents();
+  expect(texts.length).toBeGreaterThan(0);
+  for (const text of texts) expect(text).not.toMatch(/agent/i);
 
   const layout = await page.evaluate(() => {
     function boxOf(el: Element) {
@@ -106,7 +121,6 @@ async function assertReadableLayout(page: Page) {
     const counters = document.querySelector('[data-counters]');
     const panel = document.querySelector('aside[aria-label="Project details"]');
     const projects = document.querySelector('nav[aria-label="Projects"]');
-    const hooks = document.querySelector('[data-overlay="hooks"]');
     const overlays = [...document.querySelectorAll('[data-overlay]')]
       .filter(shown)
       .flatMap((el) => {
@@ -126,7 +140,6 @@ async function assertReadableLayout(page: Page) {
       counters: counters ? boxOf(counters) : null,
       panel: panel ? boxOf(panel) : null,
       projects: projects && projects.getBoundingClientRect().width > 100 ? boxOf(projects) : null,
-      hooks: hooks && hooks.getBoundingClientRect().height > 20 ? boxOf(hooks) : null,
       overlays,
       labels,
       canvas: document.querySelector('canvas') ? boxOf(document.querySelector('canvas')!) : null,
@@ -152,7 +165,6 @@ async function assertReadableLayout(page: Page) {
     if (layout.panel && layout.panel.bottom - layout.panel.top > 20) {
       expect(intersects(label, layout.panel), label.text).toBe(false);
     }
-    if (layout.hooks) expect(intersects(label, layout.hooks), label.text).toBe(false);
   }
   for (let i = 0; i < layout.labels.length; i++) {
     for (let j = i + 1; j < layout.labels.length; j++) {
@@ -164,10 +176,12 @@ async function assertReadableLayout(page: Page) {
   }
 
   const chrome = layout.overlays.filter((overlay) => overlay.name !== 'dock');
-  expect(chrome.some((overlay) => overlay.name === 'notice')).toBe(true);
   expect(chrome.some((overlay) => overlay.name === 'disconnect')).toBe(true);
-  expect(chrome.some((overlay) => overlay.name === 'legend')).toBe(true);
-  expect(chrome.some((overlay) => overlay.name === 'hooks')).toBe(true);
+  expect(chrome.some((overlay) => overlay.name === 'help')).toBe(true);
+  expect(chrome.some((overlay) => overlay.name === 'settings')).toBe(true);
+  expect(chrome.some((overlay) => overlay.name === 'notice')).toBe(false);
+  expect(chrome.some((overlay) => overlay.name === 'legend')).toBe(false);
+  expect(chrome.some((overlay) => overlay.name === 'hooks')).toBe(false);
   for (let i = 0; i < chrome.length; i++) {
     for (let j = i + 1; j < chrome.length; j++) {
       expect(intersects(chrome[i], chrome[j]), `${chrome[i].name} overlaps ${chrome[j].name}`).toBe(
@@ -187,12 +201,15 @@ test('has no serious or critical accessibility violations', async ({ page }) => 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
   await expect(page.getByText('10 planets discovered')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole('complementary', { name: 'Hooks' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Status help' })).toBeVisible();
+  await page.getByRole('button', { name: /Settings/ }).click();
+  await expect(page.getByRole('complementary', { name: 'Hooks' })).toBeVisible({ timeout: 20_000 });
   const wide = await new AxeBuilder({ page }).analyze();
   const wideBad = wide.violations.filter(
     (violation) => violation.impact === 'serious' || violation.impact === 'critical',
   );
   expect(wideBad, JSON.stringify(wideBad, null, 2)).toEqual([]);
+  await page.keyboard.press('Escape');
 
   await page.setViewportSize({ width: 800, height: 900 });
   await expect(page.getByRole('button', { name: 'Open projects' })).toBeVisible();
@@ -206,14 +223,15 @@ test('has no serious or critical accessibility violations', async ({ page }) => 
 test('keyboard opens a needs-you project and escape closes it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
-  await expect(page.getByRole('region', { name: 'Needs you' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-project-name]').first()).toBeVisible({ timeout: 20_000 });
 
   let focused = false;
-  for (let step = 0; step < 30 && !focused; step++) {
+  for (let step = 0; step < 40 && !focused; step++) {
     await page.keyboard.press('Tab');
-    focused = await page.evaluate(
-      () => document.activeElement?.closest('[aria-label="Needs you"]') != null,
-    );
+    focused = await page.evaluate(() => {
+      const el = document.activeElement;
+      return el instanceof HTMLElement && el.querySelector('[data-project-name]') != null;
+    });
   }
   expect(focused).toBe(true);
   await page.keyboard.press('Enter');
@@ -233,7 +251,7 @@ for (const size of SIZES) {
     if (size.width <= 999) {
       await page.getByRole('button', { name: 'Open projects' }).click();
     }
-    await page.getByRole('region', { name: 'Needs you' }).getByRole('button').first().click();
+    await page.locator('#projects-nav [data-project-name]').first().click();
     await expect(page.getByRole('complementary', { name: 'Project details' })).toBeVisible();
     await page.waitForTimeout(1000);
     await saveShot(page, `panel-${size.name}.png`);
@@ -247,7 +265,7 @@ test('layout holds at 800x640 with the bottom overlays', async ({ page }) => {
   await settleSky(page);
   await assertReadableLayout(page);
   await page.getByRole('button', { name: 'Open projects' }).click();
-  await page.getByRole('region', { name: 'Needs you' }).getByRole('button').first().click();
+  await page.locator('#projects-nav [data-project-name]').first().click();
   await expect(page.getByRole('complementary', { name: 'Project details' })).toBeVisible();
   await page.waitForTimeout(1000);
   await assertReadableLayout(page);

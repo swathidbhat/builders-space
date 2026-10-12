@@ -18,7 +18,7 @@ describe('hooks toggle', () => {
     delete window.__BUILDERS_SPACE_TOKEN__;
   });
 
-  it('enables, shows a manual snippet, disables, and minimizes', async () => {
+  it('enables, shows a manual snippet, and disables', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).endsWith('/enable')) {
         return jsonResponse({
@@ -65,12 +65,6 @@ describe('hooks toggle', () => {
     await vi.waitFor(() => {
       expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith('/disable'))).toBe(true);
     });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize hooks' }));
-    expect(localStorage.getItem('space:hooks-minimized')).toBe('1');
-    fireEvent.click(screen.getByTitle('Hook settings'));
-    expect(localStorage.getItem('space:hooks-minimized')).toBeNull();
-    expect(screen.getByText('Hooks')).toBeTruthy();
   });
 
   it('stays hidden when the status request fails', async () => {
@@ -82,21 +76,5 @@ describe('hooks toggle', () => {
     );
     render(<HookSetupCard />);
     await vi.waitFor(() => expect(screen.queryByText('Enable Hooks')).toBeNull());
-  });
-
-  it('restores a minimized card', async () => {
-    localStorage.setItem('space:hooks-minimized', '1');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        jsonResponse({
-          claude: 'configured',
-          cursor: 'configured',
-          codex: 'configured',
-        }),
-      ),
-    );
-    render(<HookSetupCard />);
-    expect(await screen.findByTitle('Hook settings')).toBeTruthy();
   });
 });

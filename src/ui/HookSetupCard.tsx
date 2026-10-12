@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_ORIGIN, authHeaders } from '../api';
-import { cssVars } from './cssVars';
 import { HookToolRow, type EnableToolResult } from './HookToolRow';
 import styles from './HookSetupCard.module.css';
 
@@ -20,32 +19,8 @@ interface EnableResponse {
   restartRequired?: boolean;
 }
 
-function startMinimized(): boolean {
-  if (typeof window === 'undefined') return false;
-  const compact =
-    typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 999px)').matches;
-  if (compact) return true;
-  if (localStorage.getItem('space:hooks-seen') === '1') return true;
-  return localStorage.getItem('space:hooks-minimized') === '1';
-}
-
 const API_BASE = API_ORIGIN;
 const TOOLS = ['claude', 'cursor', 'codex'] as const;
-
-const WRENCH_SVG = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-  </svg>
-);
 
 export function HookSetupCard() {
   const [status, setStatus] = useState<HookStatusResponse | null>(null);
@@ -53,7 +28,6 @@ export function HookSetupCard() {
   const [disableMessage, setDisableMessage] = useState<string | null>(null);
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [minimized, setMinimized] = useState(startMinimized);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -68,10 +42,6 @@ export function HookSetupCard() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
-
-  useEffect(() => {
-    if (!minimized) localStorage.setItem('space:hooks-seen', '1');
-  }, [minimized]);
 
   if (!status) return null;
 
@@ -117,49 +87,13 @@ export function HookSetupCard() {
     setLoading(false);
   };
 
-  const handleMinimize = () => {
-    localStorage.setItem('space:hooks-minimized', '1');
-    localStorage.setItem('space:hooks-seen', '1');
-    setMinimized(true);
-  };
-
-  const handleExpand = () => {
-    localStorage.removeItem('space:hooks-minimized');
-    setMinimized(false);
-  };
-
-  if (minimized) {
-    const iconColor = anyConfigured ? '#4ade80' : 'rgba(255,255,255,0.4)';
-    return (
-      <button
-        type="button"
-        className={styles.fab}
-        style={cssVars({ '--icon': iconColor })}
-        onClick={handleExpand}
-        title="Hook settings"
-        aria-label="Hook settings"
-        data-overlay="hooks"
-      >
-        {WRENCH_SVG}
-      </button>
-    );
-  }
-
   const changedFiles = enableResult?.changedFiles ?? [];
   const restartRequired = Boolean(enableResult?.restartRequired);
 
   return (
-    <aside className={styles.card} aria-label="Hooks" data-overlay="hooks">
+    <aside className={styles.card} aria-label="Hooks">
       <div className={styles.header}>
         <span className={styles.title}>Hooks</span>
-        <button
-          type="button"
-          className={styles.minimize}
-          onClick={handleMinimize}
-          aria-label="Minimize hooks"
-        >
-          <span aria-hidden="true">&#8722;</span>
-        </button>
       </div>
 
       <div className={styles.body}>

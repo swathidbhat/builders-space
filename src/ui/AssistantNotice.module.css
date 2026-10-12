@@ -1,16 +1,8 @@
 .notice {
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  flex: 0 1 auto;
-  min-height: 0;
-  width: min(520px, 100%);
-  overflow: auto;
   display: flex;
   gap: 12px;
   align-items: flex-start;
   padding: 12px 14px;
-  pointer-events: auto;
   border-radius: 12px;
   background: rgba(12, 16, 32, 0.94);
   border: 1px solid rgba(120, 160, 255, 0.35);
@@ -18,7 +10,6 @@
   font-family: 'Space Grotesk', sans-serif;
   font-size: 13px;
   line-height: 1.45;
-  pointer-events: auto;
 }
 
 .notice p {

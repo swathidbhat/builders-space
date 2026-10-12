@@ -23,7 +23,7 @@ function readDismissed(): NoticeKind | null {
   }
 }
 
-export function AssistantNotice() {
+export function useAssistantNotice(): { kind: NoticeKind | null; dismiss: () => void } {
   const connection = useSpaceStore((s) => s.connection);
   const assistantRejected = useSpaceStore((s) => s.assistantRejected);
   const [serverKind, setServerKind] = useState<NoticeKind | null>(null);
@@ -56,25 +56,41 @@ export function AssistantNotice() {
   }, [connection]);
 
   const kind: NoticeKind | null = assistantRejected ? 'rejected' : serverKind;
-  if (!kind || dismissed === kind) return null;
+  const visible = kind !== null && dismissed !== kind;
 
+  return {
+    kind: visible ? kind : null,
+    dismiss: () => {
+      if (!kind) return;
+      try {
+        localStorage.setItem(DISMISS_KEY, kind);
+      } catch {
+        /* a private window can refuse storage; hiding it for this view is enough */
+      }
+      setDismissed(kind);
+    },
+  };
+}
+
+export function AssistantNoticeCopy({
+  kind,
+  onDismiss,
+}: {
+  kind: NoticeKind;
+  onDismiss: () => void;
+}) {
   return (
-    <aside className={styles.notice} role="status" data-overlay="notice">
+    <aside className={styles.notice} role="status">
       <p>{COPY[kind]}</p>
-      <button
-        type="button"
-        className={styles.dismiss}
-        onClick={() => {
-          try {
-            localStorage.setItem(DISMISS_KEY, kind);
-          } catch {
-            /* a private window can refuse storage; hiding it for this view is enough */
-          }
-          setDismissed(kind);
-        }}
-      >
+      <button type="button" className={styles.dismiss} onClick={onDismiss}>
         Dismiss
       </button>
     </aside>
   );
+}
+
+export function AssistantNotice() {
+  const notice = useAssistantNotice();
+  if (!notice.kind) return null;
+  return <AssistantNoticeCopy kind={notice.kind} onDismiss={notice.dismiss} />;
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { dominantStatus, projectStatusColor } from '../../shared/status';
 import { prettifyName } from '../prettifyName';
 import { useSpaceStore } from '../store';
-import { needsYouRows, projectsByUrgency } from './attention';
+import { needsYouRows, type AttentionRow, projectsByUrgency } from './attention';
 import { cssVars } from './cssVars';
 import { STATUS_MARK, STATUS_WORD } from './statusCue';
 import { useCompactLayout } from './useCompactLayout';
@@ -33,7 +33,11 @@ export function Sidebar() {
     else toggleSidebar();
   };
 
-  const needsYou = useMemo(() => needsYouRows(projects), [projects]);
+  const attention = useMemo(() => {
+    const rows = new Map<string, AttentionRow>();
+    for (const row of needsYouRows(projects)) rows.set(row.projectId, row);
+    return rows;
+  }, [projects]);
   const sorted = useMemo(() => projectsByUrgency(projects), [projects]);
 
   if (!open) {
@@ -66,65 +70,28 @@ export function Sidebar() {
       </div>
 
       <div className={styles.list}>
-        {needsYou.length > 0 && (
-          <section aria-label="Needs you">
-            <div className={styles.section}>Needs you</div>
-            {needsYou.map((row) => {
-              const isSelected = row.projectId === selectedId;
-              const dotColor = row.status === 'error' ? '#ff4444' : '#ffaa44';
-              const pretty = prettifyName(row.projectName);
-              const accessible = `${STATUS_WORD[row.status]}: ${pretty}. ${row.duration}. ${row.task}`;
-              return (
-                <button
-                  key={row.agentId}
-                  type="button"
-                  className={isSelected ? `${styles.urgent} ${styles.selected}` : styles.urgent}
-                  title={`${pretty}. ${row.duration}. ${row.detail}`}
-                  aria-label={accessible}
-                  onClick={() => select(row.projectId)}
-                >
-                  <span className={styles.urgentTop}>
-                    <span
-                      className={styles.dot}
-                      aria-hidden="true"
-                      style={cssVars({
-                        '--dot': dotColor,
-                        '--dot-glow': `0 0 6px ${dotColor}66`,
-                      })}
-                    />
-                    <span className={styles.glyph} aria-hidden="true">
-                      {STATUS_MARK[row.status]}
-                    </span>
-                    <span className={styles.urgentProject} data-project-name="">
-                      {pretty}
-                    </span>
-                  </span>
-                  <span className={styles.urgentTaskRow}>
-                    <span className={styles.urgentTask}>{row.task}</span>
-                    <span className={styles.urgentTime}>{row.duration}</span>
-                  </span>
-                  {row.detail !== row.task && (
-                    <span className={styles.urgentDetail}>{row.detail}</span>
-                  )}
-                </button>
-              );
-            })}
-          </section>
-        )}
-
-        <section aria-label="All projects">
-          {sorted.map((project) => {
-            const isSelected = project.id === selectedId;
-            const dotColor = projectStatusColor(project.agents);
-
-            const status = dominantStatus(project.agents);
-            return (
-              <button
-                key={project.id}
-                type="button"
-                className={isSelected ? `${styles.item} ${styles.selected}` : styles.item}
-                onClick={() => select(project.id)}
-              >
+        {sorted.map((project) => {
+          const row = attention.get(project.id);
+          const status = row?.status ?? dominantStatus(project.agents);
+          const isSelected = project.id === selectedId;
+          const dotColor = projectStatusColor(project.agents);
+          const pretty = prettifyName(project.name);
+          const accessible = row
+            ? `${STATUS_WORD[row.status]}: ${pretty}. ${row.duration}. ${row.detail}`
+            : `${STATUS_WORD[status]}: ${pretty}. ${project.agents.length} ${
+                project.agents.length === 1 ? 'agent' : 'agents'
+              }`;
+          const title = row ? `${pretty}. ${row.duration}. ${row.detail}` : pretty;
+          return (
+            <button
+              key={project.id}
+              type="button"
+              className={isSelected ? `${styles.item} ${styles.selected}` : styles.item}
+              title={title}
+              aria-label={accessible}
+              onClick={() => select(project.id)}
+            >
+              <span className={styles.nameLine}>
                 <span
                   className={styles.dot}
                   aria-hidden="true"
@@ -136,19 +103,29 @@ export function Sidebar() {
                 <span className={styles.glyph} aria-hidden="true">
                   {STATUS_MARK[status]}
                 </span>
-                <span className="sr-only">{STATUS_WORD[status]}</span>
                 <span
                   className={isSelected ? `${styles.name} ${styles.selectedName}` : styles.name}
+                  data-project-name=""
                 >
-                  {prettifyName(project.name)}
+                  {pretty}
                 </span>
-                {project.agents.length > 0 && (
+                {!row && project.agents.length > 0 && (
                   <span className={styles.count}>{project.agents.length}</span>
                 )}
-              </button>
-            );
-          })}
-        </section>
+              </span>
+              {row && (
+                <>
+                  <span className={styles.reason} data-project-reason="">
+                    {row.detail}
+                  </span>
+                  <span className={styles.time} data-project-time="">
+                    {row.duration}
+                  </span>
+                </>
+              )}
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
