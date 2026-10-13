@@ -16,7 +16,6 @@ export function ProjectPanel() {
   );
   const deselectPlanet = useSpaceStore((s) => s.deselectPlanet);
   const humanLingo = useSpaceStore((s) => s.humanLingo);
-  const besideList = useSpaceStore((s) => s.sidebarOverlayOpen);
   const toggleHumanLingo = useSpaceStore((s) => s.toggleHumanLingo);
 
   useProjectHumanize(project, humanLingo);
@@ -44,7 +43,7 @@ export function ProjectPanel() {
     <aside
       ref={panelRef}
       tabIndex={-1}
-      className={besideList ? `${styles.panel} ${styles.besideList}` : styles.panel}
+      className={styles.panel}
       aria-label="Project details"
       data-overlay="panel"
     >
@@ -54,10 +53,6 @@ export function ProjectPanel() {
         summary={projectStatsText(project.agents)}
         onClose={deselectPlanet}
       />
-      <div className={styles.surface}>
-        <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
-      </div>
-
       <div className={styles.agents}>
         <div className={styles.agentsHead}>
           <div className={styles.agentsLabel}>Agents</div>
@@ -78,6 +73,9 @@ export function ProjectPanel() {
             ))}
           </div>
         )}
+      </div>
+      <div className={styles.surface} data-pixel-surface="">
+        <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
       </div>
     </aside>
   );

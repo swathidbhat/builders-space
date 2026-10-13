@@ -22,6 +22,24 @@ function canDropUser(): boolean {
 
 const dropUser = canDropUser();
 
+/** Peer checks run in CI. Locally, a missing passwordless sudo is a reported skip. */
+function otherUser(title: string, body: () => Promise<void>): void {
+  if (dropUser) {
+    it(title, body);
+    return;
+  }
+  if (process.env.CI === 'true') {
+    it(title, () => {
+      throw new Error(
+        'CI must run this as nobody. `id nobody` and `sudo -n -u nobody true` have to succeed.',
+      );
+    });
+    return;
+  }
+  console.warn(`SKIP other-user test (no passwordless sudo as nobody): ${title}`);
+  it.skip(title, body);
+}
+
 function project(dir: string): Map<string, ProjectInfo> {
   return new Map([
     [
@@ -138,68 +156,62 @@ describe('server access control', () => {
     expect(JSON.parse(text)).toEqual({ ok: false, error: 'Invalid JSON' });
   });
 
-  it.skipIf(!dropUser)(
-    'rejects a different local user even when that user presents the token',
-    async () => {
-      runtime.stateManager.updateClaudeProjects(project('/tmp/lumen-lab'));
-      const authHeader = `Authorization: Bearer ${TOKEN}`;
-      const health = await nobodyCurl([
-        '-sS',
-        '-H',
-        authHeader,
-        '-w',
-        '\n%{http_code}',
-        `${base}/api/health`,
-      ]);
-      const enable = await nobodyCurl([
-        '-sS',
-        '-X',
-        'POST',
-        '-H',
-        authHeader,
-        '-w',
-        '\n%{http_code}',
-        `${base}/api/hooks/enable`,
-      ]);
-      expect(health.status).toBe(403);
-      expect(enable.status).toBe(403);
-      expect(health.body).not.toContain('lumen-lab');
-      expect(health.body).not.toContain(TOKEN);
-      expect(JSON.parse(health.body)).toEqual({ ok: false, error: 'Peer user not allowed' });
-      expect(existsSync(join(home, '.claude', 'settings.json'))).toBe(false);
-    },
-  );
+  otherUser('rejects a different local user even when that user presents the token', async () => {
+    runtime.stateManager.updateClaudeProjects(project('/tmp/lumen-lab'));
+    const authHeader = `Authorization: Bearer ${TOKEN}`;
+    const health = await nobodyCurl([
+      '-sS',
+      '-H',
+      authHeader,
+      '-w',
+      '\n%{http_code}',
+      `${base}/api/health`,
+    ]);
+    const enable = await nobodyCurl([
+      '-sS',
+      '-X',
+      'POST',
+      '-H',
+      authHeader,
+      '-w',
+      '\n%{http_code}',
+      `${base}/api/hooks/enable`,
+    ]);
+    expect(health.status).toBe(403);
+    expect(enable.status).toBe(403);
+    expect(health.body).not.toContain('lumen-lab');
+    expect(health.body).not.toContain(TOKEN);
+    expect(JSON.parse(health.body)).toEqual({ ok: false, error: 'Peer user not allowed' });
+    expect(existsSync(join(home, '.claude', 'settings.json'))).toBe(false);
+  });
 
-  it.skipIf(!dropUser)(
-    'serves the Vite page to another user without the launch token',
-    async () => {
-      const dir = join(home, '.builders-space');
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
-      writeFileSync(join(dir, 'auth-token'), TOKEN, { mode: 0o600 });
-      const vite = await createViteServer({
-        configFile: join(process.cwd(), 'vite.config.ts'),
-        server: { host: '127.0.0.1', port: 0 },
-        logLevel: 'silent',
-      });
-      try {
-        await vite.listen();
-        const address = vite.httpServer?.address();
-        if (!address || typeof address === 'string') throw new Error('vite did not listen');
-        const page = await nobodyCurl([
-          '-sS',
-          '-w',
-          '\n%{http_code}',
-          `http://127.0.0.1:${address.port}/`,
-        ]);
-        expect(page.status).toBe(403);
-        expect(page.body).not.toContain(TOKEN);
-        expect(page.body).not.toContain('__BUILDERS_SPACE_TOKEN__');
-        expect(JSON.parse(page.body)).toEqual({ ok: false, error: 'Peer user not allowed' });
-      } finally {
-        await vite.close();
-      }
-    },
-  );
+  otherUser('serves the Vite page to another user without the launch token', async () => {
+    const dir = join(home, '.builders-space');
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(dir, 'auth-token'), TOKEN, { mode: 0o600 });
+    const vite = await createViteServer({
+      configFile: join(process.cwd(), 'vite.config.ts'),
+      server: { host: '127.0.0.1', port: 0 },
+      logLevel: 'silent',
+    });
+    try {
+      await vite.listen();
+      const address = vite.httpServer?.address();
+      if (!address || typeof address === 'string') throw new Error('vite did not listen');
+      const page = await nobodyCurl([
+        '-sS',
+        '-w',
+        '\n%{http_code}',
+        `http://127.0.0.1:${address.port}/`,
+      ]);
+      expect(page.status).toBe(403);
+      expect(page.body).not.toContain(TOKEN);
+      expect(page.body).not.toContain('__BUILDERS_SPACE_TOKEN__');
+      expect(JSON.parse(page.body)).toEqual({ ok: false, error: 'Peer user not allowed' });
+    } finally {
+      await vite.close();
+    }
+  });
 
   const execFileAsync = promisify(execFile);
 

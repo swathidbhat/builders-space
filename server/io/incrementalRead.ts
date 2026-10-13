@@ -1,5 +1,4 @@
 import { createHash } from 'crypto';
-import { closeSync, fstatSync, openSync, readSync } from 'fs';
 import { open, stat } from 'fs/promises';
 import { logCaught } from '../log';
 
@@ -33,24 +32,33 @@ export interface FoldCache<T> {
   value: T;
 }
 
-function readAt(filePath: string, start: number, length: number): Buffer | null {
+const READ_CHUNK = 64 * 1024;
+
+/** Read bytes off the Node thread. Large logs yield every few chunks. */
+async function readAt(filePath: string, start: number, length: number): Promise<Buffer | null> {
   if (length <= 0) return Buffer.alloc(0);
-  let fd: number | undefined;
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    fd = openSync(filePath, 'r');
+    handle = await open(filePath, 'r');
     const buf = Buffer.alloc(length);
     let offset = 0;
+    let chunks = 0;
     while (offset < length) {
-      const n = readSync(fd, buf, offset, length - offset, start + offset);
-      if (n <= 0) break;
-      offset += n;
+      const step = Math.min(READ_CHUNK, length - offset);
+      const { bytesRead } = await handle.read(buf, offset, step, start + offset);
+      if (bytesRead <= 0) break;
+      offset += bytesRead;
+      chunks += 1;
+      if (length > READ_CHUNK && chunks % 4 === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
     }
     return buf.subarray(0, offset);
   } catch (err) {
     logCaught('incrementalRead', err, filePath);
     return null;
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    await handle?.close();
   }
 }
 
@@ -78,15 +86,15 @@ async function hashFile(filePath: string, size: number): Promise<string | null> 
   }
 }
 
-function tailOf(filePath: string, size: number): Buffer | null {
+function tailOf(filePath: string, size: number): Promise<Buffer | null> {
   const start = Math.max(0, size - TAIL_BYTES);
   return readAt(filePath, start, size - start);
 }
 
 /** Hash of the first bytes. When `size` is at most HEAD_BYTES this is the whole file. */
-function headDigest(filePath: string, size: number): string | null {
+async function headDigest(filePath: string, size: number): Promise<string | null> {
   const length = Math.min(size, HEAD_BYTES);
-  const buf = readAt(filePath, 0, length);
+  const buf = await readAt(filePath, 0, length);
   if (!buf || buf.length !== length) return null;
   return createHash('sha256').update(buf).digest('hex');
 }
@@ -135,8 +143,8 @@ export async function readIncremental(
   }
 
   if (previous && previous.size === size && previous.mtimeMs === mtimeMs && size <= HEAD_BYTES) {
-    const tail = tailOf(filePath, size);
-    const head = tail && tail.equals(previous.tail) ? headDigest(filePath, size) : null;
+    const tail = await tailOf(filePath, size);
+    const head = tail && tail.equals(previous.tail) ? await headDigest(filePath, size) : null;
     if (tail && head && head === previous.head) {
       return { mode: 'unchanged', cursor: { ...previous, ino } };
     }
@@ -147,7 +155,7 @@ export async function readIncremental(
     previous.size === size &&
     (previous.mtimeMs !== mtimeMs || previous.ino !== ino)
   ) {
-    const tail = tailOf(filePath, size);
+    const tail = await tailOf(filePath, size);
     if (tail && tail.equals(previous.tail)) {
       const digest = await hashFile(filePath, size);
       if (digest && digest === previous.digest) {
@@ -161,7 +169,7 @@ export async function readIncremental(
   let prefix = '';
   if (previous && size > previous.size) {
     const checkStart = Math.max(0, previous.size - TAIL_BYTES);
-    const previousTail = readAt(filePath, checkStart, previous.size - checkStart);
+    const previousTail = await readAt(filePath, checkStart, previous.size - checkStart);
     if (previousTail && previousTail.equals(previous.tail)) {
       start = previous.size;
       prefix = previous.remainder;
@@ -169,13 +177,13 @@ export async function readIncremental(
     }
   }
 
-  const chunkBuf = readAt(filePath, start, size - start);
+  const chunkBuf = await readAt(filePath, start, size - start);
   if (!chunkBuf) return null;
   const chunk = chunkBuf.toString('utf8');
   const { lines, remainder } = splitLines(prefix + chunk);
-  const tail = tailOf(filePath, size);
+  const tail = await tailOf(filePath, size);
   const digest = await hashFile(filePath, size);
-  const head = headDigest(filePath, size);
+  const head = await headDigest(filePath, size);
   if (!tail || !digest || !head) return null;
 
   return {
@@ -187,19 +195,19 @@ export async function readIncremental(
 }
 
 /** First line only, capped so a multi-megabyte rollout is not loaded for its header. */
-export function readFirstLine(filePath: string, maxBytes = 65_536): string | null {
-  let fd: number | undefined;
+export async function readFirstLine(filePath: string, maxBytes = 65_536): Promise<string | null> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    fd = openSync(filePath, 'r');
-    const size = fstatSync(fd).size;
+    handle = await open(filePath, 'r');
+    const size = (await handle.stat()).size;
     const toRead = Math.min(size, maxBytes);
     if (toRead === 0) return '';
     const buf = Buffer.alloc(toRead);
     let offset = 0;
     while (offset < toRead) {
-      const n = readSync(fd, buf, offset, toRead - offset, offset);
-      if (n <= 0) break;
-      offset += n;
+      const { bytesRead } = await handle.read(buf, offset, toRead - offset, offset);
+      if (bytesRead <= 0) break;
+      offset += bytesRead;
       const nl = buf.subarray(0, offset).indexOf(0x0a);
       if (nl !== -1) return buf.subarray(0, nl).toString('utf8');
     }
@@ -208,7 +216,7 @@ export function readFirstLine(filePath: string, maxBytes = 65_536): string | nul
     logCaught('readFirstLine', err, filePath);
     return null;
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    await handle?.close();
   }
 }
 

@@ -1,4 +1,4 @@
-import { mkdtempSync, utimesSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawn } from 'child_process';
@@ -20,6 +20,7 @@ import {
   projectStatusColor,
 } from '../../shared/status';
 import { readFirstLine, readIncremental } from '../io/incrementalRead';
+import { collectSessionFiles } from '../watchers/sessionFiles';
 import { cursorPathsFromPs, cwdFromLsof, pidsMatching, runningCwds } from '../process/runningCwds';
 import { parseClaudeLine, parseCodexLine, parseHookEvent, hookString } from '../schema/sessionLog';
 
@@ -197,15 +198,53 @@ describe('incremental session reads', () => {
     expect(next.lines).toEqual(['{"a":1}']);
   });
 
-  it('reads only the first line of a large rollout', () => {
+  it('reads only the first line of a large rollout', async () => {
     const dir = tempDir();
     const file = join(dir, 'rollout.jsonl');
     const header = JSON.stringify({ type: 'session_meta', payload: { id: 's', cwd: '/tmp/app' } });
     writeFileSync(file, `${header}\n${'x'.repeat(2_000_000)}\n`);
     const started = performance.now();
-    expect(readFirstLine(file)).toBe(header);
+    expect(await readFirstLine(file)).toBe(header);
     expect(performance.now() - started).toBeLessThan(200);
-    expect(readFirstLine(join(dir, 'missing'))).toBeNull();
+    expect(await readFirstLine(join(dir, 'missing'))).toBeNull();
+  });
+
+  it('lets the event loop run while reading a large changed log', async () => {
+    const dir = tempDir();
+    const file = join(dir, 'big.jsonl');
+    const line = `${'x'.repeat(200)}\n`;
+    writeFileSync(file, line.repeat(Math.ceil((8 * 1024 * 1024) / line.length)));
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+    }, 1);
+    try {
+      const read = await readIncremental(file);
+      expect(read?.mode).toBe('reset');
+      expect(ticks).toBeGreaterThan(0);
+    } finally {
+      clearInterval(timer);
+    }
+  });
+
+  it('lets the event loop run while walking a session tree', async () => {
+    const dir = tempDir();
+    for (let i = 0; i < 80; i++) {
+      const sub = join(dir, `project-${i}`);
+      mkdirSync(sub);
+      writeFileSync(join(sub, 'session.jsonl'), '{}\n');
+    }
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+    }, 1);
+    try {
+      const files = await collectSessionFiles(dir, ['.jsonl'], 'test');
+      expect(files).toHaveLength(80);
+      expect(ticks).toBeGreaterThan(0);
+    } finally {
+      clearInterval(timer);
+    }
   });
 });
 

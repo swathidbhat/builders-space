@@ -1,4 +1,5 @@
-import { readdirSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
+import { readdir } from 'fs/promises';
 import { join, basename, isAbsolute } from 'path';
 import { homedir } from 'os';
 import {
@@ -123,7 +124,7 @@ export class CursorWatcher {
     this.projects.clear();
     let projectDirs: string[];
     try {
-      projectDirs = readdirSync(this.cursorBase, { withFileTypes: true })
+      projectDirs = (await readdir(this.cursorBase, { withFileTypes: true }))
         .filter((d) => d.isDirectory())
         .map((d) => d.name);
     } catch (err) {
@@ -177,7 +178,7 @@ export class CursorWatcher {
       const transcriptsDir = join(encodedPath, 'agent-transcripts');
       if (existsSync(transcriptsDir)) {
         try {
-          const entries = readdirSync(transcriptsDir, { withFileTypes: true });
+          const entries = await readdir(transcriptsDir, { withFileTypes: true });
 
           for (const entry of entries) {
             if (entry.isDirectory()) {

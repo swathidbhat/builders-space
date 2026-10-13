@@ -1,7 +1,9 @@
 import { connect, createServer } from 'net';
 import { describe, expect, it } from 'vitest';
 import {
+  clearPeerUidCache,
   formatProcAddress,
+  peerTableReads,
   peerUidFromLsof,
   peerUidFromProcNet,
   sameUserAsPeer,
@@ -72,8 +74,36 @@ describe('peer uid', () => {
     });
     await new Promise<void>((resolve) => client.once('connect', () => resolve()));
     try {
-      expect(sameUserAsPeer(peer)).toBe(true);
+      expect(await sameUserAsPeer(peer)).toBe(true);
     } finally {
+      client.destroy();
+      peer.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('does not reread /proc for the same socket within a second', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as { port: number }).port;
+    const client = connect(port, '127.0.0.1');
+    const peer = await new Promise<import('net').Socket>((resolve) => {
+      server.once('connection', resolve);
+    });
+    await new Promise<void>((resolve) => client.once('connect', () => resolve()));
+    clearPeerUidCache();
+    peerTableReads.count = 0;
+    try {
+      expect(await sameUserAsPeer(peer)).toBe(true);
+      const afterFirst = peerTableReads.count;
+      expect(afterFirst).toBe(1);
+      expect(await sameUserAsPeer(peer)).toBe(true);
+      expect(peerTableReads.count).toBe(afterFirst);
+      clearPeerUidCache();
+      expect(await sameUserAsPeer(peer)).toBe(true);
+      expect(peerTableReads.count).toBe(afterFirst + 1);
+    } finally {
+      clearPeerUidCache();
       client.destroy();
       peer.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));

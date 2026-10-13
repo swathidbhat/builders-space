@@ -1,4 +1,5 @@
-import { readdirSync, statSync } from 'fs';
+import { statSync } from 'fs';
+import { readdir, stat } from 'fs/promises';
 import { join, basename } from 'path';
 import { RECENT_ACTIVITY_MS } from '../../shared/config';
 import { logCaught } from '../log';
@@ -119,17 +120,20 @@ function activity(lastActivityMs: number): { isRecentlyActive: boolean; lastActi
 
 export async function parseTranscriptDir(dirPath: string): Promise<TranscriptData | null> {
   try {
-    const files = readdirSync(dirPath).filter((f) => f.endsWith('.jsonl'));
+    const files = (await readdir(dirPath)).filter((f) => f.endsWith('.jsonl'));
     if (files.length === 0) return null;
-    files.sort((a, b) => {
-      try {
-        return statSync(join(dirPath, b)).mtimeMs - statSync(join(dirPath, a)).mtimeMs;
-      } catch (err) {
-        logCaught('parseTranscriptDir', err, `stat ${dirPath}`);
-        return 0;
-      }
-    });
-    return parseTranscriptJsonl(join(dirPath, files[0]));
+    const ranked = await Promise.all(
+      files.map(async (name) => {
+        try {
+          return { name, mtimeMs: (await stat(join(dirPath, name))).mtimeMs };
+        } catch (err) {
+          logCaught('parseTranscriptDir', err, `stat ${dirPath}`);
+          return { name, mtimeMs: 0 };
+        }
+      }),
+    );
+    ranked.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return parseTranscriptJsonl(join(dirPath, ranked[0].name));
   } catch (err) {
     logCaught('parseTranscriptDir', err, dirPath);
     return null;

@@ -124,7 +124,7 @@ export class ClaudeWatcher {
   /** Full tree walk. Startup and the fallback interval only. */
   private async scanAll(): Promise<void> {
     this.walked.push(this.claudeBase);
-    const files = collectSessionFiles(this.claudeBase, ['.jsonl'], 'ClaudeWatcher');
+    const files = await collectSessionFiles(this.claudeBase, ['.jsonl'], 'ClaudeWatcher');
     const live = new Set(files);
     for (const file of this.sessions.keys()) {
       if (!live.has(file)) this.sessions.delete(file);
@@ -155,7 +155,7 @@ export class ClaudeWatcher {
       for (const file of this.sessions.keys()) {
         if (dirname(file) === dirPath) this.sessions.delete(file);
       }
-      for (const file of collectSessionFiles(dirPath, ['.jsonl'], 'ClaudeWatcher')) {
+      for (const file of await collectSessionFiles(dirPath, ['.jsonl'], 'ClaudeWatcher')) {
         await this.ingest(file);
       }
     }
