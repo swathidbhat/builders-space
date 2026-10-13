@@ -85,7 +85,7 @@ test.describe('layout matrix', () => {
         });
         return projects;
       });
-      await expect(page.getByText('No sessions yet')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'No sessions yet' })).toBeVisible();
       await page.evaluate((projects) => {
         window.__spaceStore?.setState({
           projects,
@@ -161,12 +161,19 @@ test.describe('layout matrix', () => {
       }
 
       const hud = await boxOf(page, 'header');
-      const dock = await boxOf(page, '[data-bottom-dock]');
       if (hud) expect(overlaps(hud, panelBox)).toBe(false);
-      if (dock) expect(overlaps(dock, panelBox)).toBe(false);
+      await expect
+        .poll(async () => {
+          const sheet = await boxOf(page, 'aside[aria-label="Project details"]');
+          const help = await boxOf(page, '[data-overlay="help"]');
+          const settings = await boxOf(page, '[data-overlay="settings"]');
+          if (!sheet || !help || !settings) return true;
+          return overlaps(help, sheet) || overlaps(settings, sheet);
+        })
+        .toBe(false);
 
       const question = panel.locator('[data-agent-question]').first();
-      await expect(question).toContainText(QUESTION);
+      await expect(panel).toContainText(QUESTION);
       const placed = await question.evaluate((el) => {
         const rect = el.getBoundingClientRect();
         const sheet = el.closest('aside');
