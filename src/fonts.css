@@ -1,38 +1,29 @@
 /* Latin woff2 only. These files ship with the app; the page never requests a font host. */
 
 @font-face {
-  font-family: 'Fraunces';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('../node_modules/@fontsource/fraunces/files/fraunces-latin-500-normal.woff2')
-    format('woff2');
-}
-
-@font-face {
-  font-family: 'Source Sans 3';
+  font-family: 'Figtree';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-400-normal.woff2')
+  src: url('../node_modules/@fontsource/figtree/files/figtree-latin-400-normal.woff2')
     format('woff2');
 }
 
 @font-face {
-  font-family: 'Source Sans 3';
+  font-family: 'Figtree';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-500-normal.woff2')
+  src: url('../node_modules/@fontsource/figtree/files/figtree-latin-500-normal.woff2')
     format('woff2');
 }
 
 @font-face {
-  font-family: 'Source Sans 3';
+  font-family: 'Figtree';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-600-normal.woff2')
+  src: url('../node_modules/@fontsource/figtree/files/figtree-latin-600-normal.woff2')
     format('woff2');
 }
 
