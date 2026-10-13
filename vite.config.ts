@@ -20,14 +20,25 @@ function buildersAuthPlugin(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const rejection = peerRejection(req.socket);
-        if (!rejection) {
-          next();
+        const deny = (error: string) => {
+          res.statusCode = 403;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: false, error }));
+        };
+        if (!req.socket) {
+          deny('Peer user not allowed');
           return;
         }
-        res.statusCode = 403;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ ok: false, error: rejection }));
+        void peerRejection(req.socket).then(
+          (rejection) => {
+            if (!rejection) {
+              next();
+              return;
+            }
+            deny(rejection);
+          },
+          () => deny('Peer user not allowed'),
+        );
       });
     },
     async transformIndexHtml(html) {

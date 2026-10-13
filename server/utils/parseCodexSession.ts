@@ -1,4 +1,5 @@
 import { statSync } from 'fs';
+import { stat } from 'fs/promises';
 import { basename } from 'path';
 import { RECENT_ACTIVITY_MS } from '../../shared/config';
 import { logCaught } from '../log';
@@ -65,6 +66,14 @@ export function codexCacheSize(): number {
 function safeStatMtime(filePath: string): number {
   try {
     return statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+async function safeStatMtimeAsync(filePath: string): Promise<number> {
+  try {
+    return (await stat(filePath)).mtimeMs;
   } catch {
     return 0;
   }
@@ -181,9 +190,9 @@ export async function parseCodexSessionFile(filePath: string): Promise<CodexSess
   }
 }
 
-export function parseCodexSessionMeta(filePath: string): CodexMeta | null {
+export async function parseCodexSessionMeta(filePath: string): Promise<CodexMeta | null> {
   codexScan?.add(filePath);
-  const mtimeMs = safeStatMtime(filePath);
+  const mtimeMs = await safeStatMtimeAsync(filePath);
   if (mtimeMs === 0) {
     codexMetaCache.delete(filePath);
     return null;
@@ -193,7 +202,7 @@ export function parseCodexSessionMeta(filePath: string): CodexMeta | null {
 
   let value: CodexMeta | null = null;
   try {
-    const firstLine = readFirstLine(filePath);
+    const firstLine = await readFirstLine(filePath);
     if (firstLine) {
       const entry = parseCodexLine(JSON.parse(firstLine));
       const meta = entry?.type === 'session_meta' ? parseCodexMetaPayload(entry.payload) : null;

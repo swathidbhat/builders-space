@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { dominantStatus, projectStatusColor } from '../../shared/status';
 import { prettifyName } from '../prettifyName';
 import { useSpaceStore } from '../store';
@@ -27,10 +27,30 @@ export function Sidebar() {
   const compact = useCompactLayout();
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const openedFromListRef = useRef<string | null>(null);
+  const returnFocusRef = useRef<string | null>(null);
+  const prevSelectedRef = useRef<string | null>(selectedId);
 
   useEffect(() => {
     if (!compact) setOverlayOpen(false);
   }, [compact]);
+
+  useLayoutEffect(() => {
+    const previous = prevSelectedRef.current;
+    prevSelectedRef.current = selectedId;
+    if (previous === selectedId) return;
+    if (compact && selectedId && overlayOpen && openedFromListRef.current !== selectedId) {
+      setOverlayOpen(false);
+    }
+    if (selectedId || !previous) return;
+    if (compact && openedFromListRef.current === previous) {
+      openedFromListRef.current = null;
+      returnFocusRef.current = previous;
+      setOverlayOpen(true);
+      return;
+    }
+    returnFocusRef.current = compact ? 'open-projects' : previous;
+  }, [selectedId, compact, overlayOpen]);
 
   useEffect(() => {
     useSpaceStore.getState().setSidebarOverlay(compact && overlayOpen);
@@ -39,9 +59,31 @@ export function Sidebar() {
 
   const open = compact ? overlayOpen : sidebarOpen;
   const toggle = () => {
-    if (compact) setOverlayOpen((value) => !value);
-    else toggleSidebar();
+    if (compact) {
+      setOverlayOpen((value) => {
+        if (value) returnFocusRef.current = 'open-projects';
+        return !value;
+      });
+    } else toggleSidebar();
   };
+
+  useLayoutEffect(() => {
+    const target = returnFocusRef.current;
+    if (!target) return;
+    if (target === 'open-projects') {
+      if (open) return;
+      const button = document.querySelector<HTMLElement>('button[aria-label="Open projects"]');
+      if (!button) return;
+      returnFocusRef.current = null;
+      button.focus();
+      return;
+    }
+    if (!open) return;
+    const button = document.querySelector<HTMLElement>(`[data-project-id="${CSS.escape(target)}"]`);
+    if (!button) return;
+    returnFocusRef.current = null;
+    button.focus();
+  }, [open, selectedId, compact]);
 
   const clock = useMemo<ActivityClock>(
     () => ({
@@ -58,6 +100,7 @@ export function Sidebar() {
   const sorted = useMemo(() => projectsByUrgency(projects), [projects]);
 
   if (!open) {
+    if (compact && selectedId) return null;
     return (
       <nav id="projects-nav" aria-label="Projects" data-overlay="projects">
         <button
@@ -73,8 +116,15 @@ export function Sidebar() {
   }
 
   const select = (id: string) => {
-    if (id === selectedId) deselectPlanet();
-    else selectPlanet(id);
+    if (id === selectedId) {
+      deselectPlanet();
+      return;
+    }
+    if (compact) {
+      openedFromListRef.current = id;
+      setOverlayOpen(false);
+    }
+    selectPlanet(id);
   };
 
   return (
@@ -111,6 +161,7 @@ export function Sidebar() {
                 className={styles.hit}
                 title={title}
                 aria-label={accessible}
+                data-project-id={project.id}
                 onClick={() => select(project.id)}
               >
                 <span className={styles.nameLine}>

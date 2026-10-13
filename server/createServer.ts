@@ -62,12 +62,22 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
   app.disable('x-powered-by');
 
   app.use((req, res, next) => {
-    const rejection = peerRejection(req.socket);
-    if (rejection) {
-      res.status(403).json({ ok: false, error: rejection });
-      return;
-    }
+    void peerRejection(req.socket).then(
+      (rejection) => {
+        if (rejection) {
+          res.status(403).json({ ok: false, error: rejection });
+          return;
+        }
+        admit(req, res, next);
+      },
+      (err: unknown) => {
+        logCaught('peerUser', err, 'request');
+        res.status(403).json({ ok: false, error: 'Peer user not allowed' });
+      },
+    );
+  });
 
+  const admit: express.RequestHandler = (req, res, next) => {
     const originHeader = req.headers.origin;
     const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
 
@@ -97,7 +107,7 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
     }
 
     next();
-  });
+  };
 
   app.use(express.json({ limit: '32kb' }));
 
@@ -119,16 +129,26 @@ export function createBuildersServer(options: CreateServerOptions = {}): Builder
       req: { headers: { origin?: string }; socket?: ProcEndpoints },
       callback: (err: string | null, ok: boolean) => void,
     ) => {
-      if (!req.socket || peerRejection(req.socket)) {
-        callback('Peer user not allowed', false);
+      const decide = (rejection: string | null) => {
+        if (!req.socket || rejection) {
+          callback(rejection ?? 'Peer user not allowed', false);
+          return;
+        }
+        const origin = req.headers.origin;
+        if (origin && !isLoopbackOrigin(origin)) {
+          callback('Origin not allowed', false);
+          return;
+        }
+        callback(null, true);
+      };
+      if (!req.socket) {
+        decide('Peer user not allowed');
         return;
       }
-      const origin = req.headers.origin;
-      if (origin && !isLoopbackOrigin(origin)) {
-        callback('Origin not allowed', false);
-        return;
-      }
-      callback(null, true);
+      void peerRejection(req.socket).then(decide, (err: unknown) => {
+        logCaught('peerUser', err, 'socket');
+        decide('Peer user not allowed');
+      });
     },
   };
 

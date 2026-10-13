@@ -37,9 +37,20 @@ export default defineConfig({
         'server/index.ts',
       ],
       thresholds: {
-        'server/**/*.ts': {
-          lines: 90,
-        },
+        // Per file, so a low file cannot hide inside the server average.
+        'server/createServer.ts': { lines: 90, perFile: true },
+        'server/security.ts': { lines: 100, perFile: true },
+        'server/stateManager.ts': { lines: 97, perFile: true },
+        'server/peerUser.ts': { lines: 87, perFile: true },
+        'server/openSession.ts': { lines: 89, perFile: true },
+        'server/io/incrementalRead.ts': { lines: 94, perFile: true },
+        'server/utils/parseCodexSession.ts': { lines: 90, perFile: true },
+        'server/utils/parseTranscript.ts': { lines: 97, perFile: true },
+        'server/watchers/claudeWatcher.ts': { lines: 83, perFile: true },
+        'server/watchers/codexWatcher.ts': { lines: 83, perFile: true },
+        'server/watchers/cursorWatcher.ts': { lines: 92, perFile: true },
+        'server/watchers/eventWatcher.ts': { lines: 91, perFile: true },
+        'server/watchers/sessionFiles.ts': { lines: 100, perFile: true },
         'src/**/*.{ts,tsx}': {
           lines: 70,
         },

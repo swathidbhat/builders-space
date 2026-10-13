@@ -1,4 +1,4 @@
-import { readdirSync } from 'fs';
+import { readdir } from 'fs/promises';
 import { join, relative, sep } from 'path';
 import { logCaught } from '../log';
 
@@ -7,28 +7,40 @@ export function isSessionFile(name: string, extensions: readonly string[]): bool
   return extensions.some((ext) => name.endsWith(ext));
 }
 
-/** One directory tree. Callers use this for the first scan and the slow fallback, not for every save. */
-export function collectSessionFiles(
+/**
+ * One directory tree, read off the Node thread.
+ * Callers use this for the first scan and the slow fallback, not for every save.
+ * A wide tree yields so the loop can serve a request during startup.
+ */
+export async function collectSessionFiles(
   root: string,
   extensions: readonly string[],
   label: string,
-): string[] {
+): Promise<string[]> {
   const files: string[] = [];
-  walk(root, extensions, files, label);
+  await walk(root, extensions, files, label, { n: 0 });
   return files;
 }
 
-function walk(dir: string, extensions: readonly string[], files: string[], label: string): void {
+async function walk(
+  dir: string,
+  extensions: readonly string[],
+  files: string[],
+  label: string,
+  progress: { n: number },
+): Promise<void> {
   let entries;
   try {
-    entries = readdirSync(dir, { withFileTypes: true });
+    entries = await readdir(dir, { withFileTypes: true });
   } catch (err) {
     logCaught(label, err, `reading ${dir}`);
     return;
   }
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) walk(fullPath, extensions, files, label);
+    progress.n += 1;
+    if (progress.n % 24 === 0) await new Promise((resolve) => setImmediate(resolve));
+    if (entry.isDirectory()) await walk(fullPath, extensions, files, label, progress);
     else if (isSessionFile(entry.name, extensions)) files.push(fullPath);
   }
 }

@@ -1,6 +1,12 @@
-import { spawnSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { execFile } from 'child_process';
+import { readFile } from 'fs/promises';
 import type { Socket } from 'net';
+import { promisify } from 'util';
+import { logCaught } from './log';
+
+const execFileAsync = promisify(execFile);
+/** One connection's peer uid. A reload burst reuses it instead of rereading /proc. */
+const PEER_TTL_MS = 1000;
 
 export interface ProcEndpoints {
   localAddress?: string;
@@ -15,14 +21,38 @@ export interface ProcEndpoints {
  * Linux reads that uid from `/proc/net/tcp`. Elsewhere we ask `lsof`.
  * If the peer uid cannot be shown, the connection is rejected.
  */
-export function sameUserAsPeer(socket: ProcEndpoints): boolean {
-  const mine = typeof process.getuid === 'function' ? process.getuid() : undefined;
-  if (mine === undefined) return false;
-  return lookupPeerUid(socket) === mine;
+interface CachedUid {
+  uid: number | null;
+  at: number;
 }
 
-export function peerRejection(socket: ProcEndpoints): string | null {
-  return sameUserAsPeer(socket) ? null : 'Peer user not allowed';
+const uidBySocket = new Map<string, CachedUid>();
+/** How many times the proc tables were actually read. Tests use this. */
+export const peerTableReads = { count: 0 };
+
+export function clearPeerUidCache(): void {
+  uidBySocket.clear();
+}
+
+function socketKey(socket: ProcEndpoints): string | null {
+  if (!socket.localAddress || socket.localPort === undefined) return null;
+  if (!socket.remoteAddress || socket.remotePort === undefined) return null;
+  return `${socket.localAddress}:${socket.localPort}|${socket.remoteAddress}:${socket.remotePort}`;
+}
+
+export async function sameUserAsPeer(socket: ProcEndpoints): Promise<boolean> {
+  const mine = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  if (mine === undefined) return false;
+  return (await lookupPeerUid(socket)) === mine;
+}
+
+export async function peerRejection(socket: ProcEndpoints): Promise<string | null> {
+  try {
+    return (await sameUserAsPeer(socket)) ? null : 'Peer user not allowed';
+  } catch (err) {
+    logCaught('peerUser', err, 'lookup');
+    return 'Peer user not allowed';
+  }
 }
 
 export function formatProcAddress(address: string, port: number): string | null {
@@ -91,27 +121,49 @@ export function peerUidFromLsof(output: string, endpoints: ProcEndpoints): numbe
   return conflict ? null : uid;
 }
 
-function lookupPeerUid(socket: ProcEndpoints): number | null {
-  const tables = readProcTables();
-  if (tables !== null) return peerUidFromProcNet(tables, socket);
-  const listed = readLsof();
-  if (listed === null) return null;
-  return peerUidFromLsof(listed, socket);
+async function lookupPeerUid(socket: ProcEndpoints): Promise<number | null> {
+  const key = socketKey(socket);
+  if (key) {
+    const hit = uidBySocket.get(key);
+    if (hit && Date.now() - hit.at < PEER_TTL_MS) return hit.uid;
+  }
+  const tables = await readProcTables();
+  const uid =
+    tables !== null
+      ? peerUidFromProcNet(tables, socket)
+      : peerUidFromLsof(await readLsof(), socket);
+  if (key) uidBySocket.set(key, { uid, at: Date.now() });
+  return uid;
 }
 
-function readProcTables(): string | null {
-  if (!existsSync('/proc/net/tcp')) return null;
-  let text = readFileSync('/proc/net/tcp', 'utf8');
-  if (existsSync('/proc/net/tcp6')) text += `\n${readFileSync('/proc/net/tcp6', 'utf8')}`;
-  return text;
+async function readProcTables(): Promise<string | null> {
+  try {
+    let text = await readFile('/proc/net/tcp', 'utf8');
+    peerTableReads.count += 1;
+    try {
+      text += `\n${await readFile('/proc/net/tcp6', 'utf8')}`;
+    } catch {
+      // tcp6 is optional
+    }
+    return text;
+  } catch {
+    return null;
+  }
 }
 
-function readLsof(): string | null {
-  const result = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:ESTABLISHED', '-F', 'pun'], {
-    encoding: 'utf8',
-  });
-  if (result.status !== 0 || !result.stdout) return null;
-  return result.stdout;
+async function readLsof(): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync(
+      'lsof',
+      ['-nP', '-iTCP', '-sTCP:ESTABLISHED', '-F', 'pun'],
+      {
+        encoding: 'utf8',
+      },
+    );
+    return stdout;
+  } catch {
+    return '';
+  }
 }
 
 function ipv4Proc(ip: string): string | null {
@@ -168,11 +220,11 @@ function expandIpv6(address: string): number[] | null {
 }
 
 /** Express and Vite both call this before a response is written. */
-export function rejectForeignPeer(
+export async function rejectForeignPeer(
   socket: Socket,
   reject: (status: number, body: string) => void,
-): boolean {
-  const error = peerRejection(socket);
+): Promise<boolean> {
+  const error = await peerRejection(socket);
   if (!error) return false;
   reject(403, JSON.stringify({ ok: false, error }));
   return true;

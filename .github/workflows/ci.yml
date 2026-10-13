@@ -16,6 +16,8 @@ jobs:
           node-version: '22.22.2'
           cache: npm
       - run: npm ci
+      - name: Require the nobody user for peer checks
+        run: id nobody && sudo -n -u nobody true
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check

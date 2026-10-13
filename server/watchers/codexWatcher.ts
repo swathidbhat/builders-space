@@ -141,7 +141,7 @@ export class CodexWatcher {
   }
 
   private async scanAll(): Promise<void> {
-    const files = collectSessionFiles(this.sessionsDir, ['.jsonl'], 'CodexWatcher');
+    const files = await collectSessionFiles(this.sessionsDir, ['.jsonl'], 'CodexWatcher');
     const live = new Set(files);
     for (const file of [...this.held.keys()]) {
       if (!live.has(file)) this.held.delete(file);
@@ -164,7 +164,7 @@ export class CodexWatcher {
         continue;
       }
       if (change.event === 'addDir') {
-        for (const file of collectSessionFiles(change.path, ['.jsonl'], 'CodexWatcher')) {
+        for (const file of await collectSessionFiles(change.path, ['.jsonl'], 'CodexWatcher')) {
           await this.ingest(file);
         }
         continue;
@@ -175,7 +175,7 @@ export class CodexWatcher {
   }
 
   private async ingest(file: string): Promise<void> {
-    const meta = parseCodexSessionMeta(file);
+    const meta = await parseCodexSessionMeta(file);
     if (!meta?.cwd || Date.now() - meta.lastActivityMs > MAX_SESSION_AGE_MS) {
       this.held.delete(file);
       return;

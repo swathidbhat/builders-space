@@ -89,6 +89,7 @@ export function BottomDock() {
   const [insets, setInsets] = useState<DockInsets>(REST);
   const [menu, setMenu] = useState<'help' | 'settings' | null>(null);
   const menusRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const apply = () => {
@@ -110,13 +111,29 @@ export function BottomDock() {
     window.addEventListener('resize', apply);
     window.addEventListener('animationend', apply);
     const frame = window.requestAnimationFrame(apply);
+    const dock = dockRef.current;
+    if (dock) observer?.observe(dock);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', apply);
       window.removeEventListener('animationend', apply);
       observer?.disconnect();
     };
-  }, [panelOpen, sidebarOpen]);
+  }, [panelOpen, sidebarOpen, connection]);
+
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock) return;
+    const write = () => {
+      const gap = Math.max(0, Math.ceil(window.innerHeight - dock.getBoundingClientRect().top));
+      document.documentElement.style.setProperty('--dock-bottom', `${gap}px`);
+    };
+    write();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(write);
+    observer.observe(dock);
+    return () => observer.disconnect();
+  }, [insets, connection, menu]);
 
   useEffect(() => {
     if (!menu) return;
@@ -147,7 +164,13 @@ export function BottomDock() {
     setMenu((current) => (current === next ? null : next));
 
   return (
-    <div className={styles.dock} data-bottom-dock="" data-overlay="dock" style={style}>
+    <div
+      ref={dockRef}
+      className={styles.dock}
+      data-bottom-dock=""
+      data-overlay="dock"
+      style={style}
+    >
       {connection === 'stale' && (
         <div className={styles.banner} role="status" data-overlay="disconnect">
           {DISCONNECT_BANNER}

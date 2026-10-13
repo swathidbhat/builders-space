@@ -127,7 +127,9 @@
 .more {
   align-self: flex-start;
   margin-left: 42px;
-  padding: 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
   border: none;
   background: none;
   color: #b9d4ff;

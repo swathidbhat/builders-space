@@ -1,5 +1,6 @@
 import { prettifyName } from '../prettifyName';
 import styles from './ProjectPanel.module.css';
+import { useCompactLayout } from './useCompactLayout';
 
 /** Encoded folders that no longer exist are a single slash-free segment. */
 function pathCaption(path: string): string {
@@ -19,6 +20,7 @@ export function ProjectPanelHeader({
   summary: string;
   onClose: () => void;
 }) {
+  const compact = useCompactLayout();
   return (
     <div className={styles.header}>
       <div className={styles.titles}>
@@ -31,10 +33,10 @@ export function ProjectPanelHeader({
       <button
         type="button"
         className={styles.esc}
-        aria-label="Close project details"
+        aria-label={compact ? 'Back to projects' : 'Close project details'}
         onClick={onClose}
       >
-        ESC
+        {compact ? 'Back' : 'ESC'}
       </button>
     </div>
   );

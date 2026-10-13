@@ -355,7 +355,7 @@ describe('Codex session parser', () => {
       isActive: true,
       turnFinished: false,
     });
-    expect(parseCodexSessionMeta(file)).toMatchObject({
+    expect(await parseCodexSessionMeta(file)).toMatchObject({
       sessionId: 'codex-1',
       cwd: '/tmp/lumen-lab',
     });
@@ -513,7 +513,7 @@ describe('Codex session parser', () => {
     expect((await parseCodexSessionFile(file))?.isActive).toBe(false);
     expect(await parseCodexSessionFile(join(dir, 'missing.jsonl'))).toBeNull();
     write(dir, 'nometa.jsonl', '{}\n');
-    expect(parseCodexSessionMeta(join(dir, 'nometa.jsonl'))).toBeNull();
+    expect(await parseCodexSessionMeta(join(dir, 'nometa.jsonl'))).toBeNull();
     expect(await parseCodexSessionFile(join(dir, 'nometa.jsonl'))).toBeNull();
   });
 
@@ -529,7 +529,7 @@ describe('Codex session parser', () => {
     );
     const stamp = new Date('2020-01-01T00:00:00Z');
     utimesSync(file, stamp, stamp);
-    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-a');
+    expect((await parseCodexSessionMeta(file))?.sessionId).toBe('header-a');
     writeFileSync(
       file,
       JSON.stringify({
@@ -538,15 +538,15 @@ describe('Codex session parser', () => {
       }) + '\n',
     );
     utimesSync(file, stamp, stamp);
-    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-a');
+    expect((await parseCodexSessionMeta(file))?.sessionId).toBe('header-a');
     const changed = new Date('2020-01-01T00:00:02Z');
     utimesSync(file, changed, changed);
-    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-b');
+    expect((await parseCodexSessionMeta(file))?.sessionId).toBe('header-b');
 
     beginCodexParseScan();
     endCodexParseScan();
     expect(codexCacheSize()).toBe(0);
-    expect(parseCodexSessionMeta(file)?.sessionId).toBe('header-b');
+    expect((await parseCodexSessionMeta(file))?.sessionId).toBe('header-b');
   });
 });
 
