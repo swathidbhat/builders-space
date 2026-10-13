@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentCard } from '../AgentCard';
@@ -272,6 +273,14 @@ describe('agent cards', () => {
     );
     expect(screen.queryByText('last activity just now')).toBeNull();
     expect(screen.getByText(`as of 4:52`)).toBeTruthy();
+  });
+
+  it('does not paint a colored bar on the left edge of the card', () => {
+    const card = readFileSync('src/ui/AgentCard.module.css', 'utf8');
+    const sidebar = readFileSync('src/ui/Sidebar.module.css', 'utf8');
+    expect(card).not.toMatch(/border-left/);
+    expect(sidebar).not.toMatch(/border-left/);
+    expect(sidebar).toMatch(/\.selected[\s\S]*background:\s*rgba\(100, 140, 255, 0\.12\)/);
   });
 
   it('does not call the server when the agent has no session', () => {
