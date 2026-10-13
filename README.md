@@ -131,7 +131,7 @@ A **Hooks** tool icon sits in the bottom-right corner of the dashboard. Click **
 
 ## Privacy and security
 
-The dashboard reads session logs that already exist on this machine. It does not upload those logs. Fonts are files in this app, and the page does not request another website when it loads. The only network call to a third party is Human Lingo, and only in the cases below. Report a vulnerability the way [SECURITY.md](SECURITY.md) describes.
+The dashboard reads session logs that already exist on this machine. It does not upload those logs. Titles are set in Fraunces, the interface in Source Sans 3, and paths and commands in IBM Plex Mono. Those are Open Font License files in this app (latin woff2 only), and the page does not request another website when it loads. The only network call to a third party is Human Lingo, and only in the cases below. Report a vulnerability the way [SECURITY.md](SECURITY.md) describes.
 
 ### What is read locally
 

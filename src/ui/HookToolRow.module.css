@@ -45,12 +45,13 @@
   cursor: pointer;
   font-size: 12px;
   padding: 0;
-  font-family: monospace;
+  font-family: var(--font-ui);
 }
 
 .snippet {
   margin-top: 4px;
-  font-size: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
   background: rgba(0, 0, 0, 0.3);
   border-radius: 4px;
