@@ -1,8 +1,34 @@
 # Builders Space
 
-https://github.com/user-attachments/assets/5118a62b-e610-43ef-b556-1169afeac5e7
+An ambient awareness dashboard for multi-agent coding work, rendered as an immersive deep-space scene. Each of your projects appears as a planet. Each coding agent (Claude, Codex, Cursor) working on a project appears as a worker on that planet's surface. Expanding status rings around a planet signal when it needs your attention — red for errors, amber when an agent needs you. Technical jargon is translated into human lingo so you always know what's happening at a glance.
 
-An ambient awareness dashboard for multi-agent coding work, rendered as an immersive deep-space scene. Each of your projects appears as a planet. Each coding agent (Claude, Codex, Cursor) working on a project appears as a worker on that planet's surface. Expanding status rings around a planet signal when it needs your attention — red for errors, amber for waiting. Technical jargon is translated into human lingo so you always know what's happening at a glance.
+## On screen
+
+A wide window keeps the project list on the left. Opening a project adds a side panel on the right. A phone shows one surface at a time: the list, or a bottom sheet for the open project. The header counters read **Needs you** and **Errors**. Type throughout is Figtree.
+
+![Sky of project planets, with the project list and the Needs you and Errors counters](docs/media/hero-1280x800.png)
+
+![Billing Question Backfill open in the side panel, showing the question the waiting agent asked](docs/media/project-open-1280x800.png)
+
+![Phone project list, one surface covering the sky](docs/media/phone-list-390x844.png)
+
+![Phone bottom sheet for an open project, with the waiting question](docs/media/phone-project-390x844.png)
+
+![Hover a planet, click it, and the side panel opens on the question](docs/media/overview.gif)
+
+![On a phone: open the list, open a project, then go back to the list](docs/media/phone.gif)
+
+If the API drops, the planets stay and a banner says the connection is retrying. When the server is back, the sky recovers on its own.
+
+![The sky stays up while the connection drops, then recovers](docs/media/disconnect.gif)
+
+With no sessions in the last 48 hours, the sky is empty and the header says there is nothing yet.
+
+![Empty sky when no agent sessions are on this machine](docs/media/empty-1280x800.png)
+
+![Last sky still visible, with the disconnected banner and a stale last update](docs/media/disconnected-1280x800.png)
+
+`npm run docs:media` records these again from the fixture sessions.
 
 ## Why This Exists
 
@@ -49,14 +75,14 @@ Every visual element in Builders Space maps to something real. Nothing is decora
 
 ### Status system
 
-The same 4-state hierarchy applies everywhere — sidebar dot, planet status rings, planet label. The most urgent status always wins:
+The same 4-state hierarchy applies everywhere — sidebar dot, planet status rings, planet label. On screen those words are Error, Needs you, Working, and Done. The header counts Needs you and Errors. The most urgent status always wins:
 
-| Priority | Status      | Color           | Planet visual                                      | What it means                                                                |
-| -------- | ----------- | --------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1        | **Error**   | Red `#ff4444`   | 3–4 fast red rings expanding outward, flickering   | An agent hit a failure. Go investigate.                                      |
-| 2        | **Waiting** | Amber `#ffaa44` | Single slow amber ring, calm radar pulse           | The agent finished its turn and needs your input.                            |
-| 3        | **Working** | Green `#44ffaa` | No ring — planet at full color and normal rotation | Agents are writing, or a live process has not handed the turn back.          |
-| 4        | **Done**    | Dim `#6688aa`   | No ring — planet dimmed, desaturated, near-still   | Quiet, with no finished turn and no live process. Nothing is asking for you. |
+| Priority | Status        | Color           | Planet visual                                      | What it means                                                                |
+| -------- | ------------- | --------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1        | **Error**     | Red `#ff4444`   | 3–4 fast red rings expanding outward, flickering   | An agent hit a failure. Go investigate.                                      |
+| 2        | **Needs you** | Amber `#ffaa44` | Single slow amber ring, calm radar pulse           | The agent finished its turn and needs your input.                            |
+| 3        | **Working**   | Green `#44ffaa` | No ring — planet at full color and normal rotation | Agents are writing, or a live process has not handed the turn back.          |
+| 4        | **Done**      | Dim `#6688aa`   | No ring — planet dimmed, desaturated, near-still   | Quiet, with no finished turn and no live process. Nothing is asking for you. |
 
 If a project has 3 working agents and 1 error agent, the planet shows red rings — because the error needs your attention regardless of the working agents. The sidebar dot matches.
 
