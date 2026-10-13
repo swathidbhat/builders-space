@@ -12,6 +12,12 @@
         padding: 0;
         box-sizing: border-box;
       }
+      :root {
+        --font-display: 'Figtree', 'Segoe UI', sans-serif;
+        --font-ui: 'Figtree', 'Segoe UI', sans-serif;
+        --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+        --display-weight: 600;
+      }
       html,
       body,
       #root {
@@ -19,13 +25,14 @@
         height: 100%;
         overflow: hidden;
         background: #000;
-        font-family:
-          'Space Grotesk',
-          -apple-system,
-          BlinkMacSystemFont,
-          'Segoe UI',
-          sans-serif;
+        font-family: var(--font-ui);
         color: #e0e0e0;
+        -webkit-font-smoothing: antialiased;
+      }
+      button,
+      input,
+      textarea {
+        font-family: inherit;
       }
       .project-sky {
         position: fixed;

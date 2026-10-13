@@ -7,7 +7,7 @@
   background: rgba(12, 16, 32, 0.94);
   border: 1px solid rgba(120, 160, 255, 0.35);
   color: #d5def2;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.45;
 }

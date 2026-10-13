@@ -15,17 +15,19 @@
   background: rgba(8, 10, 22, 0.88);
   border: 1px solid rgba(140, 170, 255, 0.28);
   color: #c9d4ea;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .title {
   margin: 0 0 8px;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: var(--display-weight);
+  font-synthesis: none;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: #fff;
 }
 
@@ -34,7 +36,7 @@
 }
 
 .card code {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: #9eb6ff;
 }

@@ -21,8 +21,10 @@
 
 .label {
   position: relative;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 14px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
   color: #9ab;
 }
