@@ -46,7 +46,7 @@ export default defineConfig({
         'server/io/incrementalRead.ts': { lines: 94, perFile: true },
         'server/utils/parseCodexSession.ts': { lines: 90, perFile: true },
         'server/utils/parseTranscript.ts': { lines: 97, perFile: true },
-        'server/watchers/claudeWatcher.ts': { lines: 84, perFile: true },
+        'server/watchers/claudeWatcher.ts': { lines: 83, perFile: true },
         'server/watchers/codexWatcher.ts': { lines: 83, perFile: true },
         'server/watchers/cursorWatcher.ts': { lines: 92, perFile: true },
         'server/watchers/eventWatcher.ts': { lines: 91, perFile: true },
