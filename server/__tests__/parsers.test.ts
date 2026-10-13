@@ -35,7 +35,7 @@ function write(dir: string, name: string, body: string): string {
 }
 
 describe('Claude and Cursor transcript parsers', () => {
-  it('reads a Cursor jsonl directory, including cwd and the newest file', () => {
+  it('reads a Cursor jsonl directory, including cwd and the newest file', async () => {
     const dir = tempDir();
     const session = join(dir, 'session');
     mkdirSync(session);
@@ -71,7 +71,7 @@ describe('Claude and Cursor transcript parsers', () => {
     );
     utimesSync(newest, new Date(), new Date());
 
-    const data = parseTranscriptDir(session);
+    const data = await parseTranscriptDir(session);
     expect(data?.userQuery).toBe('fix the login form');
     expect(data?.cwd).toBe('/Users/ada/work/lumen-lab');
     expect(data?.lastAction).toBe('Updated the form.');
@@ -79,7 +79,7 @@ describe('Claude and Cursor transcript parsers', () => {
     expect(data?.isRecentlyActive).toBe(true);
   });
 
-  it('falls back to workspace roots and a Workspace Path line', () => {
+  it('falls back to workspace roots and a Workspace Path line', async () => {
     const dir = tempDir();
     const file = write(
       dir,
@@ -90,7 +90,7 @@ describe('Claude and Cursor transcript parsers', () => {
         message: { content: 'Workspace Path: /srv/other\nplease look' },
       }) + '\n',
     );
-    const withRoot = parseTranscriptDir(dir);
+    const withRoot = await parseTranscriptDir(dir);
     expect(withRoot?.cwd).toBe('/srv/app');
 
     writeFileSync(
@@ -100,36 +100,36 @@ describe('Claude and Cursor transcript parsers', () => {
         message: { content: 'Workspace Path: /srv/other please look' },
       }) + '\n',
     );
-    expect(parseTranscriptDir(dir)?.cwd).toBe('/srv/other');
+    expect((await parseTranscriptDir(dir))?.cwd).toBe('/srv/other');
   });
 
-  it('returns null for empty, missing, and content-less transcripts', () => {
+  it('returns null for empty, missing, and content-less transcripts', async () => {
     const dir = tempDir();
-    expect(parseTranscriptDir(join(dir, 'missing'))).toBeNull();
-    expect(parseTranscriptDir(dir)).toBeNull();
+    expect(await parseTranscriptDir(join(dir, 'missing'))).toBeNull();
+    expect(await parseTranscriptDir(dir)).toBeNull();
     write(dir, 'blank.jsonl', '{}\n');
-    expect(parseTranscriptDir(dir)).toBeNull();
-    expect(parseTranscriptFile(join(dir, 'nope.txt'))).toBeNull();
+    expect(await parseTranscriptDir(dir)).toBeNull();
+    expect(await parseTranscriptFile(join(dir, 'nope.txt'))).toBeNull();
     write(dir, 'notes.txt', 'no query tag here');
-    expect(parseTranscriptFile(join(dir, 'notes.txt'))).toBeNull();
+    expect(await parseTranscriptFile(join(dir, 'notes.txt'))).toBeNull();
   });
 
-  it('parses a Cursor txt export and a long assistant sentence', () => {
+  it('parses a Cursor txt export and a long assistant sentence', async () => {
     const dir = tempDir();
     const txt = write(
       dir,
       'chat.txt',
       '<user_query>\n  rename the sidebar\n</user_query>\nassistant notes',
     );
-    const data = parseTranscriptFile(txt);
+    const data = await parseTranscriptFile(txt);
     expect(data?.userQuery).toBe('rename the sidebar');
     expect(data?.pendingQuestion).toBe('assistant notes');
     expect(data?.turnFinished).toBe(true);
     expect(data?.isRecentlyActive).toBe(true);
-    expect(parseTranscriptFile(txt)?.pendingQuestion).toBe('assistant notes');
+    expect((await parseTranscriptFile(txt))?.pendingQuestion).toBe('assistant notes');
     const asking = write(dir, 'ask.txt', '<user_query>only the user</user_query>\n');
-    expect(parseTranscriptFile(asking)?.turnFinished).toBe(false);
-    expect(parseTranscriptFile(asking)?.pendingQuestion).toBeUndefined();
+    expect((await parseTranscriptFile(asking))?.turnFinished).toBe(false);
+    expect((await parseTranscriptFile(asking))?.pendingQuestion).toBeUndefined();
     const full =
       'The old charge path still has callers in checkout. Should I delete it anyway, or keep it behind a flag?';
     const asked = write(
@@ -137,8 +137,8 @@ describe('Claude and Cursor transcript parsers', () => {
       'asked.txt',
       `<user_query>\n${'migrate the dashboard'}\n</user_query>\n${full}\n`,
     );
-    expect(parseTranscriptFile(asked)?.pendingQuestion).toBe(full);
-    expect(parseTranscriptFile(asked)?.userQuery).toBe('migrate the dashboard');
+    expect((await parseTranscriptFile(asked))?.pendingQuestion).toBe(full);
+    expect((await parseTranscriptFile(asked))?.userQuery).toBe('migrate the dashboard');
     expect(
       txtAssistantReply('\nuser: keep going\nassistant: Should I also backfill existing orders?\n'),
     ).toBe('Should I also backfill existing orders?');
@@ -153,14 +153,14 @@ describe('Claude and Cursor transcript parsers', () => {
         message: { content: longSentence },
       }) + '\n',
     );
-    const parsed = parseTranscriptDir(dir);
+    const parsed = await parseTranscriptDir(dir);
     expect(parsed?.lastAction?.endsWith('...')).toBe(true);
     expect(parsed?.pendingQuestion).toBe(longSentence);
     expect(parsed?.turnFinished).toBe(true);
-    expect(parseTranscriptFile(jsonl)).toBeNull();
+    expect(await parseTranscriptFile(jsonl)).toBeNull();
   });
 
-  it('keeps the whole Claude and Cursor question, then drops it when the user replies', () => {
+  it('keeps the whole Claude and Cursor question, then drops it when the user replies', async () => {
     const dir = tempDir();
     const question =
       'The rename touches 41 components. Should I update them all in this PR, or split it?';
@@ -189,7 +189,7 @@ describe('Claude and Cursor transcript parsers', () => {
         }),
       ].join('\n') + '\n',
     );
-    const asked = parseClaudeSessionFile(claude);
+    const asked = await parseClaudeSessionFile(claude);
     expect(asked?.lastAction).toBe('Read:App.tsx');
     expect(asked?.pendingQuestion).toBe(question);
     expect(asked?.latestTask).toBe('rename the sidebar');
@@ -219,13 +219,13 @@ describe('Claude and Cursor transcript parsers', () => {
         }),
       ].join('\n') + '\n',
     );
-    const answered = parseClaudeSessionFile(claude);
+    const answered = await parseClaudeSessionFile(claude);
     expect(answered?.turnFinished).toBe(false);
     expect(answered?.pendingQuestion).toBeUndefined();
     expect(answered?.latestTask).toBe('split it');
   });
 
-  it('formats Claude tool uses and shortens deep paths', () => {
+  it('formats Claude tool uses and shortens deep paths', async () => {
     expect(shortenPaths('cd /Users/ada/work/app && cat /tmp')).toBe('cd app && cat /tmp');
     expect(shortenPaths('no paths here')).toBe('no paths here');
     expect(shortenPaths('go test ./internal/ratelimit/...')).toBe(
@@ -277,13 +277,13 @@ describe('Claude and Cursor transcript parsers', () => {
           }),
         ].join('\n') + '\n',
       );
-      expect(parseClaudeSessionFile(file)?.lastAction).toBe(expected);
+      expect((await parseClaudeSessionFile(file))?.lastAction).toBe(expected);
     }
 
     expect(formatToolUse('Read')).toBe('Read');
   });
 
-  it('keeps slug, string content, and inactive sessions', () => {
+  it('keeps slug, string content, and inactive sessions', async () => {
     const dir = tempDir();
     const old = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const file = write(
@@ -298,7 +298,7 @@ describe('Claude and Cursor transcript parsers', () => {
         message: { content: 'ship it' },
       }) + '\n',
     );
-    const data = parseClaudeSessionFile(file);
+    const data = await parseClaudeSessionFile(file);
     expect(data).toMatchObject({
       sessionId: 'sess-old',
       cwd: '/tmp/lumen-lab',
@@ -306,14 +306,14 @@ describe('Claude and Cursor transcript parsers', () => {
       latestTask: 'ship it',
       isActive: false,
     });
-    expect(parseClaudeSessionFile(join(dir, 'missing.jsonl'))).toBeNull();
+    expect(await parseClaudeSessionFile(join(dir, 'missing.jsonl'))).toBeNull();
     write(dir, 'noid.jsonl', '{}\n');
-    expect(parseClaudeSessionFile(join(dir, 'noid.jsonl'))).toBeNull();
+    expect(await parseClaudeSessionFile(join(dir, 'noid.jsonl'))).toBeNull();
   });
 });
 
 describe('Codex session parser', () => {
-  it('reads a rollout with tool calls and a thread name', () => {
+  it('reads a rollout with tool calls and a thread name', async () => {
     const dir = tempDir();
     const now = new Date().toISOString();
     const file = write(
@@ -345,7 +345,7 @@ describe('Codex session parser', () => {
       ].join('\n') + '\n',
     );
 
-    const data = parseCodexSessionFile(file);
+    const data = await parseCodexSessionFile(file);
     expect(data).toMatchObject({
       sessionId: 'codex-1',
       cwd: '/tmp/lumen-lab',
@@ -361,7 +361,7 @@ describe('Codex session parser', () => {
     });
   });
 
-  it('treats a Codex assistant message as a finished turn', () => {
+  it('treats a Codex assistant message as a finished turn', async () => {
     const dir = tempDir();
     const now = new Date().toISOString();
     const file = write(
@@ -385,12 +385,12 @@ describe('Codex session parser', () => {
         }),
       ].join('\n') + '\n',
     );
-    const finished = parseCodexSessionFile(file);
+    const finished = await parseCodexSessionFile(file);
     expect(finished?.turnFinished).toBe(true);
     expect(finished?.pendingQuestion).toBe('checking');
   });
 
-  it('keeps a Codex agent_message and hides it again after the user replies', () => {
+  it('keeps a Codex agent_message and hides it again after the user replies', async () => {
     const dir = tempDir();
     const now = new Date().toISOString();
     const question =
@@ -425,7 +425,7 @@ describe('Codex session parser', () => {
         }),
       ].join('\n') + '\n',
     );
-    const asked = parseCodexSessionFile(file);
+    const asked = await parseCodexSessionFile(file);
     expect(asked?.turnFinished).toBe(true);
     expect(asked?.lastAction).toBe('Shell:psql -c "select id from charges"');
     expect(asked?.pendingQuestion).toBe(question);
@@ -451,13 +451,13 @@ describe('Codex session parser', () => {
         }),
       ].join('\n') + '\n',
     );
-    const answered = parseCodexSessionFile(file);
+    const answered = await parseCodexSessionFile(file);
     expect(answered?.turnFinished).toBe(false);
     expect(answered?.pendingQuestion).toBeUndefined();
     expect(answered?.latestTask).toBe('keep the flag');
   });
 
-  it('formats the other Codex tools and survives bad arguments', () => {
+  it('formats the other Codex tools and survives bad arguments', async () => {
     const dir = tempDir();
     const now = new Date().toISOString();
     const cases: Array<[string, string | undefined, string]> = [
@@ -493,11 +493,11 @@ describe('Codex session parser', () => {
           }),
         ].join('\n') + '\n',
       );
-      expect(parseCodexSessionFile(file)?.lastAction).toBe(expected);
+      expect((await parseCodexSessionFile(file))?.lastAction).toBe(expected);
     }
   });
 
-  it('marks an old rollout inactive and rejects files without session meta', () => {
+  it('marks an old rollout inactive and rejects files without session meta', async () => {
     const dir = tempDir();
     const old = new Date(Date.now() - 30 * 60 * 1000);
     const file = write(
@@ -510,14 +510,14 @@ describe('Codex session parser', () => {
       }) + '\n',
     );
     utimesSync(file, old, old);
-    expect(parseCodexSessionFile(file)?.isActive).toBe(false);
-    expect(parseCodexSessionFile(join(dir, 'missing.jsonl'))).toBeNull();
+    expect((await parseCodexSessionFile(file))?.isActive).toBe(false);
+    expect(await parseCodexSessionFile(join(dir, 'missing.jsonl'))).toBeNull();
     write(dir, 'nometa.jsonl', '{}\n');
     expect(parseCodexSessionMeta(join(dir, 'nometa.jsonl'))).toBeNull();
-    expect(parseCodexSessionFile(join(dir, 'nometa.jsonl'))).toBeNull();
+    expect(await parseCodexSessionFile(join(dir, 'nometa.jsonl'))).toBeNull();
   });
 
-  it('keeps a Codex header until mtime changes and drops headers the scan did not see', () => {
+  it('keeps a Codex header until mtime changes and drops headers the scan did not see', async () => {
     const dir = tempDir();
     const file = write(
       dir,
@@ -551,7 +551,7 @@ describe('Codex session parser', () => {
 });
 
 describe('parse caches', () => {
-  it('does not keep the whole txt body and drops files the latest scan skipped', () => {
+  it('does not keep the whole txt body and drops files the latest scan skipped', async () => {
     beginCursorParseScan();
     endCursorParseScan();
     beginClaudeParseScan();
@@ -563,7 +563,7 @@ describe('parse caches', () => {
       'chat.txt',
       `<user_query>rename the sidebar</user_query>\n${'x'.repeat(20_000)}`,
     );
-    expect(parseTranscriptFile(txt)?.userQuery).toBe('rename the sidebar');
+    expect((await parseTranscriptFile(txt))?.userQuery).toBe('rename the sidebar');
     const tail = transcriptTxtTailLength(txt);
     expect(tail).not.toBeNull();
     expect(tail!).toBeLessThanOrEqual(8_192);
@@ -583,7 +583,7 @@ describe('parse caches', () => {
         message: { role: 'user', content: 'hello' },
       }) + '\n',
     );
-    expect(parseClaudeSessionFile(claude)?.sessionId).toBe('sess-cache');
+    expect((await parseClaudeSessionFile(claude))?.sessionId).toBe('sess-cache');
     beginClaudeParseScan();
     endClaudeParseScan();
     expect(transcriptCacheSize()).toBe(0);

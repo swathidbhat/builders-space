@@ -103,33 +103,33 @@ describe('shared status and humanize bounds', () => {
 });
 
 describe('incremental session reads', () => {
-  it('returns new lines on append, nothing when unchanged, and rereads a rewrite', () => {
+  it('returns new lines on append, nothing when unchanged, and rereads a rewrite', async () => {
     const dir = tempDir();
     const file = join(dir, 'session.jsonl');
     writeFileSync(file, 'one\n');
 
-    const first = readIncremental(file);
+    const first = await readIncremental(file);
     expect(first?.mode).toBe('reset');
     if (first?.mode === 'unchanged') return;
     expect(first?.lines).toEqual(['one']);
 
-    const same = readIncremental(file, first?.cursor);
+    const same = await readIncremental(file, first?.cursor);
     expect(same?.mode).toBe('unchanged');
 
     writeFileSync(file, 'two\n', { flag: 'a' });
-    const appended = readIncremental(file, first?.cursor);
+    const appended = await readIncremental(file, first?.cursor);
     expect(appended?.mode).toBe('append');
     if (appended?.mode === 'unchanged') return;
     expect(appended?.lines).toEqual(['two']);
 
     writeFileSync(file, 'replaced\n');
-    const replaced = readIncremental(file, appended?.cursor);
+    const replaced = await readIncremental(file, appended?.cursor);
     expect(replaced?.mode).toBe('reset');
     if (replaced?.mode === 'unchanged') return;
     expect(replaced?.lines).toEqual(['replaced']);
   });
 
-  it('rereads a same-length rewrite that keeps the last 64 bytes', () => {
+  it('rereads a same-length rewrite that keeps the last 64 bytes', async () => {
     const dir = tempDir();
     const file = join(dir, 'same-length.jsonl');
     const tail = `${'T'.repeat(63)}\n`;
@@ -137,7 +137,7 @@ describe('incremental session reads', () => {
     writeFileSync(file, `${'A'.repeat(50)}${tail}`);
     utimesSync(file, stamp, stamp);
 
-    const first = readIncremental(file);
+    const first = await readIncremental(file);
     expect(first?.mode).toBe('reset');
     if (!first || first.mode === 'unchanged') return;
     expect(first.cursor.mtimeMs).toBe(stamp.getTime());
@@ -145,13 +145,13 @@ describe('incremental session reads', () => {
 
     writeFileSync(file, `${'B'.repeat(50)}${tail}`);
     utimesSync(file, stamp, stamp);
-    const rewritten = readIncremental(file, first.cursor);
+    const rewritten = await readIncremental(file, first.cursor);
     expect(rewritten?.mode).toBe('reset');
     if (!rewritten || rewritten.mode === 'unchanged') return;
     expect(rewritten.lines).toEqual([`${'B'.repeat(50)}${'T'.repeat(63)}`]);
   });
 
-  it('rereads a same-length rewrite past the first 4KB that keeps the tail', () => {
+  it('treats a large file with the same size, mtime, and inode as unchanged', async () => {
     const dir = tempDir();
     const file = join(dir, 'middle.jsonl');
     const head = `${'H'.repeat(4096)}\n`;
@@ -161,31 +161,37 @@ describe('incremental session reads', () => {
     writeFileSync(file, `${head}${middle}${tail}`);
     utimesSync(file, stamp, stamp);
 
-    const first = readIncremental(file);
+    const first = await readIncremental(file);
     expect(first?.mode).toBe('reset');
     if (!first || first.mode === 'unchanged') return;
     expect(first.cursor.mtimeMs).toBe(stamp.getTime());
+    expect(first.cursor.ino).toBeGreaterThan(0);
 
     writeFileSync(file, `${head}${'B'.repeat(40)}\n${tail}`);
     utimesSync(file, stamp, stamp);
-    const rewritten = readIncremental(file, first.cursor);
+    const sameStat = await readIncremental(file, first.cursor);
+    expect(sameStat?.mode).toBe('unchanged');
+
+    const later = new Date('2020-01-01T00:00:01.000Z');
+    utimesSync(file, later, later);
+    const rewritten = await readIncremental(file, first.cursor);
     expect(rewritten?.mode).toBe('reset');
     if (!rewritten || rewritten.mode === 'unchanged') return;
     expect(rewritten.lines.some((line) => line.startsWith('B'))).toBe(true);
   });
 
-  it('keeps a partial line until the newline arrives', () => {
+  it('keeps a partial line until the newline arrives', async () => {
     const dir = tempDir();
     const file = join(dir, 'partial.jsonl');
     writeFileSync(file, '{"a":');
-    const first = readIncremental(file);
+    const first = await readIncremental(file);
     expect(first?.mode).toBe('reset');
     if (!first || first.mode === 'unchanged') return;
     expect(first.lines).toEqual([]);
     expect(first.cursor.remainder).toBe('{"a":');
 
     writeFileSync(file, '1}\n', { flag: 'a' });
-    const next = readIncremental(file, first.cursor);
+    const next = await readIncremental(file, first.cursor);
     expect(next?.mode).toBe('append');
     if (!next || next.mode === 'unchanged') return;
     expect(next.lines).toEqual(['{"a":1}']);

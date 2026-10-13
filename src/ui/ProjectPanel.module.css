@@ -188,11 +188,28 @@
     left: 0;
     width: auto;
     height: auto;
-    max-height: calc(100vh - 400px);
+    max-height: min(72vh, 640px, calc(100vh - 400px));
     border-left: none;
     border-top: 1px solid rgba(100, 140, 255, 0.2);
     border-radius: 16px 16px 0 0;
     animation-name: sheetIn;
+  }
+
+  .agents {
+    order: 1;
+  }
+
+  .surface {
+    order: 2;
+    max-height: 132px;
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+
+  .surface canvas {
+    max-height: 132px;
+    width: auto;
+    margin: 0 auto;
   }
 
   .panel.besideList {

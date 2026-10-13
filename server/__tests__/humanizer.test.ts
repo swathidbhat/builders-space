@@ -84,6 +84,7 @@ describe('humanize input limits', () => {
         'WebFetch:https://example.com/a-very-long-page-name',
         'Task:subtask',
         'TodoWrite:list',
+        'apply_patch',
         'Nope:something',
         '<tag>   </tag>',
         'plain sentence without a tool prefix',
@@ -99,7 +100,9 @@ describe('humanize input limits', () => {
       expect(result.texts['WebFetch:https://example.com/a-very-long-page-name']).toMatch(
         /^Fetching a page /,
       );
-      expect(result.texts['Nope:something']).toBe('Unclear activity');
+      expect(result.texts['Nope:something']).toBe('Using Nope: something');
+      expect(result.texts['TodoWrite:list']).toBe('Planning tasks list');
+      expect(result.texts['apply_patch']).toBe('Applying a patch');
       expect(result.texts['<tag>   </tag>']).toBe('Unclear activity');
       expect(result.texts['plain sentence without a tool prefix']).toBe(
         'plain sentence without a tool prefix',
@@ -120,7 +123,9 @@ describe('humanize input limits', () => {
       expect(visibleActivity('TypeError: broken', 'Unclear activity', true)).toBe(
         'TypeError: broken',
       );
-      expect(visibleActivity('Nope:something', 'Unclear activity', true)).toBe('Unclear activity');
+      expect(visibleActivity('Nope:something', 'Unclear activity', true)).toBe(
+        'Using Nope: something',
+      );
       expect(visibleActivity('Nope:something', undefined, true)).toBe('Nope:something');
     } finally {
       if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;

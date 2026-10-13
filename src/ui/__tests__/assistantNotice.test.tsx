@@ -46,18 +46,18 @@ describe('assistant key notice', () => {
       })),
     );
     const view = render(<AssistantNotice />);
-    expect(await screen.findByText(/No Anthropic API key is set/)).toBeTruthy();
-    expect(screen.getByText(/example value/)).toBeTruthy();
+    expect(await screen.findByText(/Add an Anthropic key/)).toBeTruthy();
+    expect(screen.getByText(/original text/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(screen.queryByText(/No Anthropic API key is set/)).toBeNull();
+    expect(screen.queryByText(/Add an Anthropic key/)).toBeNull();
     expect(localStorage.getItem('builders-space:assistant-notice')).toBe('missing');
 
     view.rerender(<AssistantNotice />);
-    expect(screen.queryByText(/No Anthropic API key is set/)).toBeNull();
+    expect(screen.queryByText(/Add an Anthropic key/)).toBeNull();
 
     useSpaceStore.setState({ assistantRejected: true });
     view.rerender(<AssistantNotice />);
-    expect(await screen.findByText(/rejected the API key \(401\)/)).toBeTruthy();
+    expect(await screen.findByText(/key was rejected/)).toBeTruthy();
     vi.unstubAllGlobals();
   });
 

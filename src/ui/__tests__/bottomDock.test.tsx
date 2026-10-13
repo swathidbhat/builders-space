@@ -59,16 +59,16 @@ describe('bottom dock', () => {
       })),
     );
     render(<BottomDock />);
-    expect(screen.queryByText(/No Anthropic API key/)).toBeNull();
+    expect(screen.queryByText(/Add an Anthropic key/)).toBeNull();
     const settings = await screen.findByRole('button', { name: 'Settings, needs attention' });
     expect(settings.getAttribute('data-attention')).toBe('true');
     fireEvent.click(settings);
-    expect(await screen.findByText(/No Anthropic API key is set/)).toBeTruthy();
+    expect(await screen.findByText(/Add an Anthropic key/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Status help' }));
     expect(screen.getByRole('complementary', { name: 'Status legend' }).textContent).toMatch(
       /Rings pulse/,
     );
-    expect(screen.queryByText(/No Anthropic API key/)).toBeNull();
+    expect(screen.queryByText(/Add an Anthropic key/)).toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('complementary', { name: 'Status legend' })).toBeNull();
   });

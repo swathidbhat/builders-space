@@ -117,7 +117,7 @@ function activity(lastActivityMs: number): { isRecentlyActive: boolean; lastActi
   };
 }
 
-export function parseTranscriptDir(dirPath: string): TranscriptData | null {
+export async function parseTranscriptDir(dirPath: string): Promise<TranscriptData | null> {
   try {
     const files = readdirSync(dirPath).filter((f) => f.endsWith('.jsonl'));
     if (files.length === 0) return null;
@@ -170,9 +170,9 @@ function applyCursorLine(fold: CursorFold, line: string): void {
   }
 }
 
-function parseTranscriptJsonl(filePath: string): TranscriptData | null {
+async function parseTranscriptJsonl(filePath: string): Promise<TranscriptData | null> {
   cursorScan?.add(filePath);
-  const fold = foldAppendOnly(
+  const fold = await foldAppendOnly(
     filePath,
     cursorFolds,
     (): CursorFold => ({ userQuery: '' }),
@@ -195,10 +195,10 @@ function cwdFromText(text: string): string | undefined {
   return match?.[1];
 }
 
-export function parseTranscriptFile(filePath: string): TranscriptData | null {
+export async function parseTranscriptFile(filePath: string): Promise<TranscriptData | null> {
   cursorScan?.add(filePath);
   const cached = txtFolds.get(filePath);
-  const read = readIncremental(filePath, cached?.cursor);
+  const read = await readIncremental(filePath, cached?.cursor);
   if (!read) {
     txtFolds.delete(filePath);
     return null;
@@ -337,9 +337,9 @@ function claudeAssistantAction(content: string | unknown[]): string | undefined 
   return undefined;
 }
 
-export function parseClaudeSessionFile(filePath: string): ClaudeSessionData | null {
+export async function parseClaudeSessionFile(filePath: string): Promise<ClaudeSessionData | null> {
   claudeScan?.add(filePath);
-  const fold = foldAppendOnly(
+  const fold = await foldAppendOnly(
     filePath,
     claudeFolds,
     (): ClaudeFold => ({

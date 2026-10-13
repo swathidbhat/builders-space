@@ -9,9 +9,9 @@ type NoticeKind = 'missing' | 'rejected';
 
 const COPY: Record<NoticeKind, string> = {
   missing:
-    'Human Lingo stays on Raw. No Anthropic API key is set. The example value in .env.example is not a key — add a real one to .env if you want shorter labels.',
+    'Shorter labels are optional. Add an Anthropic key in .env if you want them. Without one, you still see the original text.',
   rejected:
-    'Anthropic rejected the API key (401). Human Lingo stays on Raw until the key in .env is updated.',
+    'The Anthropic key was rejected, so labels stay as written. Update the key in .env to try shorter labels again.',
 };
 
 function readDismissed(): NoticeKind | null {

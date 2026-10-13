@@ -294,7 +294,7 @@ describe('status display', () => {
         projects: [],
       });
       render(<HUD />);
-      expect(screen.getByText('Looking for sessions…')).toBeTruthy();
+      expect(screen.getByText('Loading the sky…')).toBeTruthy();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(8_000);
       });

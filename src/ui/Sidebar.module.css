@@ -94,7 +94,6 @@
   padding: 7px 14px;
   background: transparent;
   border: none;
-  border-left: 2px solid transparent;
   text-align: left;
   font-family: 'Space Grotesk', sans-serif;
   transition: background 0.15s;
@@ -131,7 +130,6 @@
 .selected,
 .selected:hover {
   background: rgba(100, 140, 255, 0.12);
-  border-left-color: rgba(100, 140, 255, 0.5);
 }
 
 .dot {

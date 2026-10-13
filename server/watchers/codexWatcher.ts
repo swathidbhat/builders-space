@@ -1,4 +1,4 @@
-import { readdirSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import {
@@ -8,7 +8,15 @@ import {
   parseCodexSessionMeta,
 } from '../utils/parseCodexSession';
 import { logCaught } from '../log';
-import { watchJsonlTree, type JsonlWatch, FALLBACK_SCAN_MS, MISSING_DIR_RETRY_MS } from './fsWatch';
+import { projectKey } from '../projectKey';
+import {
+  watchJsonlTree,
+  type FsChange,
+  type JsonlWatch,
+  FALLBACK_SCAN_MS,
+  MISSING_DIR_RETRY_MS,
+} from './fsWatch';
+import { collectSessionFiles } from './sessionFiles';
 import { CwdCache } from '../process/cwdCache';
 import { foldAppendOnly, type FoldCache } from '../io/incrementalRead';
 import { parseIndexLine } from '../schema/sessionLog';
@@ -41,6 +49,8 @@ export class CodexWatcher {
   private missingDirRetryMs: number;
   private processes: CwdCache;
   private indexCache = new Map<string, FoldCache<Map<string, string>>>();
+  private held = new Map<string, { cwd: string; turnFinished: boolean; agent: AgentInfo }>();
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(onChange: CodexWatcherCallback, options: CodexWatcherOptions = {}) {
     const codexBase = join(homedir(), '.codex');
@@ -49,7 +59,9 @@ export class CodexWatcher {
     this.onChange = onChange;
     this.fallbackScanMs = options.fallbackScanMs ?? FALLBACK_SCAN_MS;
     this.missingDirRetryMs = options.missingDirRetryMs ?? MISSING_DIR_RETRY_MS;
-    this.processes = new CwdCache('codex', () => this.scan());
+    this.processes = new CwdCache('codex', () => {
+      this.enqueue(() => this.publish());
+    });
   }
 
   start(): void {
@@ -70,7 +82,9 @@ export class CodexWatcher {
   }
 
   whenWatching(): Promise<void> {
-    return this.jsonlWatch?.ready ?? Promise.resolve();
+    return Promise.all([this.queue, this.jsonlWatch?.ready ?? Promise.resolve()]).then(
+      () => undefined,
+    );
   }
 
   stop(): void {
@@ -84,21 +98,33 @@ export class CodexWatcher {
   }
 
   private arm(): void {
-    this.scan();
+    this.enqueue(() => this.scanAll());
     this.processes.start();
     try {
-      this.jsonlWatch = watchJsonlTree(this.sessionsDir, () => this.scan(), 'CodexWatcher');
+      this.jsonlWatch = watchJsonlTree(
+        this.sessionsDir,
+        (changes) => {
+          this.enqueue(() => this.scanChanges(changes));
+        },
+        'CodexWatcher',
+      );
     } catch (err) {
       logCaught('CodexWatcher', err, 'starting file watch');
     }
-    this.scanInterval = setInterval(() => this.scan(), this.fallbackScanMs);
+    this.scanInterval = setInterval(() => {
+      this.enqueue(() => this.scanAll());
+    }, this.fallbackScanMs);
     this.scanInterval.unref?.();
     console.log(`[CodexWatcher] Watching ${this.sessionsDir}`);
   }
 
-  private getThreadNames(): Map<string, string> {
+  private enqueue(job: () => Promise<void>): void {
+    this.queue = this.queue.then(job).catch((err) => logCaught('CodexWatcher', err, 'scan'));
+  }
+
+  private async getThreadNames(): Promise<Map<string, string>> {
     if (!existsSync(this.indexFile)) return new Map();
-    const names = foldAppendOnly(
+    const names = await foldAppendOnly(
       this.indexFile,
       this.indexCache,
       () => new Map<string, string>(),
@@ -114,126 +140,97 @@ export class CodexWatcher {
     return names ?? new Map();
   }
 
-  private collectSessionFiles(): string[] {
-    const files: string[] = [];
-    try {
-      this.walkDir(this.sessionsDir, files);
-    } catch (err) {
-      logCaught('CodexWatcher', err, `walking ${this.sessionsDir}`);
+  private async scanAll(): Promise<void> {
+    const files = collectSessionFiles(this.sessionsDir, ['.jsonl'], 'CodexWatcher');
+    const live = new Set(files);
+    for (const file of [...this.held.keys()]) {
+      if (!live.has(file)) this.held.delete(file);
     }
-    return files;
-  }
-
-  private walkDir(dir: string, results: string[]): void {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch (err) {
-      logCaught('CodexWatcher', err, `reading ${dir}`);
-      return;
-    }
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        this.walkDir(fullPath, results);
-      } else if (entry.name.endsWith('.jsonl')) {
-        results.push(fullPath);
-      }
-    }
-  }
-
-  private scan(): void {
-    this.projects.clear();
-
-    const sessionFiles = this.collectSessionFiles();
     beginCodexParseScan();
     try {
-      if (sessionFiles.length === 0) {
-        this.onChange(new Map());
-        return;
-      }
-      this.scanSessions(sessionFiles);
+      for (const file of files) await this.ingest(file);
     } finally {
       endCodexParseScan();
     }
+    await this.publish();
   }
 
-  private scanSessions(sessionFiles: string[]): void {
-    const threadNames = this.getThreadNames();
-    const runningCwds = this.processes.current();
-
-    const projectSessions = new Map<
-      string,
-      Array<{
-        file: string;
-        sessionId: string;
-        lastActivityMs: number;
-      }>
-    >();
-
-    for (const file of sessionFiles) {
-      const meta = parseCodexSessionMeta(file);
-      if (!meta || !meta.cwd) continue;
-
-      const codexAgeMs = Date.now() - meta.lastActivityMs;
-      if (codexAgeMs > MAX_SESSION_AGE_MS) continue;
-
-      const cwd = stripSlash(meta.cwd);
-      if (!projectSessions.has(cwd)) {
-        projectSessions.set(cwd, []);
+  private async scanChanges(changes: FsChange[]): Promise<void> {
+    for (const change of changes) {
+      if (change.event === 'unlink' || change.event === 'unlinkDir') {
+        for (const file of [...this.held.keys()]) {
+          if (file === change.path || file.startsWith(`${change.path}/`)) this.held.delete(file);
+        }
+        continue;
       }
-      projectSessions.get(cwd)!.push({
-        file,
-        sessionId: meta.sessionId,
-        lastActivityMs: meta.lastActivityMs,
-      });
+      if (change.event === 'addDir') {
+        for (const file of collectSessionFiles(change.path, ['.jsonl'], 'CodexWatcher')) {
+          await this.ingest(file);
+        }
+        continue;
+      }
+      if (change.path.endsWith('.jsonl')) await this.ingest(change.path);
     }
+    await this.publish();
+  }
 
-    for (const [cwd, sessions] of projectSessions) {
-      const agents: AgentInfo[] = [];
+  private async ingest(file: string): Promise<void> {
+    const meta = parseCodexSessionMeta(file);
+    if (!meta?.cwd || Date.now() - meta.lastActivityMs > MAX_SESSION_AGE_MS) {
+      this.held.delete(file);
+      return;
+    }
+    const data = await parseCodexSessionFile(file);
+    if (!data) {
+      this.held.delete(file);
+      return;
+    }
+    const cwd = stripSlash(meta.cwd);
+    this.held.set(file, {
+      cwd,
+      turnFinished: data.turnFinished,
+      agent: {
+        id: `codex-${data.sessionId}`,
+        source: 'codex',
+        sessionId: data.sessionId,
+        status: 'working',
+        statusSource: 'inferred',
+        currentTask: data.latestTask,
+        lastAction: data.lastAction,
+        pendingQuestion: data.pendingQuestion,
+        lastActivityMs: data.lastActivityMs,
+        sessionMeta: { projectPath: cwd, sessionId: data.sessionId, cwd },
+      },
+    });
+  }
 
-      for (const session of sessions) {
-        const data = parseCodexSessionFile(session.file);
-        if (!data) continue;
+  private async publish(): Promise<void> {
+    const threadNames = await this.getThreadNames();
+    const runningCwds = this.processes.current();
+    this.projects.clear();
 
-        const status = inferSessionStatus({
-          lastActivityMs: data.lastActivityMs,
-          processRunning: runningCwds.has(stripSlash(cwd)),
-          turnFinished: data.turnFinished,
-        });
-
-        const threadName = threadNames.get(data.sessionId);
-
-        agents.push({
-          id: `codex-${data.sessionId}`,
-          source: 'codex',
-          sessionId: data.sessionId,
-          status,
-          statusSource: 'inferred',
-          currentTask: data.latestTask,
-          lastAction: data.lastAction,
-          pendingQuestion: data.pendingQuestion,
-          lastActivityMs: data.lastActivityMs,
-          title: threadName,
-          sessionMeta: {
-            projectPath: cwd,
-            sessionId: data.sessionId,
-            cwd,
-          },
-        });
+    for (const held of this.held.values()) {
+      const agent: AgentInfo = {
+        ...held.agent,
+        title: threadNames.get(held.agent.sessionId),
+        status: inferSessionStatus({
+          lastActivityMs: held.agent.lastActivityMs ?? 0,
+          processRunning: runningCwds.has(held.cwd),
+          turnFinished: held.turnFinished,
+        }),
+      };
+      const key = projectKey(held.cwd);
+      const existing = this.projects.get(key);
+      if (existing) {
+        existing.agents.push(agent);
+        continue;
       }
-
-      if (agents.length === 0) continue;
-
-      const projectName = basename(cwd);
-      const normalizedKey = cwd.toLowerCase().replace(/\/+$/, '');
-
-      this.projects.set(normalizedKey, {
-        id: `codex-${normalizedKey}`,
-        name: projectName,
-        path: cwd,
+      this.projects.set(key, {
+        id: `codex-${key}`,
+        name: basename(held.cwd),
+        path: held.cwd,
         fileCount: 0,
-        agents,
+        agents: [agent],
       });
     }
 

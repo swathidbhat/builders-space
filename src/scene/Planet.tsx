@@ -27,7 +27,7 @@ export function advancePlanetMesh(
   hovered: boolean,
 ): void {
   mesh.rotation.y += delta * (idle ? 0.006 : 0.06);
-  const next = MathUtils.lerp(mesh.scale.x, hovered ? 1.04 : 1, motionAlpha(delta, 8));
+  const next = MathUtils.lerp(mesh.scale.x, hovered ? 1.12 : 1, motionAlpha(delta, 8));
   mesh.scale.setScalar(next);
 }
 
@@ -87,7 +87,7 @@ function PlanetMesh({ project, position }: PlanetProps) {
     const hovered = useSpaceStore.getState().hoveredPlanetId === project.id;
     const targetDim = planetState === 'idle' ? 1 : -1;
     const targetHover = hovered ? 1 : 0;
-    const targetScale = hovered ? 1.04 : 1;
+    const targetScale = hovered ? 1.12 : 1;
 
     if (pageHidden() || prefersReducedMotion()) {
       material.uniforms.uDim.value = targetDim;

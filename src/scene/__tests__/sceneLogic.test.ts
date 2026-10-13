@@ -137,6 +137,7 @@ describe('prettifyName', () => {
     expect(prettifyName('checkout-service')).toBe('Checkout Service');
     expect(prettifyName('ml-pipeline')).toBe('ML Pipeline');
     expect(prettifyName('api-gateway')).toBe('API Gateway');
+    expect(prettifyName('data-warehouse-etl')).toBe('Data Warehouse ETL');
   });
 });
 
@@ -360,6 +361,28 @@ describe('label placement', () => {
     expect(placed[0].hidden).toBe(false);
     expect(placed[0].y + 20).toBeLessThanOrEqual(700);
     expect(placed[0].x - 90).toBeGreaterThanOrEqual(248);
+  });
+
+  it('hides off-screen labels instead of stacking them when a planet is open', () => {
+    const viewport = { width: 800, height: 900 };
+    const placed = resolveLabelCollisions(
+      [
+        { id: 'open', x: 400, y: 280, width: 160, height: 40, priority: 2 },
+        { id: 'behind-a', x: -700, y: -40, width: 180, height: 40, priority: 0 },
+        { id: 'behind-b', x: -400, y: -20, width: 180, height: 40, priority: 1 },
+        { id: 'behind-c', x: 900, y: -80, width: 160, height: 36, priority: 0 },
+      ],
+      chromeForbidden(800, 900, { sidebarOpen: false, panelOpen: true }),
+      viewport,
+      { hideOffscreen: true },
+    );
+    const byId = Object.fromEntries(placed.map((spot) => [spot.id, spot]));
+    expect(byId.open.hidden).toBe(false);
+    expect(byId['behind-a'].hidden).toBe(true);
+    expect(byId['behind-b'].hidden).toBe(true);
+    expect(byId['behind-c'].hidden).toBe(true);
+    const visible = placed.filter((spot) => !spot.hidden);
+    expect(visible).toHaveLength(1);
   });
 
   it('slides a label out of the sidebar and the detail panel', () => {

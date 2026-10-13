@@ -191,6 +191,92 @@ describe('live session file updates', () => {
     expect(existsSync(join(project, '.codex', 'hooks.json'))).toBe(false);
   });
 
+  it('keeps CaseApp and caseapp apart and merges sessions that share a path', async () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bs-codex-case-'));
+    const rolloutDir = join(sessionsDir, '2026', '10', '11');
+    mkdirSync(rolloutDir, { recursive: true });
+    function rollout(id: string, cwd: string): string {
+      return (
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          type: 'session_meta',
+          payload: { id, cwd },
+        }) + '\n'
+      );
+    }
+    writeFileSync(join(rolloutDir, 'a.jsonl'), rollout('a', '/tmp/CaseApp'));
+    writeFileSync(join(rolloutDir, 'b.jsonl'), rollout('b', '/tmp/caseapp'));
+
+    const seen: Map<string, ProjectInfo>[] = [];
+    const watcher = new CodexWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      { sessionsDir, indexFile: join(sessionsDir, 'missing-index.jsonl'), fallbackScanMs: 60_000 },
+    );
+    watchers.push(watcher);
+    watcher.start();
+    await watcher.whenWatching();
+    await waitFor(() => (seen.at(-1)?.size ?? 0) >= 2);
+    const paths = [...seen.at(-1)!.values()].map((project) => project.path).sort();
+    expect(paths).toEqual(['/tmp/CaseApp', '/tmp/caseapp']);
+
+    writeFileSync(join(rolloutDir, 'c.jsonl'), rollout('c', '/tmp/CaseApp'));
+    await waitFor(() =>
+      [...seen.at(-1)!.values()].some(
+        (project) =>
+          project.path === '/tmp/CaseApp' &&
+          project.agents
+            .map((agent) => agent.sessionId)
+            .sort()
+            .join() === 'a,c',
+      ),
+    );
+    expect([...seen.at(-1)!.values()]).toHaveLength(2);
+  });
+
+  it('does not reread every Claude project when one session file changes', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'bs-claude-delta-'));
+    const first = join(base, '-tmp-CaseApp');
+    const second = join(base, '-tmp-caseapp');
+    mkdirSync(first);
+    mkdirSync(second);
+    const line = (id: string, cwd: string) =>
+      JSON.stringify({
+        type: 'user',
+        sessionId: id,
+        cwd,
+        timestamp: new Date().toISOString(),
+        message: { role: 'user', content: 'keep the case' },
+      }) + '\n';
+    writeFileSync(join(first, 'a.jsonl'), line('a', '/tmp/CaseApp'));
+    writeFileSync(join(second, 'b.jsonl'), line('b', '/tmp/caseapp'));
+
+    const seen: Map<string, ProjectInfo>[] = [];
+    const watcher = new ClaudeWatcher(
+      (projects) => {
+        seen.push(projects);
+      },
+      { base, fallbackScanMs: 60_000 },
+    );
+    watchers.push(watcher);
+    watcher.start();
+    await watcher.whenWatching();
+    await waitFor(() => (seen.at(-1)?.size ?? 0) === 2);
+
+    const walkedBefore = watcher.walked.length;
+    writeFileSync(join(first, 'c.jsonl'), line('c', '/tmp/CaseApp'));
+    await waitFor(() =>
+      [...seen.at(-1)!.values()].some((project) =>
+        project.agents.some((agent) => agent.sessionId === 'c'),
+      ),
+    );
+    const walked = watcher.walked.slice(walkedBefore);
+    expect(walked).not.toContain(base);
+    expect(walked).not.toContain(second);
+    expect(walked).toContain(first);
+  });
+
   it('Cursor starts watching after the projects directory appears', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bs-cursor-late-'));
     const base = join(root, 'projects');
@@ -230,13 +316,14 @@ describe('live session file updates', () => {
     expect([...seen.at(-1)!.values()][0].path).toBe('/Users/alice/code/app');
   });
 
-  it('logs a readable error when the Claude projects path is not a directory', () => {
+  it('logs a readable error when the Claude projects path is not a directory', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'bs-claude-file-')), 'not-a-dir');
     writeFileSync(file, 'nope');
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const watcher = new ClaudeWatcher(() => {}, { base: file });
     watchers.push(watcher);
     watcher.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(spy.mock.calls.some((call) => String(call[0]).includes('[ClaudeWatcher]'))).toBe(true);
   });
 

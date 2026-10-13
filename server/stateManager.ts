@@ -3,6 +3,7 @@ import type { SpaceData, ProjectInfo, AgentSource, AgentStatus, AgentInfo } from
 import { HOOK_ACTIVE_TTL_MS, HOOK_TERMINAL_TTL_MS } from '../shared/config';
 import { hookEntryExpired, loadHookRuntime, saveHookRuntime } from './hookRuntimeStore';
 import { logCaught } from './log';
+import { projectKey } from './projectKey';
 
 export { HOOK_ACTIVE_TTL_MS, HOOK_TERMINAL_TTL_MS };
 
@@ -212,14 +213,10 @@ export class StateManager extends EventEmitter {
     const sameSource = siblings.filter((candidate) => candidate.source === agent.source);
     if (sameSource.length !== 1) return undefined;
 
-    const normalizedPath = projectPath.toLowerCase().replace(/\/+$/, '');
+    const normalizedPath = projectKey(projectPath);
     for (const entry of this.hookRuntimeByKey.values()) {
       if (entry.sessionId) continue;
-      if (
-        entry.source === agent.source &&
-        entry.cwd &&
-        entry.cwd.toLowerCase().replace(/\/+$/, '') === normalizedPath
-      ) {
+      if (entry.source === agent.source && entry.cwd && projectKey(entry.cwd) === normalizedPath) {
         return entry;
       }
     }
@@ -228,7 +225,7 @@ export class StateManager extends EventEmitter {
   }
 
   private normalizeKey(path: string): string {
-    return path.toLowerCase().replace(/\/+$/, '');
+    return projectKey(path);
   }
 
   private persistRuntime(): void {

@@ -274,10 +274,15 @@ function nearestClear(
  * Other labels keep a nearby clear spot, and hide when the sky is too crowded
  * for that — they do not stack into a column over the HUD.
  */
+function farOffscreen(box: ScreenBox, viewport: { width: number; height: number }): boolean {
+  return box.x < -8 || box.y < -8 || box.x > viewport.width + 8 || box.y > viewport.height + 8;
+}
+
 export function resolveLabelCollisions(
   boxes: ScreenBox[],
   forbidden: ScreenRect[],
   viewport: { width: number; height: number },
+  options?: { hideOffscreen?: boolean },
 ): SettledLabel[] {
   const ordered = [...boxes].sort((a, b) => a.priority - b.priority || a.y - b.y || a.x - b.x);
   const placed: ScreenBox[] = [];
@@ -285,6 +290,10 @@ export function resolveLabelCollisions(
   const nudges = [0, 18, -18, 36, -36];
 
   for (const box of ordered) {
+    if (options?.hideOffscreen && farOffscreen(box, viewport)) {
+      settled.push({ id: box.id, x: box.x, y: box.y, hidden: true });
+      continue;
+    }
     const attention = box.priority <= 2;
     if (attention) {
       const spot = nearestClear(box, forbidden, placed, viewport);

@@ -11,7 +11,7 @@ import {
   markAnthropicKeyRejected,
   usableAnthropicKey,
 } from '../anthropicKey';
-import { shouldPassThrough, UNCLEAR_ACTIVITY } from '../../shared/humanize';
+import { plainActivity, UNCLEAR_ACTIVITY } from '../../shared/humanize';
 
 export { HUMANIZE_MAX_ITEMS, HUMANIZE_MAX_TEXT_CHARS, UNCLEAR_ACTIVITY };
 
@@ -187,50 +187,8 @@ Rules:
   }
 }
 
-const TOOL_VERBS: Record<string, string> = {
-  Write: 'Writing',
-  Read: 'Reading',
-  Edit: 'Editing',
-  Shell: 'Running',
-  Bash: 'Running',
-  Search: 'Searching',
-  Grep: 'Searching',
-  Glob: 'Finding files',
-  WebSearch: 'Researching',
-  WebFetch: 'Fetching a page',
-  Task: 'Delegating work',
-  TodoWrite: 'Planning tasks',
-};
-
-function shortDetail(detail: string): string {
-  const keep =
-    detail.includes('...') ||
-    /^(?:\.\/|\/|go |npm |pnpm |yarn |node |pytest |cargo |make )/.test(detail);
-  const limit = keep ? 80 : 25;
-  if (detail.length <= limit) return detail;
-  return detail.slice(0, limit - 3).replace(/\s+\S*$/, '') + '...';
-}
-
 function simpleFallback(raw: string): string {
-  const stripped = raw
-    .trim()
-    .replace(/<[^>]+>/g, '')
-    .trim();
-  if (!stripped) return UNCLEAR_ACTIVITY;
-
-  const colonIdx = stripped.indexOf(':');
-  if (colonIdx > 0 && colonIdx < 20 && /^[A-Za-z][A-Za-z0-9]*$/.test(stripped.slice(0, colonIdx))) {
-    const tool = stripped.slice(0, colonIdx);
-    const detail = stripped.slice(colonIdx + 1).trim();
-    const verb = TOOL_VERBS[tool];
-    if (verb) {
-      if (!detail || detail === 'subtask') return verb;
-      return `${verb} ${shortDetail(detail)}`;
-    }
-  }
-
-  if (shouldPassThrough(stripped)) return stripped;
-  return UNCLEAR_ACTIVITY;
+  return plainActivity(raw);
 }
 
 function getFromCache(raw: string): string | undefined {

@@ -209,6 +209,7 @@ function LabelLayoutDriver() {
       height,
       sidebarOpen: sidebarOpen && !compact,
       panelOpen: selectedPlanetId !== null && !compact,
+      hideOffscreen: selectedPlanetId !== null,
     });
   });
   return null;

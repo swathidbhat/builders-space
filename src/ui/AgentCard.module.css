@@ -7,7 +7,6 @@
   background: linear-gradient(135deg, var(--soft), var(--soft-2));
   border-radius: 8px;
   border: none;
-  border-left: 3px solid var(--accent);
   cursor: var(--cursor);
   transition: background 0.15s ease;
   position: relative;

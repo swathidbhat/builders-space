@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useSpaceStore } from '../store';
 import { AgentCard } from './AgentCard';
 import { getProjectAgentIdentities } from './agentIdentity';
@@ -33,10 +33,17 @@ export function ProjectPanel() {
     [project],
   );
 
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, [project?.id]);
+
   if (!project) return null;
 
   return (
     <aside
+      ref={panelRef}
+      tabIndex={-1}
       className={besideList ? `${styles.panel} ${styles.besideList}` : styles.panel}
       aria-label="Project details"
       data-overlay="panel"
@@ -47,9 +54,11 @@ export function ProjectPanel() {
         summary={projectStatsText(project.agents)}
         onClose={deselectPlanet}
       />
-      <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
+      <div className={styles.surface}>
+        <PlanetSurface agents={project.agents} projectName={project.name} identities={identities} />
+      </div>
 
-      <div>
+      <div className={styles.agents}>
         <div className={styles.agentsHead}>
           <div className={styles.agentsLabel}>Agents</div>
           <HumanLingoToggle humanLingo={humanLingo} onToggle={toggleHumanLingo} />

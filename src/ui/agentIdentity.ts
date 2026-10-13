@@ -41,19 +41,20 @@ const AGENT_NAMES = [
   'Zephyr',
 ];
 
+/** Identity only. Reds, oranges, ambers, and greens belong to status. */
 const AVATAR_GRADIENTS: [string, string][] = [
-  ['#ff6b6b', '#ee5a24'],
-  ['#feca57', '#ff9f43'],
+  ['#7eb6ff', '#3d7ee8'],
+  ['#9aa7ff', '#5b6fd6'],
   ['#48dbfb', '#0abde3'],
-  ['#ff9ff3', '#f368e0'],
+  ['#c9b6ff', '#8d74e8'],
   ['#54a0ff', '#2e86de'],
   ['#5f27cd', '#341f97'],
-  ['#10ac84', '#01a3a4'],
-  ['#ff6348', '#ff4757'],
-  ['#2ed573', '#7bed9f'],
-  ['#1e90ff', '#7b68ee'],
-  ['#e056fd', '#be2edd'],
-  ['#f0932b', '#eb4d4b'],
+  ['#6ec8d4', '#3a8fbf'],
+  ['#8eb4ff', '#4c6fd6'],
+  ['#b9a7ff', '#6d5bd0'],
+  ['#1e90ff', '#5b7cff'],
+  ['#7f8cff', '#3d4e9a'],
+  ['#9ecbff', '#4a7eb5'],
 ];
 
 export const HAIR_COLORS = [
@@ -64,7 +65,7 @@ export const HAIR_COLORS = [
   '#e8c84a',
   '#5a3a5a',
   '#3a4a5a',
-  '#8a3a3a',
+  '#3a3a5a',
 ];
 
 const SKIN_TONES = ['#e8b88a', '#f5d0a9', '#d4a373', '#c89060', '#b07d56', '#8d5e3c'];

@@ -10,6 +10,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5174',
     trace: 'on-first-retry',
   },
+  globalTeardown: './e2e/global-teardown.ts',
   webServer: {
     command: 'node e2e/start.mjs',
     url: 'http://127.0.0.1:5174',
