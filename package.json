@@ -24,6 +24,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "docs:media": "node scripts/docs-media.mjs",
     "prepare": "simple-git-hooks"
   },
   "lint-staged": {
